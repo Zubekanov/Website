@@ -1,7 +1,10 @@
 name = "offline-site"
 main = "worker.js"
-compatibility_date = "2025-04-23"
+compatibility_date = "2024-04-23"
 
-[assets]
-directory = "./public/"
-binding = "ASSETS"
+[site]
+bucket = "./public"
+
+[[kv_namespaces]]
+binding = "OFFLINE_STATS"
+id = "48804d0061f54978af163e0a175cdb35"
