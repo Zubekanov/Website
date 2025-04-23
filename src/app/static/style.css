@@ -1,0 +1,173 @@
+/* Base layout */
+body {
+	margin: 0;
+	font-family: 'IBM Plex Sans', sans-serif;
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	background-color: #f0f0f0;
+	color: #222;
+}
+
+.navbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1.2rem 2rem;
+	background-color: #e5e5e5;
+	color: #000;
+	font-size: 1.2rem;
+	font-family: 'IBM Plex Sans', sans-serif;
+	row-gap: 0.5rem;
+}
+
+.nav-left {
+	font-weight: 600;
+}
+
+.nav-right {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+.nav-right a {
+	text-decoration: none;
+	font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.nav-right a:hover {
+	color: #000;
+}
+
+.nav-center {
+	flex-grow: 1;
+	display: flex;
+	justify-content: center;
+}
+
+/* Responsive stacking */
+@media (max-width: 1200px) {
+	.navbar {
+		flex-direction: column;
+		align-items: flex-start;
+		text-align: left;
+	}
+
+	.nav-center {
+		align-self: center;
+		width: 100%;
+		text-align: center;
+	}
+
+	.nav-right {
+		justify-content: flex-start;
+		width: 100%;
+	}
+}
+
+.content {
+	flex: 1;
+	padding: 2rem;
+}
+
+.footer {
+	padding: 1rem 2rem;
+	text-align: center;
+	background-color: #dcdcdc;
+	font-size: 0.9rem;
+	color: #333;
+	font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.uptime-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5em;
+	text-decoration: none;
+	color: inherit;
+	font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.uptime-left {
+	display: flex;
+	align-items: center;
+}
+
+.uptime-icon {
+	width: 1.25em;
+	height: 1.25em;
+	margin-right: 0.5em;
+	object-fit: contain;
+}
+
+.uptime-label {
+	margin-right: 0.5em;
+}
+
+.uptime-value {
+	text-align: right;
+	font-family: 'IBM Plex Mono', monospace;
+}
+
+.uptime-link:hover {
+	color: #569cd6;
+	transition: color 0.2s ease-in-out;
+}
+
+.unreachable {
+	color: #bbb !important;
+}
+
+/* Dark Mode overrides */
+@media (prefers-color-scheme: dark) {
+	body {
+		background-color: #1f1f1f;
+		color: #d4d4d4;
+	}
+
+	.navbar {
+		background-color: #181818;
+		color: #d4d4d4;
+	}
+
+	.nav-right a {
+		color: #bbb;
+	}
+
+	.nav-right a:hover {
+		color: #fff;
+	}
+
+	.footer {
+		background-color: #181818;
+		color: #d4d4d4;
+	}
+
+	a {
+		color: #d4d4d4;
+	}
+
+	.uptime-link {
+		color: #d4d4d4;
+	}
+
+	.uptime-value {
+		color: #c39959;
+	}
+
+	.unreachable {
+		color: #d84644 !important;
+	}
+}
+
+@media (prefers-color-scheme: light) {
+	.nav-right a {
+		color: #333;
+	}
+
+	.nav-right a:hover {
+		color: #000;
+	}
+}
