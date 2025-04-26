@@ -61,11 +61,11 @@
     </nav>
 
     <!-- Main Content Area -->
+    <!-- Reads from a markdown file in /src/app/content/ -->
     <main class="content">
-        <h1>Placeholder</h1>
-        <p>Text</p>
+        {{ page_content|safe }}
     </main>
-
+    
     <!-- Footer / Bottom Section -->
     <footer class="footer">
         <p>&copy; 2025 Joseph Wong. Site served from a Raspberry Pi.</p>
