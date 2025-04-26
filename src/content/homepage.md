@@ -5,9 +5,7 @@
 </p>
 
 <p style="text-align: center; font-size: 1.2em; line-height: 1.6;">
-    Welcome to my personal website! <br>
-
-    I'm currently completing a double degree in Computer Science and Advanced Mathematics, and looking to apply my skills in a graduate role.
+    Welcome to my personal website!
 </p>
 
 ---
@@ -25,6 +23,8 @@ The frontend utilises basic HTML and CSS, with the focus of the project on manag
 ---
 
 ## About Me
+
+I'm currently completing a double degree in Computer Science and Advanced Mathematics at UNSW, and looking to apply my skills in a graduate role.
 
 ---
 

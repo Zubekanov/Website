@@ -30,21 +30,14 @@
         </div>
         <div class="nav-right">
             <div class="nav-item">
-                <a>More About Me</a>
-                <div class="dropdown">
-                    <a href="#placeholder1a">Option A</a>
-                    <a href="#placeholder1b">Option B</a>
-                </div>
-            </div>
-            <div class="nav-item">
-                <a>Placeholder 2</a>
+                <a>Other Services</a>
                 <div class="dropdown">
                     <a href="#placeholder2a">Option A</a>
                     <a href="#placeholder2b">Option B</a>
                 </div>
             </div>
             <div class="nav-item">
-                <a>Other Services</a>
+                <a>Settings</a>
                 <div class="dropdown">
                     <a href="#placeholder3a">Option A</a>
                     <a href="#placeholder3b">Option B</a>
@@ -91,20 +84,20 @@
             }
             return result.length ? result.join(" ") : "0s";
         }
-
+    
         const isDarkMode = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-
+    
         function getIconPath(status) {
             const mode = isDarkMode() ? "dark" : "light";
             return `/static/icons/${status}-${mode}.png`;
         }
-
+    
         const uptime = {
             iconEl: document.getElementById("uptime-icon"),
             valueEl: document.getElementById("uptime-value"),
             serverReachable: false,
             seconds: null,
-
+    
             init: async function () {
                 try {
                     const res = await fetch("/api/uptime", { cache: "no-store" });
@@ -117,25 +110,25 @@
                 }
                 this.updateDisplay();
             },
-
+    
             tick: function () {
                 if (this.serverReachable && this.seconds !== null) {
                     this.seconds++;
                     this.updateDisplay();
                 }
             },
-
+    
             markOffline: function () {
                 if (this.serverReachable) {
                     this.serverReachable = false;
                     this.updateDisplay();
                 }
             },
-
+    
             updateDisplay: function () {
                 const status = (this.serverReachable && this.seconds !== null) ? "online" : "offline";
                 this.iconEl.src = getIconPath(status);
-
+    
                 if (this.serverReachable && this.seconds !== null) {
                     this.valueEl.textContent = ` ${formatUptime(this.seconds)}`;
                     this.valueEl.classList.remove("unreachable");
@@ -145,7 +138,7 @@
                 }
             }
         };
-
+    
         async function apiFetch(url, options = {}) {
             try {
                 const res = await fetch(url, options);
@@ -156,14 +149,19 @@
                 throw err;
             }
         }
-
+    
         // Initialize uptime tracking on page load
         uptime.init();
         setInterval(() => uptime.tick(), 1000);
-
+    
         // Recalculate icon if theme changes
         window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
             uptime.updateDisplay();
+        });
+    
+        // NEW: Re-fetch uptime when tab regains focus
+        window.addEventListener("focus", async () => {
+            await uptime.init();
         });
     </script>
 
