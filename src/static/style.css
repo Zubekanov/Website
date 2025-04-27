@@ -105,6 +105,39 @@ body {
 	justify-content: center;
 }
 
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: #eeeeee; /* Light highlight in light mode */
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.breadcrumb a {
+    text-decoration: none;
+    color: inherit;
+    margin: 0 0.3em;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb span {
+    margin: 0 0.3em;
+    color: inherit;
+}
+
+.breadcrumb-separator {
+    margin: 0 0.3em;
+    color: #888;
+}
+
+
 /* Responsive stacking */
 @media (max-width: 1200px) {
 	.navbar {
@@ -235,6 +268,26 @@ body {
 	.unreachable {
 		color: #d84644 !important;
 	}
+
+	.breadcrumb {
+        background-color: #2b2b2b; /* Darker background for dark mode */
+    }
+
+    .breadcrumb a {
+        color: #c39959; /* Orange-gold links */
+    }
+
+    .breadcrumb a:hover {
+        color: #ffd080; /* Brighter hover for contrast */
+    }
+
+    .breadcrumb span {
+        color: #bbb;
+    }
+
+    .breadcrumb-separator {
+        color: #666;
+    }
 }
 
 @media (prefers-color-scheme: light) {
