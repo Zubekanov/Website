@@ -1,0 +1,13 @@
+{
+    "page_title" : "Server Overview",
+    "preload_icons" : [
+    ],
+    "navbar_left" : "nameplate.html",
+    "navbar_center" : "uptime.html",
+    "navbar_right" : "homepage_dropdown.html",
+    "content" : [
+    ],
+    "scripts" : [
+        "uptime_script.js"
+    ]
+}

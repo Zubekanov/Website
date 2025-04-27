@@ -29,6 +29,19 @@
         </div>        
     </nav>
 
+    {% if breadcrumbs %}
+    <nav class="breadcrumb">
+        {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                <a href="{{ crumb.url }}">{{ crumb.name }}</a>
+                <span class="breadcrumb-separator">&gt;</span>
+            {% else %}
+                <span>{{ crumb.name }}</span>
+            {% endif %}
+        {% endfor %}
+    </nav>
+    {% endif %}
+
     <!-- Main Content Area -->
     <main class="content">
         {{ page_content|safe }}
