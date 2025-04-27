@@ -9,10 +9,10 @@
     "navbar_left" : "nameplate.html",
     "navbar_center" : "uptime.html",
     "navbar_right" : "homepage_dropdown.html",
-    "content" : [
+    "page_contents" : [
         "homepage.md"
     ],
-    "scripts" : [
+    "page_scripts" : [
         "uptime_script.js"
     ]
 }

@@ -3,51 +3,66 @@ import json
 import markdown
 from util.configreader import ConfigReader
 
+content_types = (
+	'.md', '.html', '.txt', '.css', '.js', '.pdf', 
+)
+
+def is_link(item: str) -> bool:
+	return item.startswith("http://") or item.startswith("https://")
+
+def is_content(item: str) -> bool:
+	return item.endswith(content_types)
+
 class LayoutFetcher:
-    @staticmethod
-    def load_layout(layout_json_filename: str) -> dict:
-        base_content_dir = ConfigReader.get_content_dir()
+	@staticmethod
+	def load_layout(layout_json_filename: str) -> dict:
+		base_content_dir = ConfigReader.get_content_dir()
 
-        layout_path = os.path.join(base_content_dir, layout_json_filename)
-        with open(layout_path, "r") as f:
-            layout_config = json.load(f)
+		layout_path = os.path.join(base_content_dir, layout_json_filename)
+		with open(layout_path, "r") as f:
+			layout_config : dict = json.load(f)
 
-        result = {}
+		# DEBUG
+		print(LayoutFetcher.parse_iterable(layout_config))
 
-        result["page_title"] = layout_config.get("page_title", "Joseph Wong")
+		return LayoutFetcher.parse_iterable(layout_config)
+	
+	# Recursively parse the layout config.
+	@staticmethod
+	def parse_iterable(iterable: list | dict) -> list | dict:
+		if isinstance(iterable, list):
+			for index in range(len(iterable)):
+				item = iterable[index]
+				if isinstance(item, (list, dict)):
+					iterable[index] = LayoutFetcher.parse_iterable(item)
+				else:
+					iterable[index] = LayoutFetcher.parse_item(item)
 
-        # Load navbar sections
-        for section in ["navbar_left", "navbar_center", "navbar_right"]:
-            value = layout_config.get(section)
-            if value:
-                if "." in value:
-                    file_path = os.path.join(base_content_dir, "navbar", value)
-                    with open(file_path, "r") as f:
-                        result[section] = f.read()
-                else:
-                    result[section] = value
+		if isinstance(iterable, dict):
+			for key in iterable.keys():
+				item = iterable[key]
+				if isinstance(item, (list, dict)):
+					iterable[key] = LayoutFetcher.parse_iterable(item)
+				else:
+					iterable[key] = LayoutFetcher.parse_item(item)
+		
+		return iterable
 
-        # Load page content (support multiple Markdown files)
-        page_content_html = ""
-        for content_file in layout_config.get("content", []):
-            if "." in content_file:
-                content_path = os.path.join(base_content_dir, "content", content_file)
-                with open(content_path, "r") as f:
-                    md_text = f.read()
-                    page_content_html += markdown.markdown(md_text)
-            else:
-                page_content_html += f"<p>{content_file}</p>\n"
-        result["page_content"] = page_content_html
-
-        # Load page scripts
-        page_scripts = []
-        for script_file in layout_config.get("scripts", []):
-            if "." in script_file:
-                script_path = os.path.join(base_content_dir, "scripts", script_file)
-                with open(script_path, "r") as f:
-                    page_scripts.append(f.read())
-            else:
-                page_scripts.append(script_file)
-        result["page_scripts"] = page_scripts
-
-        return result
+	# Root method for single items.
+	@staticmethod
+	def parse_item(item: str) -> str:
+		if is_link(item):
+			return item
+		elif is_content(item) and " " not in item:
+			extension = os.path.splitext(item)[-1]
+			content_file = ConfigReader.get_content_file(item)
+			if extension == ".md":
+				with open(content_file, "r") as f:
+					return markdown.markdown(f.read())
+			else:
+				# Currently no other type requires special handling.
+				with open(content_file, "r") as f:
+					return f.read()
+		else:
+			# Otherwise string or unhandled type.
+			return item

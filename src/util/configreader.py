@@ -36,14 +36,29 @@ class ConfigReader:
 				raise FileNotFoundError(f"Multiple files match '{filename}', specify extension.")
 
 		return os.path.join(config_dir, filename)
-	
+
 	@staticmethod
 	def get_content_file(filename: str) -> str:
 		content_dir = ConfigReader.get_content_dir()
-		content_path = os.path.join(content_dir, filename)
-		if not os.path.exists(content_path):
-			raise FileNotFoundError(f"Content file '{filename}' not found.")
-		return content_path
+
+		ext = os.path.splitext(filename)[1].lower()
+
+		preferred_folder = None
+		if ext == ".js":
+			preferred_folder = "scripts"
+		elif ext in (".md", ".html", ".txt"):
+			preferred_folder = "content"
+
+		if preferred_folder:
+			preferred_path = os.path.join(content_dir, preferred_folder, filename)
+			if os.path.exists(preferred_path):
+				return preferred_path
+
+		for root, dirs, files in os.walk(content_dir):
+			if filename in files:
+				return os.path.join(root, filename)
+
+		raise FileNotFoundError(f"Content file '{filename}' not found.")
 	
 	@staticmethod
 	def get_content_file_matches(pattern: str) -> list:

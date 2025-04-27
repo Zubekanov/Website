@@ -8,9 +8,21 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
 
+    {% if extra_stylesheets %}
+        {% for stylesheet in extra_stylesheets %}
+            <link rel="stylesheet" href="{{ stylesheet }}">
+        {% endfor %}
+    {% endif %}
+
     {% if preload_icons %}
         {% for icon in preload_icons %}
             <link rel="preload" href="{{ icon }}" as="image">
+        {% endfor %}
+    {% endif %}
+
+    {% if extra_scripts_head %}
+        {% for script_src in extra_scripts_head %}
+            <script src="{{ script_src }}"></script>
         {% endfor %}
     {% endif %}
 </head>
@@ -44,7 +56,11 @@
 
     <!-- Main Content Area -->
     <main class="content">
-        {{ page_content|safe }}
+        {% if page_contents %}
+            {% for page_content in page_contents %}
+                    {{ page_content|safe }}
+            {% endfor %}
+        {% endif %}
     </main>
     
     <!-- Footer / Bottom Section -->
@@ -52,11 +68,13 @@
         <p>2025 Joseph Wong. Site served from a Raspberry Pi.</p>
     </footer>
 
-    {% for script in page_scripts %}
-    <script>
-        {{ script|safe }}
-    </script>
-    {% endfor %}
+    {% if page_scripts %}
+        {% for script in page_scripts %}
+            <script>
+                {{ script|safe }}
+            </script>
+        {% endfor %}
+    {% endif %}
 
 </body>
 </html>

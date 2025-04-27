@@ -6,13 +6,16 @@
         "/static/icons/offline-light.png",
         "/static/icons/offline-dark.png"
     ],
+    "extra_scripts_head" : [
+        "https://cdn.jsdelivr.net/npm/chart.js"
+    ],
     "navbar_left" : "nameplate.html",
     "navbar_center" : "uptime.html",
     "navbar_right" : "homepage_dropdown.html",
-    "content" : [
+    "page_contents" : [
         "Contents to come"
     ],
-    "scripts" : [
+    "page_scripts" : [
         "uptime_script.js"
     ]
 }
