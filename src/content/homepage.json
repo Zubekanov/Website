@@ -1,0 +1,18 @@
+{
+    "page_title" : "Joseph Wong",
+    "preload_icons" : [
+        "/static/icons/online-light.png",
+        "/static/icons/online-dark.png",
+        "/static/icons/offline-light.png",
+        "/static/icons/offline-dark.png"
+    ],
+    "navbar_left" : "nameplate.html",
+    "navbar_center" : "uptime.html",
+    "navbar_right" : "homepage_dropdown.html",
+    "content" : [
+        "homepage.md"
+    ],
+    "scripts" : [
+        "uptime_script.js"
+    ]
+}

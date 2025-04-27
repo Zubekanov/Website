@@ -1,0 +1,97 @@
+function formatUptime(seconds) {
+    const units = [
+        ["y", 31536000],
+        ["d", 86400],
+        ["h", 3600],
+        ["m", 60],
+        ["s", 1]
+    ];
+    let result = [];
+    for (const [name, value] of units) {
+        const count = Math.floor(seconds / value);
+        if (count > 0 || result.length) {
+            result.push(`${count}${name}`);
+            seconds %= value;
+        }
+        if (result.length === 2) break;
+    }
+    return result.length ? result.join(" ") : "0s";
+}
+
+const isDarkMode = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+function getIconPath(status) {
+    const mode = isDarkMode() ? "dark" : "light";
+    return `/static/icons/${status}-${mode}.png`;
+}
+
+const uptime = {
+    iconEl: document.getElementById("uptime-icon"),
+    valueEl: document.getElementById("uptime-value"),
+    serverReachable: false,
+    seconds: null,
+
+    init: async function () {
+        try {
+            const res = await fetch("/api/uptime", { cache: "no-store" });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            this.seconds = data.uptime_seconds;
+            this.serverReachable = true;
+        } catch {
+            this.serverReachable = false;
+        }
+        this.updateDisplay();
+    },
+
+    tick: function () {
+        if (this.serverReachable && this.seconds !== null) {
+            this.seconds++;
+            this.updateDisplay();
+        }
+    },
+
+    markOffline: function () {
+        if (this.serverReachable) {
+            this.serverReachable = false;
+            this.updateDisplay();
+        }
+    },
+
+    updateDisplay: function () {
+        const status = (this.serverReachable && this.seconds !== null) ? "online" : "offline";
+        this.iconEl.src = getIconPath(status);
+
+        if (this.serverReachable && this.seconds !== null) {
+            this.valueEl.textContent = ` ${formatUptime(this.seconds)}`;
+            this.valueEl.classList.remove("unreachable");
+        } else {
+            this.valueEl.textContent = "Server unreachable";
+            this.valueEl.classList.add("unreachable");
+        }
+    }
+};
+
+async function apiFetch(url, options = {}) {
+    try {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error();
+        return await res.json();
+    } catch (err) {
+        uptime.markOffline();
+        throw err;
+    }
+}
+
+// Initialize uptime tracking on page load
+uptime.init();
+setInterval(() => uptime.tick(), 1000);
+
+// Recalculate icon if theme changes
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    uptime.updateDisplay();
+});
+
+window.addEventListener("focus", async () => {
+    await uptime.init();
+});

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{{ page_title or "Joseph Wong" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+
+    {% if preload_icons %}
+        {% for icon in preload_icons %}
+            <link rel="preload" href="{{ icon }}" as="image">
+        {% endfor %}
+    {% endif %}
+</head>
+
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            {{ navbar_left|safe }}
+        </div>
+        <div class="nav-center">
+            {{ navbar_center|safe }}
+        </div>
+        <div class="nav-right">
+            {{ navbar_right|safe }}
+        </div>        
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="content">
+        {{ page_content|safe }}
+    </main>
+    
+    <!-- Footer / Bottom Section -->
+    <footer class="footer">
+        <p>2025 Joseph Wong. Site served from a Raspberry Pi.</p>
+    </footer>
+
+    {% for script in page_scripts %}
+    <script>
+        {{ script|safe }}
+    </script>
+    {% endfor %}
+
+</body>
+</html>

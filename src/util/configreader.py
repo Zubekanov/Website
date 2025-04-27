@@ -44,6 +44,15 @@ class ConfigReader:
 		if not os.path.exists(content_path):
 			raise FileNotFoundError(f"Content file '{filename}' not found.")
 		return content_path
+	
+	@staticmethod
+	def get_content_file_matches(pattern: str) -> list:
+		content_dir = ConfigReader.get_content_dir()
+		matches = [
+			f for f in os.listdir(content_dir)
+			if pattern in f
+		]
+		return matches
 
 	@staticmethod
 	def get_raw_file(filename: str) -> str:
