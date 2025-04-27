@@ -9,7 +9,7 @@ start_time = time.time()
 def homepage():
 	components = LayoutFetcher.load_layout("homepage.json")
 	uptime_seconds = int(time.time() - start_time)
-	return render_template("main_layout.html", **components, uptime_seconds = uptime_seconds)
+	return render_template("main_layout.html", **components)
 
 @main.route("/server")
 def server_details():
