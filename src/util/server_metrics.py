@@ -56,11 +56,11 @@ def compress_metrics_file():
 
 	for epoch, values in lines:
 		age = now - epoch
-		if age > 2 * 3600 and age <= 2 * 86400:
+		if age > compression_intervals[1] and age <= compression_intervals[2]:
 			to_compress["minute"].append((epoch, values))
-		elif age > 2 * 86400 and age <= 2 * 2592000:
+		elif age > compression_intervals[2] and age <= compression_intervals[3]:
 			to_compress["hour"].append((epoch, values))
-		elif age > 2 * 2592000:
+		elif age > compression_intervals[3]:
 			to_compress["day"].append((epoch, values))
 		else:
 			new_live_lines.append((epoch, values))
@@ -73,11 +73,11 @@ def compress_metrics_file():
 			buckets = {}
 			for epoch, values in entries:
 				if scale == "minute":
-					key = epoch // 60
+					key = epoch // compression_intervals[0]
 				elif scale == "hour":
-					key = epoch // 3600
+					key = epoch // compression_intervals[1]
 				else:
-					key = epoch // 86400
+					key = epoch // compression_intervals[2]
 
 				if key not in buckets:
 					buckets[key] = []
@@ -86,11 +86,11 @@ def compress_metrics_file():
 			for key, vals_list in buckets.items():
 				avg_vals = [sum(col) / len(col) for col in zip(*vals_list)]
 				if scale == "minute":
-					bucket_epoch = key * 60
+					bucket_epoch = key * compression_intervals[0]
 				elif scale == "hour":
-					bucket_epoch = key * 3600
+					bucket_epoch = key * compression_intervals[1]
 				else:
-					bucket_epoch = key * 86400
+					bucket_epoch = key * compression_intervals[2]
 
 				f.write(f"{bucket_epoch}," + ",".join(f"{v:.3f}" for v in avg_vals) + "\n")
 
