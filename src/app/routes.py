@@ -1,10 +1,9 @@
-import time
 from flask import Blueprint, render_template
 from app.layout_fetcher import LayoutFetcher
 from app.breadcrumbs import generate_breadcrumbs
+import util.server_metrics as metrics
 
 main = Blueprint('main', __name__)
-start_time = time.time()
 
 @main.route("/")
 def homepage():
@@ -20,5 +19,8 @@ def server_overview():
 
 @main.route("/api/uptime")
 def api_uptime():
-	uptime_seconds = int(time.time() - start_time)
-	return {"uptime_seconds": uptime_seconds}
+	return {"uptime_seconds": metrics.get_uptime()}
+
+@main.route("/api/server_overview")
+def api_server_overview():
+	pass

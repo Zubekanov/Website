@@ -22,9 +22,6 @@ class LayoutFetcher:
 		with open(layout_path, "r") as f:
 			layout_config : dict = json.load(f)
 
-		# DEBUG
-		print(LayoutFetcher.parse_iterable(layout_config))
-
 		return LayoutFetcher.parse_iterable(layout_config)
 	
 	# Recursively parse the layout config.

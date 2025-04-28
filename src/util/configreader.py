@@ -18,6 +18,11 @@ class ConfigReader:
 	def get_content_dir():
 		src_dir = ConfigReader._get_src_base_dir()
 		return os.path.join(src_dir, "content")
+	
+	@staticmethod
+	def get_logs_dir():
+		src_dir = ConfigReader._get_src_base_dir()
+		return os.path.join(src_dir, "logs")
 
 	@staticmethod
 	def _resolve_filename(filename: str) -> str:
