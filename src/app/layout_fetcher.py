@@ -4,7 +4,7 @@ import markdown
 from util.configreader import ConfigReader
 
 content_types = (
-	'.md', '.html', '.txt', '.css', '.js', '.pdf', 
+	'.md', '.html', '.txt', '.js', '.pdf', 
 )
 
 def is_link(item: str) -> bool:

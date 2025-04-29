@@ -21,6 +21,18 @@ def server_overview():
 def api_uptime():
 	return {"uptime_seconds": metrics.get_uptime()}
 
-@main.route("/api/server_overview")
-def api_server_overview():
-	pass
+@main.route("/api/static_metrics")
+def api_static_metrics():
+	return metrics.get_static_metrics()
+
+@main.route("/api/live_metrics")
+def api_live_metrics():
+	return metrics.get_latest_metrics()
+
+@main.route("/api/hour_metrics")
+def api_hour_metrics():
+	return metrics.get_last_hour_metrics()
+
+@main.route("/api/compressed_metrics")
+def api_compressed_metrics():
+	return metrics.get_compressed_metrics()

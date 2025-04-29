@@ -16,12 +16,13 @@ _COMPRESSION_INTERVALS = (
 )
 _initialisation_time = time.time()
 _worker_started = False
+_last_fetched_metrics = {}
 
 def get_local_data():
 	return {
 		"cpu_percent": psutil.cpu_percent(interval=None),
-		"ram_used": round(psutil.virtual_memory().used / 1 / 1073741824, 2),
-		"disk_used": round(psutil.disk_usage("/").used / 1 / 1073741824, 1),
+		"ram_used": round(psutil.virtual_memory().used / 1073741824, 2),
+		"disk_used": round(psutil.disk_usage("/").used / 1073741824, 1),
 		"cpu_temp": _get_cpu_temp(),
 	}
 
@@ -60,13 +61,23 @@ def _compressed_log_path():
 def _static_info_path():
 	return os.path.join(_ensure_metrics_dir(), "static_info.log")
 
+def get_static_metrics():
+	return {
+		"ram_total": get_ram_total(),
+		"disk_total": get_disk_total()
+	}
+
 def log_server_metrics():
+	global _last_fetched_metrics
 	path = _live_log_path()
 	data = get_local_data()
 	ts = int(time.time())
 	values = [data[k] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")]
 	with open(path, "a") as f:
 		f.write(f"{ts}," + ",".join(map(str, values)) + "\n")
+
+	data["timestamp"] = ts
+	_last_fetched_metrics = data
 
 def compress_metrics_file():
 	log_dir = ConfigReader.get_logs_dir()
@@ -246,10 +257,22 @@ def load_entries(path, since_ts=None):
 				parsed.append((ts, vals))
 	return parsed
 
+def get_latest_metrics():
+	return _last_fetched_metrics
+
 def get_last_hour_metrics():
 	one_hour_ago = int(time.time()) - 3600
 	entries = load_entries(_live_log_path(), since_ts=one_hour_ago)
 
+	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
+	for ts, vals in entries:
+		for name, val in zip(metrics, vals):
+			metrics[name].append({"x": ts, "y": val})
+
+	return metrics
+
+def get_compressed_metrics():
+	entries = load_entries(_compressed_log_path())
 	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
 	for ts, vals in entries:
 		for name, val in zip(metrics, vals):
