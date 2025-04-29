@@ -1,0 +1,60 @@
+:root {
+    --card-height: auto;
+    --card-bg-light: #fff;
+    --card-bg-dark: #1f1f1f;
+    --text-secondary-light: #333;
+    --text-secondary-dark: #ccc;
+    --gap: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --card-bg: var(--card-bg-dark);
+        --text-secondary: var(--text-secondary-dark);
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --card-bg: var(--card-bg-light);
+        --text-secondary: var(--text-secondary-light);
+    }
+}
+
+.content {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.grid {
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+    justify-items: stretch;
+    align-content: start;
+}
+
+.box,
+.chart-card {
+    box-sizing: border-box;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    padding: 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    height: auto;
+}
+
+.chart-card {
+    padding-bottom: 10px;
+    height: 350px;
+}
+
+.chart-card h3 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+    text-align: center;
+}
