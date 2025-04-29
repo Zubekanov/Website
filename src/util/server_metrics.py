@@ -81,7 +81,7 @@ def log_server_metrics():
 
 def compress_metrics_file():
 	log_dir = ConfigReader.get_logs_dir()
-	base = os.path.join(log_dir, "server_metrics")
+	base    = os.path.join(log_dir, "server_metrics")
 	live_path = os.path.join(base, "live_metrics.log")
 	comp_path = os.path.join(base, "compressed_metrics.log")
 
@@ -90,73 +90,79 @@ def compress_metrics_file():
 
 	all_entries = []
 
-	if os.path.exists(live_path):
-		with open(live_path, "r") as f:
+	# helper to read and parse a file, skipping bad lines
+	def _read_log(path):
+		entries = []
+		if not os.path.exists(path):
+			return entries
+		with open(path, "r") as f:
 			for line in f:
-				ts_str, *vals = line.strip().split(",")
-				all_entries.append((int(ts_str), list(map(float, vals))))
+				parts = line.strip().split(",")
+				if len(parts) != 5:
+					# malformed (wrong number of columns)
+					continue
+				ts_str, *val_strs = parts
+				try:
+					ts   = int(ts_str)
+					vals = list(map(float, val_strs))
+				except ValueError:
+					# malformed (non-numeric)
+					continue
+				entries.append((ts, vals))
+		return entries
 
-	old_live = len(all_entries)
-				
-	if os.path.exists(comp_path):
-		with open(comp_path, "r") as f:
-			for line in f:
-				ts_str, *vals = line.strip().split(",")
-				all_entries.append((int(ts_str), list(map(float, vals))))
+	old_live_entries = _read_log(live_path)
+	old_comp_entries = _read_log(comp_path)
 
+	old_live = len(old_live_entries)
+	old_comp = len(old_comp_entries)
+	all_entries = old_live_entries + old_comp_entries
 	old_total = len(all_entries)
-	old_comp = old_total - old_live
-	all_entries.sort(key=lambda e: e[0])
-	
-	buckets = {
-		"minute": {},
-		"hour":   {},
-		"day":    {}
-	}
-	minute_i, hour_i, day_i, month_i = _COMPRESSION_INTERVALS[:]
 
+	all_entries.sort(key=lambda e: e[0])
+
+	buckets = {"minute": {}, "hour": {}, "day": {}}
+	minute_i, hour_i, day_i, month_i = _COMPRESSION_INTERVALS
 	new_live = []
 	now = time.time()
 
 	for ts, vals in all_entries:
 		age = now - ts
-
 		if age > hour_i and age <= day_i:
-			interval = minute_i
-			scale = "minute"
+			interval, scale = minute_i, "minute"
 		elif age > day_i and age <= month_i:
-			interval = hour_i
-			scale = "hour"
+			interval, scale = hour_i, "hour"
 		elif age > month_i:
-			interval = day_i
-			scale = "day"
+			interval, scale = day_i, "day"
 		else:
 			new_live.append((ts, vals))
 			continue
 
-		# Align the bucket to exact boundary: e.g. ts - (ts % 60)
 		bucket_ts = ts - (ts % interval)
 		buckets[scale].setdefault(bucket_ts, []).append(vals)
 
 	new_comp = []
 	for scale, mapping in buckets.items():
 		for bucket_ts, list_of_vals in mapping.items():
-			# compute column-wise mean
 			cols = zip(*list_of_vals)
-			avg = [sum(col) / len(col) for col in cols]
+			avg  = [sum(col) / len(col) for col in cols]
 			new_comp.append((bucket_ts, avg))
 
+	# rewrite compressed log with only valid, aggregated entries
 	with open(comp_path, "w") as f:
 		for ts, vals in sorted(new_comp, key=lambda x: x[0]):
 			f.write(f"{ts}," + ",".join(f"{v:.2f}" for v in vals) + "\n")
 
+	# rewrite live log with only the un-compressed, valid entries
 	with open(live_path, "w") as f:
 		for ts, vals in sorted(new_live, key=lambda x: x[0]):
 			f.write(f"{ts}," + ",".join(f"{v:.2f}" for v in vals) + "\n")
 
 	kept = len(new_live) + len(new_comp)
 	reduction = int((1 - kept / old_total) * 100) if old_total else 0
-	print(f"{old_live} live + {old_comp} compressed ({old_total} total) → {len(new_live)} live + {len(new_comp)} compressed ({kept} total) ({reduction}% reduction) in {time.time() - start:.2f}s")
+	print(f"{old_live} live + {old_comp} compressed ({old_total} total) → "
+		  f"{len(new_live)} live + {len(new_comp)} compressed "
+		  f"({kept} total) ({reduction}% reduction) in {time.time() - start:.2f}s")
 
 def _get_earliest_live_ts(path: str) -> float:
 	if not os.path.exists(path):
@@ -245,16 +251,22 @@ def load_entries(path, since_ts=None):
 	if not os.path.exists(path):
 		return []
 
-	with open(path) as f:
-		parsed = []
+	parsed = []
+	with open(path, "r") as f:
 		for line in f:
 			parts = line.strip().split(",")
-			if len(parts) < 5:
+			# we expect exactly 5 parts: ts + 4 metrics
+			if len(parts) != 5:
 				continue
-			ts = int(parts[0])
-			vals = list(map(float, parts[1:5]))
+			ts_str, *val_strs = parts
+			try:
+				ts   = int(ts_str)
+				vals = list(map(float, val_strs))
+			except ValueError:
+				continue
 			if since_ts is None or ts >= since_ts:
 				parsed.append((ts, vals))
+
 	return parsed
 
 def get_latest_metrics():
