@@ -37,6 +37,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 			yScale.min = 0;
 			yScale.max = staticCaps.disk_total;
 		}
+		if (m.key === 'cpu_temp') {
+			yScale.min = 0;
+			yScale.max = 80;
+		}
 
 		charts[m.key] = new Chart(ctx, {
 			type: 'line',

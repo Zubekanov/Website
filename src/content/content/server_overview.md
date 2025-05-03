@@ -1,11 +1,8 @@
 <div class="grid">
     <div class="box">
-        <h3>Server Overview</h3>
-            <p>Welcome to my personal server status page! Here you can monitor in real-time:</p>
-            <ul>
-            <li><strong>CPU Temp &amp; Utilisation</strong> – current load and temperature</li>
-            <li><strong>RAM &amp; Disk Usage</strong> – memory and storage consumption over the last hour</li>
-            </ul>
+        <h3>Server Statistics</h3>
+            <p>This page currently shows server statistics over the previous hour.</p>
+            <p>All metrics collected from the server are stored, although the website currently does not support displaying past the current hour. Additionally, CPU temp is the only interesting statistic to view over time as the other metrics are relatively static.</p>
             <p>Metrics refresh every 5 seconds.</p>
     </div>
     <div class="chart-card">
@@ -23,9 +20,5 @@
     <div class="chart-card">
         <h3>Disk Usage (GiB)</h3>
         <canvas id="disk_used"></canvas>
-    </div>
-    <div class="chart-card">
-        <h3>Placeholder Chart</h3>
-        <canvas id="chart5"></canvas>
     </div>
 </div>
