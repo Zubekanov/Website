@@ -1,5 +1,3 @@
-[database]
-DB_HOST = "Your database host"
-DB_NAME = "Your database name"
-DB_USER = "Your database username"
-DB_PASSWORD = "Your database password"
+DATABASE=[Your database name]
+USER=[Your database username]
+PASSWORD=[Your database password]

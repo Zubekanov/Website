@@ -1,7 +1,7 @@
 import os
 import json
 import markdown
-from util.configreader import ConfigReader
+from util.config_reader import ConfigReader
 
 content_types = (
 	'.md', '.html', '.txt', '.js', '.pdf', 

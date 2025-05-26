@@ -1,5 +1,5 @@
 import psycopg2
-from util.configreader import ConfigReader
+from util.config_reader import ConfigReader
 
 # Read database config once at import time
 db_config = ConfigReader.get_key_value_config("database.config")

@@ -6,8 +6,6 @@ database_config = ConfigReader.get_key_value_config("database.config")
 
 class PSQLClient:
 	def __init__(self, host=None, port=None, database=None, user=None, password=None):
-		self.host = host or database_config.get("HOST", "127.0.0.1")
-		self.port = port or database_config.get("PORT", "5432")
 		self.database = database or database_config.get("DATABASE", "postgres")
 		self.user = user or database_config.get("USER", "postgres")
 		self.password = password or database_config.get("PASSWORD", "")
@@ -114,6 +112,4 @@ if __name__ == "__main__":
 	client = PSQLClient()
 	print("Databases:", client.list_databases())
 	print("Tables:", client.list_tables())
-	# Fetch records from a table called 'users'
-	# print(client.get_records('users', limit=10))
 	client.close()

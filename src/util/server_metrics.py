@@ -5,7 +5,7 @@ import threading
 import psutil
 
 from datetime import datetime
-from util.configreader import ConfigReader
+from util.config_reader import ConfigReader
 
 _SLEEP_INTERVAL = 5
 _COMPRESSION_INTERVALS = (
@@ -47,7 +47,7 @@ def get_uptime():
 	return int(time.time() - _initialisation_time)
 
 def _ensure_metrics_dir():
-	base = ConfigReader.get_logs_dir()
+	base = ConfigReader.logs_dir()
 	path = os.path.join(base, "server_metrics")
 	os.makedirs(path, exist_ok=True)
 	return path
@@ -80,7 +80,7 @@ def log_server_metrics():
 	_last_fetched_metrics = data
 
 def compress_metrics_file():
-	log_dir = ConfigReader.get_logs_dir()
+	log_dir = ConfigReader.logs_dir()
 	base    = os.path.join(log_dir, "server_metrics")
 	live_path = os.path.join(base, "live_metrics.log")
 	comp_path = os.path.join(base, "compressed_metrics.log")
