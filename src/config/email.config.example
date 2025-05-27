@@ -1,5 +1,7 @@
 EMAIL_ADDRESS=[Your server email address]
 EMAIL_PASSWORD=[Your email password]
 ALIAS_ADDRESS=[Your server alias address]
-
 ADMIN_ADDRESS=[Your personal email address]
+
+PUBSUB_TOPIC=[Your google pull subscription topic]
+PUBSUB_SUBSCRIPTION=[Your pubsub subscription]

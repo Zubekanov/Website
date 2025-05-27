@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 class ConfigReader:
     """
-    Utility for reading project configuration and managing OAuth credentials.
+    Utility for reading project configuration and managing OAuth and GCP credentials.
     """
     @staticmethod
     def _base_dir() -> Path:
@@ -30,6 +30,10 @@ class ConfigReader:
     @classmethod
     def _resolve_filename(cls, filename: str) -> Path:
         cfg = cls.config_dir()
+        path = cfg / filename
+        if path.exists():
+            return path
+        # fallback: match by stem if no suffix
         if not Path(filename).suffix:
             candidates = [f for f in cfg.iterdir() if f.stem == filename]
             if len(candidates) == 1:
@@ -37,10 +41,7 @@ class ConfigReader:
             if not candidates:
                 raise FileNotFoundError(f"No file matching '{filename}' in config dir")
             raise FileNotFoundError(f"Multiple config files match '{filename}'")
-        path = cfg / filename
-        if not path.exists():
-            raise FileNotFoundError(f"Config file '{filename}' not found in config dir")
-        return path
+        raise FileNotFoundError(f"Config file '{filename}' not found in config dir")
 
     @classmethod
     def get_raw(cls, filename: str) -> str:
@@ -57,8 +58,7 @@ class ConfigReader:
         cfg = {}
         for line in raw.splitlines():
             line = line.strip()
-            if not line or line.startswith("#"): 
-                continue
+            if not line or line.startswith("#"):  continue
             if "=" not in line:
                 raise ValueError(f"Invalid config line: '{line}'")
             key, val = line.split("=", 1)
@@ -76,7 +76,6 @@ class ConfigReader:
         Load OAuth2 credentials from token_file in config dir, refreshing if expired.
         If token_file does not exist, perform interactive auth using client_secrets.
         """
-        cfg = cls.config_dir()
         creds_path = cls._resolve_filename(token_file)
         secrets_path = cls._resolve_filename(client_secrets)
         scopes = scopes or ["https://mail.google.com/"]
@@ -92,7 +91,21 @@ class ConfigReader:
                     str(secrets_path), scopes=scopes
                 )
                 creds = flow.run_local_server(port=0)
-            # save for next time
             with open(creds_path, "w") as token:
                 token.write(creds.to_json())
         return creds
+
+    @classmethod
+    def get_service_account_key_file(cls, filename: str = "service_account.json") -> Path:
+        """
+        Return the path to a GCP service account JSON key in the config dir.
+        """
+        return cls._resolve_filename(filename)
+
+    @classmethod
+    def set_adc_env(cls, filename: str = "service_account.json") -> None:
+        """
+        Set GOOGLE_APPLICATION_CREDENTIALS env var to a service account key in config dir.
+        """
+        key_path = cls.get_service_account_key_file(filename)
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(key_path)
