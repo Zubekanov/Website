@@ -102,10 +102,30 @@ class PSQLClient:
 		)
 		self.execute(q)
 
+	def _get_table_columns(self, table, schema='public'):
+		"""Return a list of valid column names for a given table."""
+		result = self.execute(
+			"""
+			SELECT column_name
+			FROM information_schema.columns
+			WHERE table_schema = %s AND table_name = %s;
+			""",
+			[schema, table]
+		)
+		return [r['column_name'] for r in result]
+
 	def insert_row(self, table, data: dict):
 		"""Insert a row into `table` using column-value mapping from `data`."""
 		if not data:
 			raise ValueError("Data dictionary is empty.")
+
+		# Check table and columns
+		valid_columns = self._get_table_columns(table)
+		if not valid_columns:
+			raise ValueError(f"Table '{table}' does not exist.")
+		invalid = [k for k in data if k not in valid_columns]
+		if invalid:
+			raise ValueError(f"Invalid columns for insert: {invalid}")
 
 		columns = [sql.Identifier(k) for k in data.keys()]
 		values = list(data.values())
@@ -123,6 +143,13 @@ class PSQLClient:
 		if not conditions:
 			raise ValueError("Conditions dictionary is empty.")
 
+		valid_columns = self._get_table_columns(table)
+		if not valid_columns:
+			raise ValueError(f"Table '{table}' does not exist.")
+		invalid = [k for k in conditions if k not in valid_columns]
+		if invalid:
+			raise ValueError(f"Invalid columns for condition: {invalid}")
+
 		where_clauses = [
 			sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
 			for k in conditions.keys()
@@ -138,6 +165,13 @@ class PSQLClient:
 		if not conditions:
 			raise ValueError("Conditions dictionary is empty.")
 
+		valid_columns = self._get_table_columns(table)
+		if not valid_columns:
+			raise ValueError(f"Table '{table}' does not exist.")
+		invalid = [k for k in conditions if k not in valid_columns]
+		if invalid:
+			raise ValueError(f"Invalid columns for condition: {invalid}")
+
 		where_clauses = [
 			sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
 			for k in conditions.keys()
@@ -147,6 +181,7 @@ class PSQLClient:
 			conds=sql.SQL(" AND ").join(where_clauses)
 		)
 		self.execute(q, list(conditions.values()))
+
 
 	def get_rows_by_raw_conditions(self, table, conditions: list):
 		"""Get rows from `table` where all raw SQL `conditions` are met."""
