@@ -8,16 +8,28 @@ database_config = ConfigReader.get_key_value_config("database.config")
 
 class PSQLClient:
 	"""
-	Thread-safe Postgres helper using a connection pool.
+	Postgres helper using a connection pool.
 	"""
+	_instance     = None
+	_initialized  = False
+
+	def __new__(cls, *args, **kwargs):
+		# only create the object once
+		if cls._instance is None:
+			cls._instance = super(PSQLClient, cls).__new__(cls)
+		return cls._instance
+
 	def __init__(self, host=None, port=None, database=None, user=None, password=None, minconn=1, maxconn=10):
-		# Configuration fallback
-		self.host = host or database_config.get("HOST", "localhost")
-		self.port = port or database_config.get("PORT", 5432)
+		if PSQLClient._initialized:
+			return
+		PSQLClient._initialized = True
+
+		self.host     = host or database_config.get("HOST", "localhost")
+		self.port     = port or database_config.get("PORT", 5432)
 		self.database = database or database_config.get("DATABASE", "postgres")
-		self.user = user or database_config.get("USER", "postgres")
+		self.user     = user or database_config.get("USER", "postgres")
 		self.password = password or database_config.get("PASSWORD", "")
-		# Initialize a threaded connection pool
+
 		self.pool = ThreadedConnectionPool(
 			minconn, maxconn,
 			database=self.database,
@@ -206,6 +218,149 @@ class PSQLClient:
 			conds=where_clause
 		)
 		self.execute(q)
+
+	def update_rows_by_conditions(self, table, updates: dict, conditions: dict,
+								  lower_limit: int=None, upper_limit: int=None):
+		"""
+		Update rows in `table` setting columns from `updates` where each key-value in `conditions`
+		is matched. Optionally enforce that the number of rows updated is within [lower_limit, upper_limit].
+		"""
+		if not updates:
+			raise ValueError("Updates dictionary is empty.")
+		if not conditions:
+			raise ValueError("Conditions dictionary is empty.")
+
+		# Validate table & columns
+		valid_columns = self._get_table_columns(table)
+		if not valid_columns:
+			raise ValueError(f"Table '{table}' does not exist.")
+		invalid_updates = [k for k in updates if k not in valid_columns]
+		invalid_conds   = [k for k in conditions if k not in valid_columns]
+		if invalid_updates:
+			raise ValueError(f"Invalid columns to update: {invalid_updates}")
+		if invalid_conds:
+			raise ValueError(f"Invalid columns in conditions: {invalid_conds}")
+
+		# Build SET and WHERE clauses
+		set_clauses = [
+			sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder())
+			for col in updates.keys()
+		]
+		where_clauses = [
+			sql.SQL("{} = {}").format(sql.Identifier(col), sql.Placeholder())
+			for col in conditions.keys()
+		]
+		q = sql.SQL("UPDATE {table} SET {sets} WHERE {conds};").format(
+			table=sql.Identifier(table),
+			sets=sql.SQL(", ").join(set_clauses),
+			conds=sql.SQL(" AND ").join(where_clauses)
+		)
+		params = list(updates.values()) + list(conditions.values())
+
+		# manual execute so we can check rowcount
+		conn = self._get_conn()
+		try:
+			with conn.cursor() as cur:
+				cur.execute(q, params)
+				count = cur.rowcount
+				# enforce limits
+				if lower_limit is not None and count < lower_limit:
+					conn.rollback()
+					raise ValueError(f"Expected ≥ {lower_limit} rows updated, got {count}.")
+				if upper_limit is not None and count > upper_limit:
+					conn.rollback()
+					raise ValueError(f"Expected ≤ {upper_limit} rows updated, got {count}.")
+				conn.commit()
+		except:
+			conn.rollback()
+			raise
+		finally:
+			self._put_conn(conn)
+
+
+	def update_rows_by_raw_conditions(self, table, updates: list, conditions: list,
+									  lower_limit: int=None, upper_limit: int=None):
+		"""
+		Update rows in `table` using raw SQL assignment strings where all raw SQL `conditions`
+		are met. Enforce affected-row bounds if given.
+		"""
+		if not updates:
+			raise ValueError("Updates list is empty.")
+		if not conditions:
+			raise ValueError("Conditions list is empty.")
+
+		set_clause   = sql.SQL(", ").join(sql.SQL(u) for u in updates)
+		where_clause = sql.SQL(" AND ").join(sql.SQL(c) for c in conditions)
+		q = sql.SQL("UPDATE {table} SET {sets} WHERE {conds};").format(
+			table=sql.Identifier(table),
+			sets=set_clause,
+			conds=where_clause
+		)
+
+		conn = self._get_conn()
+		try:
+			with conn.cursor() as cur:
+				cur.execute(q)
+				count = cur.rowcount
+				if lower_limit is not None and count < lower_limit:
+					conn.rollback()
+					raise ValueError(f"Expected ≥ {lower_limit} rows updated, got {count}.")
+				if upper_limit is not None and count > upper_limit:
+					conn.rollback()
+					raise ValueError(f"Expected ≤ {upper_limit} rows updated, got {count}.")
+				conn.commit()
+		except:
+			conn.rollback()
+			raise
+		finally:
+			self._put_conn(conn)
+
+	def apply_to_rows(self, table, conditions: dict, func, key_columns=['id']):
+		"""
+		Fetch rows matching `conditions`, call `func(row)` on each to get an updates-dict,
+		then UPDATE each row, using `key_columns` to identify it.
+		Returns the number of rows updated.
+		"""
+		# basic checks
+		if not callable(func):
+			raise ValueError("func must be callable")
+		if not conditions:
+			raise ValueError("Conditions dictionary is empty.")
+
+		# fetch rows
+		rows = self.get_rows_by_conditions(table, conditions)
+		if not rows:
+			return 0
+
+		updated_count = 0
+		valid_columns = self._get_table_columns(table)
+		if not valid_columns:
+			raise ValueError(f"Table '{table}' does not exist.")
+
+		for row in rows:
+			# call the user-provided function
+			updates = func(row)
+			if not isinstance(updates, dict):
+				raise ValueError("func must return a dict of {column: new_value}")
+
+			# validate update columns
+			bad = [c for c in updates if c not in valid_columns]
+			if bad:
+				raise ValueError(f"Invalid update columns: {bad}")
+
+			# build the key lookup for this row
+			key_cond = {}
+			for kc in key_columns:
+				if kc not in row:
+					raise ValueError(f"Key column '{kc}' not in the row data")
+				key_cond[kc] = row[kc]
+
+			# perform the update (uses your existing method)
+			self.update_rows_by_conditions(table, updates, key_cond)
+			updated_count += 1
+
+		return updated_count
+
 
 if __name__ == "__main__":
 	client = PSQLClient()
