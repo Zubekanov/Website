@@ -1,7 +1,6 @@
-import psycopg2
 from psycopg2 import sql
 from psycopg2.pool import ThreadedConnectionPool
-from config_reader import ConfigReader
+from util.config_reader import ConfigReader
 
 # Load database config
 database_config = ConfigReader.get_key_value_config("database.config")
@@ -11,7 +10,7 @@ class PSQLClient:
 	Postgres helper using a connection pool.
 	"""
 	_instance     = None
-	_initialized  = False
+	_initialised  = False
 
 	def __new__(cls, *args, **kwargs):
 		# only create the object once
@@ -20,9 +19,9 @@ class PSQLClient:
 		return cls._instance
 
 	def __init__(self, host=None, port=None, database=None, user=None, password=None, minconn=1, maxconn=10):
-		if PSQLClient._initialized:
+		if PSQLClient._initialised:
 			return
-		PSQLClient._initialized = True
+		PSQLClient._initialised = True
 
 		self.host     = host or database_config.get("HOST", "localhost")
 		self.port     = port or database_config.get("PORT", 5432)

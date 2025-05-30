@@ -12,13 +12,18 @@
 
 ## About This Website
 
-The Github repository for this project is available at [github.com/Zubekanov/Website](https://github.com/Zubekanov/Website). <br>
+The GitHub repository for this project is available at [github.com/Zubekanov/Website](https://github.com/Zubekanov/Website).
 
-The website is self-hosted with an 8gb Raspberry Pi 5, with DNS resolution provided by Cloudflare. This project includes a lightweight Cloudflare Worker that serves a static HTML fallback page whenever the main site is offline. The source code for the Worker lives in [`src/offline/`](https://github.com/Zubekanov/Website/tree/main/src/offline), and the fallback page is always available at [offline.zubekanov.com](https://offline.zubekanov.com), even when the main site is up.
+The site is self-hosted on an 8 GB Raspberry Pi 5, with DNS handled by Cloudflare. There’s a placeholder Cloudflare Worker in `src/offline/` intended to serve a static fallback page at [offline.zubekanov.com](https://offline.zubekanov.com) when the main site goes down, but is not currently functional.
 
-The backend is written in Python using Flask and integrates a PostgreSQL database for storing user data and managing services. Static resources such as images, icons, and CSS files are served directly from the Raspberry Pi. <br>
+You can monitor CPU, memory and uptime on the built-in **Server Stats** page at `/server`, or by clicking the uptime icon at the top of the page.
 
-The frontend utilises basic HTML and CSS, with the focus of the project on managing resources server-side and minimising client-side load.
+Under the hood, the backend is Python/Flask with a PostgreSQL database for user data and service management. All static assets (images, icons, CSS) are served directly from the Pi.
+
+The frontend uses plain HTML and CSS, prioritising minimal client-side load and robust server-side resource handling.
+
+User accounts and email verification are supported. They may be more useful in the future, but currently are just proof of concept for database management.
+
 
 ---
 

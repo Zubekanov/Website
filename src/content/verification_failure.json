@@ -9,7 +9,7 @@
     "navbar_left" : "nameplate.html",
     "navbar_center" : "uptime.html",
     "page_contents" : [
-        "homepage.md"
+        "verification_failure.md"
     ],
     "page_scripts" : [
         "uptime_script.js",

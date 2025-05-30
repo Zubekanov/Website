@@ -1,0 +1,1 @@
+<div><strong>✖ Invalid code.</strong> The verification link is not valid or has expired.</div>

@@ -1,0 +1,12 @@
+zubekanov·com
+
+Hi {{ username }},
+
+Thanks for signing up! Please verify your email by clicking the link below:
+
+{{ verify_link }}
+
+If you didn’t request this, you can safely ignore this email.
+
+Cheers,
+Joseph Wong.

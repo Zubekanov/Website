@@ -16,7 +16,7 @@ def is_content(item: str) -> bool:
 class LayoutFetcher:
 	@staticmethod
 	def load_layout(layout_json_filename: str) -> dict:
-		base_content_dir = ConfigReader.get_content_dir()
+		base_content_dir = ConfigReader.content_dir()
 
 		layout_path = os.path.join(base_content_dir, layout_json_filename)
 		with open(layout_path, "r") as f:

@@ -4,7 +4,7 @@ from email.message import EmailMessage
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config_reader import ConfigReader
+from util.config_reader import ConfigReader
 
 
 class GmailClient:
@@ -36,7 +36,7 @@ class GmailClient:
 			print(f"Failed to send message: {error}")
 			return None
 	
-	def _send_html(self, to_addr: str, subject: str, plain: str, html: str, thread_id: str = None, in_reply_to: str = None):
+	def send_html(self, to_addr: str, subject: str, plain: str, html: str, thread_id: str = None, in_reply_to: str = None):
 		msg = EmailMessage()
 		msg['To'] = to_addr
 		msg['From'] = self._get_alias()

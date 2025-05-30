@@ -8,12 +8,12 @@
     ],
     "navbar_left" : "nameplate.html",
     "navbar_center" : "uptime.html",
-    "navbar_right" : "homepage_dropdown.html",
     "page_contents" : [
         "server_overview.md"
     ],
     "page_scripts" : [
         "server_overview.js",
-        "uptime_script.js"
+        "uptime_script.js",
+        "account_management.js"
     ]
 }

@@ -1,0 +1,1 @@
+<div><strong>✔ Verified!</strong> Your email has been successfully confirmed.</div>
