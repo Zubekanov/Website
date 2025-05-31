@@ -1,7 +1,10 @@
 from flask import request
 
 page_titles = {
-    "server" : "Server Overview"
+    "server" : "Server Overview",
+    "forgot-password" : "Password Recovery Form",
+    "reset-password" : "Reset Password",
+    "verify" : "Email Verification",
 }
 
 def generate_breadcrumbs():

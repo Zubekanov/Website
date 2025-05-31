@@ -5,6 +5,34 @@ document.addEventListener('DOMContentLoaded', () => {
 	const loginForm    = document.getElementById('login-form');
 	const regForm      = document.getElementById('register-form');
 
+	// ────────────────────────────────────────────────────────────────────────────────
+	// Instead of mouseDownInside + mouseUp logic, we use a single flag:
+	let ignoreNextClick = false;
+
+	// If a mousedown starts inside the sidePanel, mark that we should ignore the next click.
+	sidePanel.addEventListener('mousedown', () => {
+		ignoreNextClick = true;
+	});
+
+	// On the very next document click, if ignoreNextClick is true, skip closing and reset it.
+	document.addEventListener('click', e => {
+		// If we flagged that the click should be ignored, reset and bail out.
+		if (ignoreNextClick) {
+			ignoreNextClick = false;
+			return;
+		}
+
+		// Otherwise, only close if the click target is outside both sidePanel and auth-menu
+		if (
+			!sidePanel.contains(e.target) &&
+			!document.getElementById('auth-menu').contains(e.target)
+		) {
+			sidePanel.classList.remove('open');
+			authDropdown.style.display = '';
+		}
+	});
+	// ────────────────────────────────────────────────────────────────────────────────
+
 	// Hide dropdown and open side panel
 	document.querySelectorAll('#auth-dropdown a').forEach(link => {
 		link.addEventListener('click', e => {
@@ -19,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		});
 	});
 
-	// Close side panel
+	// Close side panel when “×” is clicked
 	closeBtn.addEventListener('click', () => {
 		sidePanel.classList.remove('open');
 		loginForm.classList.remove('active');
@@ -28,15 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		clearMessage(regForm);
 	});
 
-	// Close panel if clicking outside
-	document.addEventListener('click', e => {
-		if (!sidePanel.contains(e.target) && !document.getElementById('auth-menu').contains(e.target)) {
-			sidePanel.classList.remove('open');
-			authDropdown.style.display = '';
-		}
-	});
-
-	// Prevent nav-item hover from reopening dropdown
+	// Prevent nav‐item hover from reopening dropdown
 	document.getElementById('auth-menu').addEventListener('mouseleave', () => {
 		authDropdown.style.display = '';
 	});
@@ -48,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
 	// Handle Log In
-	loginForm.querySelector('button').addEventListener('click', async e => {
+	loginForm.addEventListener('submit', async e => {
 		e.preventDefault();
 		clearMessage(loginForm);
 
@@ -79,12 +99,25 @@ document.addEventListener('DOMContentLoaded', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email, password })
 			});
-			const data = await res.json();
+
+			let data, errorText = '';
+			try {
+				data = await res.json();
+			} catch {
+				data = null;
+			}
 
 			if (res.ok) {
-				showMessage(loginForm, data.message || 'Logged in successfully.', 'success');
+				window.location.reload();
 			} else {
-				showMessage(loginForm, data.error || 'Login failed.', 'error');
+				if (data && (data.error || data.message)) {
+					errorText = data.error || data.message;
+				} else if (data) {
+					errorText = JSON.stringify(data);
+				} else {
+					errorText = await res.text();
+				}
+				showMessage(loginForm, `Error ${res.status}: ${errorText}`, 'error');
 			}
 		} catch (err) {
 			showMessage(loginForm, 'Email or Password are invalid.', 'error');
@@ -93,13 +126,14 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 
 	// Handle Register
-	regForm.querySelector('button').addEventListener('click', async e => {
+	regForm.addEventListener('submit', async e => {
 		e.preventDefault();
 		clearMessage(regForm);
 
-		const username = regForm.querySelector('input[placeholder="Username"]').value.trim();
-		const email    = regForm.querySelector('input[type="email"]').value.trim();
-		const password = regForm.querySelector('input[type="password"]').value;
+		const username        = regForm.querySelector('input[placeholder="Username"]').value.trim();
+		const email           = regForm.querySelector('input[type="email"]').value.trim();
+		const password        = regForm.querySelector('input[placeholder="Password"]').value;
+		const confirmPassword = regForm.querySelector('input[placeholder="Confirm Password"]').value;
 
 		// Frontend validation
 		if (!username) {
@@ -126,6 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
 			showMessage(regForm, 'Password must be at least 8 characters.', 'error');
 			return;
 		}
+		if (password !== confirmPassword) {
+			showMessage(regForm, 'Passwords do not match.', 'error');
+			return;
+		}
 
 		try {
 			const res = await fetch('/register', {
@@ -133,13 +171,25 @@ document.addEventListener('DOMContentLoaded', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ username, email, password })
 			});
-			const data = await res.json();
+
+			let data, errorText = '';
+			try {
+				data = await res.json();
+			} catch {
+				data = null;
+			}
 
 			if (res.ok) {
 				showMessage(regForm, data.message || 'Registered successfully.', 'success');
-
 			} else {
-				showMessage(regForm, data.error || 'Registration failed.', 'error');
+				if (data && (data.error || data.message)) {
+					errorText = data.error || data.message;
+				} else if (data) {
+					errorText = JSON.stringify(data);
+				} else {
+					errorText = await res.text();
+				}
+				showMessage(regForm, `Error ${res.status}: ${errorText}`, 'error');
 			}
 		} catch (err) {
 			showMessage(regForm, 'An unexpected error occurred.', 'error');
@@ -188,4 +238,3 @@ document.addEventListener("DOMContentLoaded", () => {
 		}
 	});
 });
-

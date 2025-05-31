@@ -195,16 +195,22 @@ class PSQLClient:
 
 
 	def get_rows_by_raw_conditions(self, table, conditions: list):
-		"""Get rows from `table` where all raw SQL `conditions` are met."""
+		"""
+		Get rows from `table` where all raw SQL `conditions` are met.
+		Each entry in `conditions` should be a valid SQL fragment, e.g.:
+			["email = 'foo@example.com'", "is_active = true"]
+		"""
 		if not conditions:
 			raise ValueError("Conditions list is empty.")
 
 		where_clause = sql.SQL(" AND ").join(sql.SQL(cond) for cond in conditions)
-		q = sql.SQL("SELECT * FROM {table} WHERE {conds};").format(
-			table=sql.Identifier(table),
-			conds=where_clause
+
+		query = sql.SQL("SELECT * FROM {} WHERE {};").format(
+			sql.Identifier(table),
+			where_clause
 		)
-		return self.execute(q)
+
+		return self.execute(query)
 
 	def delete_rows_by_raw_conditions(self, table, conditions: list):
 		"""Delete rows from `table` where all raw SQL `conditions` are met."""

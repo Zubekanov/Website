@@ -103,7 +103,7 @@ class ConfigReader:
 		statements = []
 		for statement in raw_sql.split(";"):
 			stmt = statement.strip() + ";"
-			if stmt and not stmt.startswith("--"):
+			if stmt and not stmt.startswith("--") and not stmt == ";":
 				statements.append(stmt)
 		return statements
 

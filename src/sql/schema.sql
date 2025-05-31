@@ -22,4 +22,11 @@ CREATE TABLE IF NOT EXISTS verification_requests (
     uid             UUID        REFERENCES users(uid) ON DELETE CASCADE,
     created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at      TIMESTAMP   NOT NULL
-)
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_requests (
+    reset_token     TEXT        NOT NULL UNIQUE,
+    uid             UUID        REFERENCES users(uid) ON DELETE CASCADE,
+    created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at      TIMESTAMP   NOT NULL
+);
