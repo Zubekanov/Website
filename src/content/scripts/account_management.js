@@ -41,6 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
 		authDropdown.style.display = '';
 	});
 
+	// Utility: simple email format checker
+	function isValidEmail(email) {
+		const re = /^\S+@\S+\.\S+$/;
+		return re.test(email);
+	}
+
 	// Handle Log In
 	loginForm.querySelector('button').addEventListener('click', async e => {
 		e.preventDefault();
@@ -48,6 +54,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		const email    = loginForm.querySelector('input[type="email"]').value.trim();
 		const password = loginForm.querySelector('input[type="password"]').value;
+
+		// Frontend validation
+		if (!email) {
+			showMessage(loginForm, 'Email is required.', 'error');
+			return;
+		}
+		if (!isValidEmail(email)) {
+			showMessage(loginForm, 'Please enter a valid email address.', 'error');
+			return;
+		}
+		if (!password) {
+			showMessage(loginForm, 'Password is required.', 'error');
+			return;
+		}
+		if (password.length < 8) {
+			showMessage(loginForm, 'Password must be at least 8 characters.', 'error');
+			return;
+		}
 
 		try {
 			const res = await fetch('/login', {
@@ -59,8 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			if (res.ok) {
 				showMessage(loginForm, data.message || 'Logged in successfully.', 'success');
-				// optionally close the panel or redirect:
-				// sidePanel.classList.remove('open');
 			} else {
 				showMessage(loginForm, data.error || 'Login failed.', 'error');
 			}
@@ -79,6 +101,32 @@ document.addEventListener('DOMContentLoaded', () => {
 		const email    = regForm.querySelector('input[type="email"]').value.trim();
 		const password = regForm.querySelector('input[type="password"]').value;
 
+		// Frontend validation
+		if (!username) {
+			showMessage(regForm, 'Username is required.', 'error');
+			return;
+		}
+		if (username.length < 4) {
+			showMessage(regForm, 'Username must be at least 4 characters.', 'error');
+			return;
+		}
+		if (!email) {
+			showMessage(regForm, 'Email is required.', 'error');
+			return;
+		}
+		if (!isValidEmail(email)) {
+			showMessage(regForm, 'Please enter a valid email address.', 'error');
+			return;
+		}
+		if (!password) {
+			showMessage(regForm, 'Password is required.', 'error');
+			return;
+		}
+		if (password.length < 8) {
+			showMessage(regForm, 'Password must be at least 8 characters.', 'error');
+			return;
+		}
+
 		try {
 			const res = await fetch('/register', {
 				method: 'POST',
@@ -89,9 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			if (res.ok) {
 				showMessage(regForm, data.message || 'Registered successfully.', 'success');
-				// you might auto-switch to login form:
-				// loginForm.classList.add('active');
-				// regForm.classList.remove('active');
+
 			} else {
 				showMessage(regForm, data.error || 'Registration failed.', 'error');
 			}
@@ -120,3 +166,26 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (msg) msg.remove();
 	}
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+	const logoutBtn = document.getElementById("logout-btn");
+	if (!logoutBtn) return;
+
+	logoutBtn.addEventListener("click", async e => {
+		e.preventDefault();
+		try {
+			const res = await fetch("/logout", {
+				method: "GET",
+				credentials: "include"
+			});
+			if (res.ok) {
+				window.location.reload();
+			} else {
+				console.error("Logout failed:", await res.text());
+			}
+		} catch (err) {
+			console.error("Error logging out:", err);
+		}
+	});
+});
+

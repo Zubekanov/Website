@@ -214,6 +214,15 @@ class UserManagement:
         )
         
         return True
+    
+    def invalidate_auth_token(self, token: str) -> None:
+        """
+        Invalidate an auth token, effectively logging out the user.
+        """
+        result = psql.delete_rows_by_conditions(
+            table="auth_tokens",
+            conditions={"token": token}
+        )
 
     def get_auth_token(self, email: str, password: str) -> str:
         """

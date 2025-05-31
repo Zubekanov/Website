@@ -21,7 +21,6 @@ def create_app():
 	def load_auth_token():
 		"""
 		Before each request, check for the auth token in cookies.
-		This is a placeholder for actual authentication logic.
 		"""
 		auth_token = request.cookies.get("auth_token")
 		if not auth_token:
@@ -30,12 +29,14 @@ def create_app():
 		else:
 			g.auth_token = auth_token
 			g.clear_token = False
-			if not user_manager.get_user_by_auth_token(auth_token):
+			user = user_manager.get_user_by_auth_token(auth_token)
+			if not user:
 				g.auth_token = None
 				g.clear_token = True
 				print("[DEBUG] Invalid auth token found in cookies.")
 				return None
 			print(f"[DEBUG] Auth token found: {auth_token}")
+			print(f"[DEBUG] Linked to user: {user['username']}")
 
 	@app.after_request
 	def clear_auth_token(response):
@@ -45,7 +46,7 @@ def create_app():
 		"""
 		if getattr(g, 'clear_token', False):
 			response.set_cookie("auth_token", "", expires=0)
-			print("[DEBUG] Auth token cleared from cookies.")
+			print("[DEBUG] Invalid auth token cleared from cookies.")
 		return response
 	
 	return app

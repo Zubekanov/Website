@@ -69,6 +69,30 @@ def verify_email():
 
 	return render_template("main_layout.html", **components)
 
+@main.route("/logout")
+def logout():
+	"""
+	Log out the user by clearing the auth token cookie.
+	"""
+	auth_token = getattr(g, 'auth_token', None)
+	if not auth_token:
+		abort(400, "No user is currently logged in.")
+	
+	user = user_manager.get_user_by_auth_token(auth_token)
+	if not user:
+		abort(400, "User is already logged out or does not exist.")
+	
+	user_manager.invalidate_auth_token(auth_token)
+	response = make_response("Logout successful")
+	response.status_code = 200
+	response.set_cookie(
+		"auth_token",
+		"",
+		expires=0,  # Clear the cookie
+		httponly=True,
+	)
+	return response
+
 @main.route("/login", methods=["POST"])
 def login():
 	data = request.get_json()
@@ -76,6 +100,8 @@ def login():
 	for field in required_fields:
 		if field not in data:
 			abort(400, "Malformed request, missing required fields.")
+		if not data[field]:
+			abort(400, f"Malformed request, field '{field}' cannot be empty.")
 	auth_token = user_manager.get_auth_token(
 		email=data["email"],
 		password=data["password"]
@@ -100,6 +126,8 @@ def register():
 	for field in required_fields:
 		if field not in data:
 			abort(400, "Malformed request, missing required fields.")
+		if not data[field]:
+			abort(400, f"Malformed request, field '{field}' cannot be empty.")
 	result = user_manager.register_user(
 		username=data["username"],
 		email=data["email"],
