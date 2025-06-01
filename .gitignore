@@ -1,6 +1,8 @@
 # Remove password and API key containing files.
 *.config
 logs/*
+plots/*
+plots
 
 # Gmail API credentials
 **/config/*.json
