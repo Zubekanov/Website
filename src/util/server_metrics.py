@@ -160,7 +160,7 @@ def get_last_hour_metrics():
 		metrics["cpu_temp"].append({ "x": ts, "y": r["cpu_temp"] })
 	return metrics
 
-def get_compressed_metrics():
+def get_all_metrics():
 	"""
 	Fetch all rows from server_metrics (no compression). Return same shape:
 	{ "cpu_percent": [ {x: ts, y: val}, … ], … }

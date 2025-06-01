@@ -269,4 +269,4 @@ def api_hour_metrics():
 
 @main.route("/api/compressed_metrics")
 def api_compressed_metrics():
-	return jsonify(metrics.get_compressed_metrics())
+	return jsonify(metrics.get_all_metrics())
