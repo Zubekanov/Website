@@ -30,3 +30,19 @@ CREATE TABLE IF NOT EXISTS password_reset_requests (
     created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at      TIMESTAMP   NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    uid             UUID        REFERENCES users(uid) ON DELETE CASCADE,
+    email_subscribe BOOLEAN     NOT NULL DEFAULT FALSE,
+    profile_visible BOOLEAN     NOT NULL DEFAULT TRUE,
+    display_name    TEXT        NOT NULL,
+    biography       TEXT        NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS server_metrics (
+  ts          BIGINT      PRIMARY KEY,
+  cpu_percent REAL        NOT NULL,
+  ram_used    REAL        NOT NULL,
+  disk_used   REAL        NOT NULL,
+  cpu_temp    REAL
+);

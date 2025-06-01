@@ -8,6 +8,7 @@ from app.layout_fetcher import LayoutFetcher
 from app.breadcrumbs import generate_breadcrumbs
 import util.server_metrics as metrics
 from app.user_management import UserManagement as users
+from util.http_error_checker import validate
 
 logger = logging.getLogger(__name__)
 main = Blueprint('main', __name__)
@@ -57,9 +58,11 @@ def verify_email():
 	"""
 	Handle email verification via token, then issue an auth cookie if successful.
 	"""
-	token = request.args.get("token")
-	if not token:
-		abort(400, "Missing token")
+	validation = validate(request.args, required=["token"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
+	token = validation["request_data"]["token"].strip()
 
 	result = user_manager.verify_user(token)
 	if result:
@@ -125,20 +128,16 @@ def login():
 	"""
 	Accepts JSON {"email": "...", "password": "..."} and returns a new auth_token cookie.
 	"""
-	if not request.is_json:
-		abort(400, "Expected application/json")
 
-	data = request.get_json(silent=True)
-	if not data:
-		abort(400, "Malformed JSON")
-
-	required_fields = ["email", "password"]
-	missing = [f for f in required_fields if not data.get(f)]
-	if missing:
-		abort(400, f"Missing or empty field(s): {', '.join(missing)}")
+	validation = validate(request.get_json(silent=True), required=["email", "password"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
+	data = validation["request_data"]
 
 	email = data["email"].strip()
 	password = data["password"]
+	
 	auth_token = user_manager.get_auth_token(email=email, password=password)
 	if not auth_token:
 		abort(401, "Invalid email or password.")
@@ -160,17 +159,12 @@ def register():
 	"""
 	Accepts JSON {"username": "...", "email": "...", "password": "..."} to create a new user.
 	"""
-	if not request.is_json:
-		abort(400, "Expected application/json")
 
-	data = request.get_json(silent=True)
-	if not data:
-		abort(400, "Malformed JSON")
-
-	required_fields = ["username", "email", "password"]
-	missing = [f for f in required_fields if not data.get(f)]
-	if missing:
-		abort(400, f"Missing or empty field(s): {', '.join(missing)}")
+	validation = validate(request.get_json(silent=True), required=["username", "email", "password"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
+	data = validation["request_data"]
 
 	username = data["username"].strip()
 	email = data["email"].strip()
@@ -200,19 +194,14 @@ def password_reset_request():
 	"""
 	Accepts JSON {"email": "..."} to initiate a password reset.
 	"""
-	if not request.is_json:
-		abort(400, "Expected application/json")
 
-	data = request.get_json(silent=True)
-	if not data:
-		abort(400, "Malformed JSON")
-
+	validation = validate(request.get_json(silent=True), required=["email"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
+	data = validation["request_data"]
 	email = data.get("email", "").strip()
-	if not email:
-		abort(400, "Email is required.")
-
 	logger.debug(f"Received password reset request for email: {email}")
-
 	user_manager.request_password_reset(email=email)
 	
 	return make_response(jsonify({
@@ -224,10 +213,11 @@ def reset_password():
 	"""
 	Render the password reset page where users can set a new password.
 	"""
-	token = request.args.get("token")
-	if not token:
-		abort(400, "Missing token")
 
+	validation = validate(request.args, required=["token"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
 	# TODO reject invalid/expired tokens here
 
 	components = LayoutFetcher.load_layout("password_reset.json")
@@ -239,15 +229,17 @@ def reset_password_submit():
 	"""
 	Accepts JSON {"token": "...", "new_password": "..."} to reset the user's password.
 	"""
-	if not request.is_json:
-		abort(400, "Expected application/json")
 
-	data = request.get_json(silent=True)
-	if not data:
-		abort(400, "Malformed JSON")
+	validation = validate(request.get_json(silent=True), required=["token", "new_password"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
+	data = validation["request_data"]
+
 
 	token = data.get("token", "").strip()
 	new_password = data.get("new_password", "").strip()
+	
 	if not token or not new_password:
 		abort(400, "Token and new password are required.")
 

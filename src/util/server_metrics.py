@@ -6,14 +6,9 @@ import psutil
 
 from datetime import datetime
 from util.config_reader import ConfigReader
+from util.psql_manager import PSQLClient
 
 _SLEEP_INTERVAL = 5
-_COMPRESSION_INTERVALS = (
-	60,       # 1 minute
-	3600,     # 1 hour
-	86400,    # 1 day
-	2592000,  # 30 days
-)
 _initialisation_time = time.time()
 _worker_started = False
 _last_fetched_metrics = {}
@@ -21,9 +16,9 @@ _last_fetched_metrics = {}
 def get_local_data():
 	return {
 		"cpu_percent": psutil.cpu_percent(interval=None),
-		"ram_used": round(psutil.virtual_memory().used / 1073741824, 2),
-		"disk_used": round(psutil.disk_usage("/").used / 1073741824, 1),
-		"cpu_temp": _get_cpu_temp(),
+		"ram_used":    round(psutil.virtual_memory().used / 1073741824, 2),
+		"disk_used":   round(psutil.disk_usage("/").used / 1073741824, 1),
+		"cpu_temp":    _get_cpu_temp(),
 	}
 
 def _get_cpu_temp():
@@ -46,20 +41,9 @@ def get_disk_total():
 def get_uptime():
 	return int(time.time() - _initialisation_time)
 
-def _ensure_metrics_dir():
-	base = ConfigReader.logs_dir()
-	path = os.path.join(base, "server_metrics")
-	os.makedirs(path, exist_ok=True)
-	return path
-
-def _live_log_path():
-	return os.path.join(_ensure_metrics_dir(), "live_metrics.log")
-
-def _compressed_log_path():
-	return os.path.join(_ensure_metrics_dir(), "compressed_metrics.log")
-
 def _static_info_path():
-	return os.path.join(_ensure_metrics_dir(), "static_info.log")
+	base = ConfigReader.logs_dir()
+	return os.path.join(base, "server_metrics", "static_info.log")
 
 def get_static_metrics():
 	return {
@@ -68,121 +52,47 @@ def get_static_metrics():
 	}
 
 def log_server_metrics():
+	"""
+	Fetch current metrics and insert into `server_metrics` table.
+	Also update _last_fetched_metrics so get_latest_metrics() still works.
+	"""
 	global _last_fetched_metrics
-	path = _live_log_path()
 	data = get_local_data()
 	ts = int(time.time())
-	values = [data[k] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")]
-	with open(path, "a") as f:
-		f.write(f"{ts}," + ",".join(map(str, values)) + "\n")
 
+	# Build the row dict matching table columns
+	row = {
+		"ts":          ts,
+		"cpu_percent": data["cpu_percent"],
+		"ram_used":    data["ram_used"],
+		"disk_used":   data["disk_used"],
+		"cpu_temp":    data["cpu_temp"]
+	}
+
+	# Insert or ignore if ts collision
+	client = PSQLClient()
+	try:
+		client.insert_row("server_metrics", row)
+	except Exception:
+		# In case of conflict or any error, ignore or log as needed
+		pass
+
+	# Keep the same structure for get_latest_metrics()
 	data["timestamp"] = ts
 	_last_fetched_metrics = data
 
-def compress_metrics_file():
-	log_dir = ConfigReader.logs_dir()
-	base    = os.path.join(log_dir, "server_metrics")
-	live_path = os.path.join(base, "live_metrics.log")
-	comp_path = os.path.join(base, "compressed_metrics.log")
-
-	print("Running server metrics compression…")
-	start = time.time()
-
-	all_entries = []
-
-	# helper to read and parse a file, skipping bad lines
-	def _read_log(path):
-		entries = []
-		if not os.path.exists(path):
-			return entries
-		with open(path, "r") as f:
-			for line in f:
-				parts = line.strip().split(",")
-				if len(parts) != 5:
-					# malformed (wrong number of columns)
-					continue
-				ts_str, *val_strs = parts
-				try:
-					ts   = int(ts_str)
-					vals = list(map(float, val_strs))
-				except ValueError:
-					# malformed (non-numeric)
-					continue
-				entries.append((ts, vals))
-		return entries
-
-	old_live_entries = _read_log(live_path)
-	old_comp_entries = _read_log(comp_path)
-
-	old_live = len(old_live_entries)
-	old_comp = len(old_comp_entries)
-	all_entries = old_live_entries + old_comp_entries
-	old_total = len(all_entries)
-
-	all_entries.sort(key=lambda e: e[0])
-
-	buckets = {"minute": {}, "hour": {}, "day": {}}
-	minute_i, hour_i, day_i, month_i = _COMPRESSION_INTERVALS
-	new_live = []
-	now = time.time()
-
-	for ts, vals in all_entries:
-		age = now - ts
-		if age > hour_i and age <= day_i:
-			interval, scale = minute_i, "minute"
-		elif age > day_i and age <= month_i:
-			interval, scale = hour_i, "hour"
-		elif age > month_i:
-			interval, scale = day_i, "day"
-		else:
-			new_live.append((ts, vals))
-			continue
-
-		bucket_ts = ts - (ts % interval)
-		buckets[scale].setdefault(bucket_ts, []).append(vals)
-
-	new_comp = []
-	for scale, mapping in buckets.items():
-		for bucket_ts, list_of_vals in mapping.items():
-			cols = zip(*list_of_vals)
-			avg  = [sum(col) / len(col) for col in cols]
-			new_comp.append((bucket_ts, avg))
-
-	# rewrite compressed log with only valid, aggregated entries
-	with open(comp_path, "w") as f:
-		for ts, vals in sorted(new_comp, key=lambda x: x[0]):
-			f.write(f"{ts}," + ",".join(f"{v:.2f}" for v in vals) + "\n")
-
-	# rewrite live log with only the un-compressed, valid entries
-	with open(live_path, "w") as f:
-		for ts, vals in sorted(new_live, key=lambda x: x[0]):
-			f.write(f"{ts}," + ",".join(f"{v:.2f}" for v in vals) + "\n")
-
-	kept = len(new_live) + len(new_comp)
-	reduction = int((1 - kept / old_total) * 100) if old_total else 0
-	print(f"{old_live} live + {old_comp} compressed ({old_total} total) → "
-		  f"{len(new_live)} live + {len(new_comp)} compressed "
-		  f"({kept} total) ({reduction}% reduction) in {time.time() - start:.2f}s")
-
-def _get_earliest_live_ts(path: str) -> float:
-	if not os.path.exists(path):
-		return time.time()
-	with open(path, "r") as f:
-		for line in f:
-			ts = line.split(",", 1)[0]
-			try:
-				return float(ts)
-			except ValueError:
-				continue
-	return time.time()
-
-def _format_schedule(ts: float) -> str:
-	return datetime.fromtimestamp(ts).strftime("%d/%m %H:%M")
-
 def server_metrics_worker():
+	"""
+	Periodically calls log_server_metrics() every _SLEEP_INTERVAL seconds.
+	Static‐info (RAM/DISK) is still appended to flat file if it changes.
+	"""
 	print("Server metrics worker started.")
-	metrics_dir = _ensure_metrics_dir()
-	static_log_path = os.path.join(metrics_dir, "static_info.log")
+
+	# Ensure the directory for static_info exists (same as before)
+	metrics_dir = ConfigReader.logs_dir()
+	static_dir = os.path.join(metrics_dir, "server_metrics")
+	os.makedirs(static_dir, exist_ok=True)
+	static_log_path = os.path.join(static_dir, "static_info.log")
 
 	def _read_last_static():
 		if not os.path.exists(static_log_path):
@@ -194,50 +104,21 @@ def server_metrics_worker():
 		_, ram_s, disk_s = lines[-1].split(",")
 		return float(ram_s), float(disk_s)
 
+	# Record static metrics if they changed (same as original)
 	last_ram, last_disk = _read_last_static()
-
 	curr_ram = get_ram_total()
 	curr_disk = get_disk_total()
-
-	# Only append if either changed
 	if curr_ram != last_ram or curr_disk != last_disk:
 		with open(static_log_path, "a") as f:
 			f.write(f"{int(time.time())},{curr_ram},{curr_disk}\n")
 		print(f"[static_info] appended new specs: RAM={curr_ram} GiB, Disk={curr_disk} GiB")
 
-	compress_metrics_file()
-
-	# Calculate next compression time.
-	# The time is always 1 hour later unless the log contains less than 1 hour of data.
-	earliest = _get_earliest_live_ts(_live_log_path())
-	next_compress = earliest + 7200
-	now = time.time()
-	delay = max(0, next_compress - now)
-	print(
-		f"Next compression scheduled for "
-		f"{_format_schedule(next_compress)} "
-		f"({int(delay/60)} min from now)"
-	)
-
 	last_log = 0
 	while True:
-		if int(time.time()) % _SLEEP_INTERVAL == 0 and last_log != int(time.time()):
+		now = int(time.time())
+		if now % _SLEEP_INTERVAL == 0 and last_log != now:
 			log_server_metrics()
-			last_log = int(time.time())
-
-			if time.time() >= next_compress:
-				compress_metrics_file()
-				# Recompute earliest in the freshly‐written live log
-				earliest = _get_earliest_live_ts(_live_log_path())
-				next_compress = earliest + 7200
-				now = time.time()
-				delay = max(0, next_compress - now)
-				print(
-					f"Next compression scheduled for "
-					f"{_format_schedule(next_compress)} "
-					f"({int(delay/60)} min from now)"
-				)
-
+			last_log = now
 		time.sleep(0.5)
 
 def start_server_metrics_thread():
@@ -247,47 +128,57 @@ def start_server_metrics_thread():
 	_worker_started = True
 	threading.Thread(target=server_metrics_worker, daemon=True).start()
 
-def load_entries(path, since_ts=None):
-	if not os.path.exists(path):
-		return []
-
-	parsed = []
-	with open(path, "r") as f:
-		for line in f:
-			parts = line.strip().split(",")
-			# we expect exactly 5 parts: ts + 4 metrics
-			if len(parts) != 5:
-				continue
-			ts_str, *val_strs = parts
-			try:
-				ts   = int(ts_str)
-				vals = list(map(float, val_strs))
-			except ValueError:
-				continue
-			if since_ts is None or ts >= since_ts:
-				parsed.append((ts, vals))
-
-	return parsed
-
 def get_latest_metrics():
+	"""
+	Return the most recent sample that was written (or {} if none).
+	"""
 	return _last_fetched_metrics
 
 def get_last_hour_metrics():
-	one_hour_ago = int(time.time()) - 3600
-	entries = load_entries(_live_log_path(), since_ts=one_hour_ago)
+	"""
+	Fetch all rows from server_metrics where ts >= (now - 3600).
+	Return a dict in the same shape as previously:
+	{ "cpu_percent": [ {x: ts, y: val}, … ], … }
+	"""
+	cutoff = int(time.time()) - 3600
+	query = """
+		SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp
+		  FROM server_metrics
+		 WHERE ts >= %s
+		 ORDER BY ts;
+	"""
+	client = PSQLClient()
+	rows = client.execute(query, [cutoff])
 
+	# Build the same output structure
 	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
-	for ts, vals in entries:
-		for name, val in zip(metrics, vals):
-			metrics[name].append({"x": ts, "y": val})
-
+	for r in rows:
+		ts = r["ts"]
+		metrics["cpu_percent"].append({ "x": ts, "y": r["cpu_percent"] })
+		metrics["ram_used"].append({ "x": ts, "y": r["ram_used"] })
+		metrics["disk_used"].append({ "x": ts, "y": r["disk_used"] })
+		metrics["cpu_temp"].append({ "x": ts, "y": r["cpu_temp"] })
 	return metrics
 
 def get_compressed_metrics():
-	entries = load_entries(_compressed_log_path())
-	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
-	for ts, vals in entries:
-		for name, val in zip(metrics, vals):
-			metrics[name].append({"x": ts, "y": val})
+	"""
+	Fetch all rows from server_metrics (no compression). Return same shape:
+	{ "cpu_percent": [ {x: ts, y: val}, … ], … }
+	If you ever want to add database‐side aggregation, do it here.
+	"""
+	query = """
+		SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp
+		  FROM server_metrics
+		 ORDER BY ts;
+	"""
+	client = PSQLClient()
+	rows = client.execute(query)
 
+	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
+	for r in rows:
+		ts = r["ts"]
+		metrics["cpu_percent"].append({ "x": ts, "y": r["cpu_percent"] })
+		metrics["ram_used"].append({ "x": ts, "y": r["ram_used"] })
+		metrics["disk_used"].append({ "x": ts, "y": r["disk_used"] })
+		metrics["cpu_temp"].append({ "x": ts, "y": r["cpu_temp"] })
 	return metrics
