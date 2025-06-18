@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 	async function loadHour() {
 		let json;
 		try {
-			const res = await fetch('/api/hour_metrics');
+			const res = await fetch('/api/timestamp_metrics');
 			if (!res.ok) throw res.status;
 			json = await res.json();
 		} catch (e) {

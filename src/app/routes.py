@@ -263,10 +263,25 @@ def api_static_metrics():
 def api_live_metrics():
 	return jsonify(metrics.get_latest_metrics())
 
-@main.route("/api/hour_metrics")
-def api_hour_metrics():
-	return jsonify(metrics.get_last_hour_metrics())
-
-@main.route("/api/compressed_metrics")
+@main.route("/api/timestamp_metrics")
 def api_compressed_metrics():
-	return jsonify(metrics.get_all_metrics())
+	"""
+	Optionally accepts two timestamp query parameters:
+		- start: Start timestamp in seconds since epoch (default: 1 hour ago, inclusive)
+		- stop: End timestamp in seconds since epoch (default: now, inclusive)
+		- step: Step in seconds (default: 5 seconds, steps should be a multiple of 5 but will be rounded up to the nearest 5)
+	Attempts to return metrics for the specified time range, but advise paged requests for large ranges.
+	"""
+
+	validation = validate(request.args, required=[], optional=["start", "stop", "step"])
+	if validation["error"]:
+		abort(validation["response"], validation["message"])
+	
+	data = validation["request_data"]
+	start = data.get("start", None)
+	stop = data.get("stop", None)
+	step = data.get("step", 5)
+
+	metric = metrics.get_range_metrics(start=start, stop=stop, step=step)
+
+	return jsonify(metric)

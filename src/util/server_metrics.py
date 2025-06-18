@@ -134,23 +134,40 @@ def get_latest_metrics():
 	"""
 	return _last_fetched_metrics
 
-def get_last_hour_metrics():
+def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	"""
-	Fetch all rows from server_metrics where ts >= (now - 3600).
-	Return a dict in the same shape as previously:
-	{ "cpu_percent": [ {x: ts, y: val}, … ], … }
+	Fetch metrics between `start` and `stop` (inclusive),
+	sampled every `step` seconds (rounded up to the nearest 5).
+	Returns a dict of series just like get_last_hour_metrics()/get_all_metrics().
 	"""
-	cutoff = int(time.time()) - 3600
+	# round step up to nearest multiple of 5
+	step = ((step + 4) // 5) * 5
+	if step <= 0:
+		step = 5
+
+	if not start or start < 0:
+		start = int(time.time()) - 3600
+	if not stop or stop < 0:
+		stop = int(time.time())
+	if start > stop:
+		raise ValueError("Start timestamp must be less than or equal to stop timestamp.")
+
 	query = """
-		SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp
-		  FROM server_metrics
-		 WHERE ts >= %s
-		 ORDER BY ts;
+		SELECT
+			ts,
+			cpu_percent,
+			ram_used,
+			disk_used,
+			cpu_temp
+		FROM server_metrics
+		WHERE ts >= %s
+		  AND ts <= %s
+		  AND ts %% %s = 0
+		ORDER BY ts;
 	"""
 	client = PSQLClient()
-	rows = client.execute(query, [cutoff])
+	rows = client.execute(query, [start, stop, step])
 
-	# Build the same output structure
 	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
 	for r in rows:
 		ts = r["ts"]
@@ -158,27 +175,6 @@ def get_last_hour_metrics():
 		metrics["ram_used"].append({ "x": ts, "y": r["ram_used"] })
 		metrics["disk_used"].append({ "x": ts, "y": r["disk_used"] })
 		metrics["cpu_temp"].append({ "x": ts, "y": r["cpu_temp"] })
+
 	return metrics
 
-def get_all_metrics():
-	"""
-	Fetch all rows from server_metrics (no compression). Return same shape:
-	{ "cpu_percent": [ {x: ts, y: val}, … ], … }
-	If you ever want to add database‐side aggregation, do it here.
-	"""
-	query = """
-		SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp
-		  FROM server_metrics
-		 ORDER BY ts;
-	"""
-	client = PSQLClient()
-	rows = client.execute(query)
-
-	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
-	for r in rows:
-		ts = r["ts"]
-		metrics["cpu_percent"].append({ "x": ts, "y": r["cpu_percent"] })
-		metrics["ram_used"].append({ "x": ts, "y": r["ram_used"] })
-		metrics["disk_used"].append({ "x": ts, "y": r["disk_used"] })
-		metrics["cpu_temp"].append({ "x": ts, "y": r["cpu_temp"] })
-	return metrics
