@@ -162,19 +162,50 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 		FROM server_metrics
 		WHERE ts >= %s
 		  AND ts <= %s
-		  AND ts %% %s = 0
 		ORDER BY ts;
 	"""
 	client = PSQLClient()
-	rows = client.execute(query, [start, stop, step])
-
+	rows = client.execute(query, [start, stop])
+ 
+	step_items = step / 5
+	# If there is an even number of items, averaging over item - 1 ensures full coverage.
+	# If there is an odd number, that number of items will overlap on an intermediate value.
+	# But it saves a lot of work to just accept the overlap, and it barely affects the result.
+	if step_items % 2 == 0:
+		step_items -= 1
+  
+	# Convert rows into a dict of form
+	# { ts : { "cpu_percent": ..., "ram_used": ..., "disk_used": ..., "cpu_temp": ... } }
+	rows = {r["ts"]: r for r in rows}
 	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
-	for r in rows:
-		ts = r["ts"]
-		metrics["cpu_percent"].append({ "x": ts, "y": r["cpu_percent"] })
-		metrics["ram_used"].append({ "x": ts, "y": r["ram_used"] })
-		metrics["disk_used"].append({ "x": ts, "y": r["disk_used"] })
-		metrics["cpu_temp"].append({ "x": ts, "y": r["cpu_temp"] })
+ 
+	for step_ts in range(start, stop + 1, step):
+		half_step_items = (step_items - 1) / 2
+		step_lower = step_ts - half_step_items * 5
+		step_upper = step_ts + half_step_items * 5
+  
+		valid_values = 0
+		step_row = {
+			"ts": step_ts,
+			"cpu_percent": 0,
+			"ram_used": 0,
+			"disk_used": 0,
+			"cpu_temp": 0
+		}
+  
+		for inter_step_ts in range(step_lower, step_upper + 1, 5):
+			if inter_step_ts in rows.keys():
+				valid_values += 1
+				step_row["cpu_percent"] += rows[inter_step_ts]["cpu_percent"]
+				step_row["ram_used"] += rows[inter_step_ts]["ram_used"]
+				step_row["disk_used"] += rows[inter_step_ts]["disk_used"]
+				step_row["cpu_temp"] += rows[inter_step_ts]["cpu_temp"]
+		
+		if valid_values> 0:
+			metrics["cpu_percent"].append({ "x": step_ts, "y": step_row["cpu_percent"] / valid_values })
+			metrics["ram_used"].append({ "x": step_ts, "y": step_row["ram_used"] / valid_values })
+			metrics["disk_used"].append({ "x": step_ts, "y": step_row["disk_used"] / valid_values })
+			metrics["cpu_temp"].append({ "x": step_ts, "y": step_row["cpu_temp"] / valid_values })
 
 	return metrics
 
