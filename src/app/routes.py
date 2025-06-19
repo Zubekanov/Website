@@ -279,8 +279,11 @@ def api_compressed_metrics():
 	
 	data = validation["request_data"]
 	start = data.get("start", None)
+	if start is not None: start = int(start)
 	stop = data.get("stop", None)
+	if stop is not None: stop = int(stop)
 	step = data.get("step", 5)
+	if step is not None: step = int(step)
 
 	metric = metrics.get_range_metrics(start=start, stop=stop, step=step)
 
