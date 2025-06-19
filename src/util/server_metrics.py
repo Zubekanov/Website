@@ -148,14 +148,14 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	bound_row = client.execute(
 		"SELECT MIN(ts) AS min_ts FROM server_metrics;"
 	)[0]
-	min_ts = bound_row["min_ts"] or int(time.time()) - 3600
+	min_ts = bound_row["min_ts"]
 	max_ts = int(time.time())
 
-	if not start:
+	if start is None:
 		start = int(time.time()) - 3600
 	if start < min_ts:
 		start = min_ts
-	if not stop or stop > max_ts:
+	if stop is None or stop > max_ts:
 		stop = max_ts
 	if start > stop:
 		raise ValueError("Start timestamp must be ≤ stop timestamp.")
