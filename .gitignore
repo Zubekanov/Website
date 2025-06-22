@@ -7,6 +7,10 @@ plots
 # Gmail API credentials
 **/config/*.json
 
+# Debug psql dump script and dir
+psql_dump.bash
+psql_dump/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
