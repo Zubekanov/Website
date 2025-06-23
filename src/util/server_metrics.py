@@ -140,7 +140,7 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	sampled every `step` seconds (rounded up to the nearest 5).
 	Returns a dict of series just like get_last_hour_metrics()/get_all_metrics().
 	"""
-	# round step up to nearest multiple of 5
+	# Round step up to nearest multiple of 5
 	step = ((step + 4) // 5) * 5
 	if step <= 0:
 		step = 5
@@ -180,6 +180,7 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
  
 	for step_ts in range(start, stop + 1, step):
+		# From above conversion, step_items is always odd.
 		half_step_items = (step_items - 1) / 2
 		step_lower = step_ts - half_step_items * 5
 		step_upper = step_ts + half_step_items * 5

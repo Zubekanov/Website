@@ -281,6 +281,10 @@ def api_compressed_metrics():
 	start = data.get("start", None)
 	stop = data.get("stop", None)
 	step = data.get("step", 5)
+ 
+	# Simple check to prevent ridiculous requests from being processed.
+	if (stop - start) / step > 65536:
+		abort(400, "Requested range is too large. Please reduce the time range or increase the step size.")
 
 	metric = metrics.get_range_metrics(start=start, stop=stop, step=step)
 
