@@ -138,75 +138,68 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	"""
 	Fetch metrics between `start` and `stop` (inclusive),
 	sampled every `step` seconds (rounded up to the nearest 5).
+	Clamps out-of-bounds start/stop to the DB range so you never iterate
+	over an empty span.
 	Returns a dict of series just like get_last_hour_metrics()/get_all_metrics().
 	"""
-	# Round step up to nearest multiple of 5
-	step = ((step + 4) // 5) * 5
-	if step <= 0:
-		step = 5
+	step = max(5, ((step + 4) // 5) * 5)
 
-	if not start or start < 0:
+	client = PSQLClient()
+	bound_row = client.execute(
+		"SELECT MIN(ts) AS min_ts FROM server_metrics;"
+	)[0]
+	min_ts = bound_row["min_ts"]
+	max_ts = int(time.time())
+
+	if start is None:
 		start = int(time.time()) - 3600
-	if not stop or stop < 0:
-		stop = int(time.time())
+	if start < min_ts:
+		start = min_ts
+	if stop is None or stop > max_ts:
+		stop = max_ts
 	if start > stop:
-		raise ValueError("Start timestamp must be less than or equal to stop timestamp.")
+		raise ValueError("Start timestamp must be ≤ stop timestamp.")
+
+	start += (5 - start % 5) % 5    # bump up to next multiple of 5
+	stop  -= stop % 5              	# drop down to previous multiple of 5
 
 	query = """
-		SELECT
-			ts,
-			cpu_percent,
-			ram_used,
-			disk_used,
-			cpu_temp
-		FROM server_metrics
-		WHERE ts >= %s
-		  AND ts <= %s
-		ORDER BY ts;
+		SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp
+		  FROM server_metrics
+		 WHERE ts >= %s
+		   AND ts <= %s
+		 ORDER BY ts;
 	"""
-	client = PSQLClient()
 	rows = client.execute(query, [start, stop])
- 
-	step_items = step / 5
-	# If there is an even number of items, averaging over item - 1 ensures full coverage.
-	# If there is an odd number, that number of items will overlap on an intermediate value.
-	# But it saves a lot of work to just accept the overlap, and it barely affects the result.
-	if step_items % 2 == 0:
-		step_items -= 1
-  
-	# Convert rows into a dict of form
-	# { ts : { "cpu_percent": ..., "ram_used": ..., "disk_used": ..., "cpu_temp": ... } }
-	rows = {r["ts"]: r for r in rows}
+
+	row_map = {r["ts"]: r for r in rows}
+
+	n_per_step = step // 5
+	if n_per_step % 2 == 0:
+		n_per_step -= 1
+	half_window = ((n_per_step - 1) // 2) * 5  # in seconds
+
 	metrics = {k: [] for k in ("cpu_percent", "ram_used", "disk_used", "cpu_temp")}
- 
-	for step_ts in range(start, stop + 1, step):
-		# From above conversion, step_items is always odd.
-		half_step_items = (step_items - 1) / 2
-		step_lower = step_ts - half_step_items * 5
-		step_upper = step_ts + half_step_items * 5
-  
-		valid_values = 0
-		step_row = {
-			"ts": step_ts,
-			"cpu_percent": 0,
-			"ram_used": 0,
-			"disk_used": 0,
-			"cpu_temp": 0
-		}
-  
-		for inter_step_ts in range(step_lower, step_upper + 1, 5):
-			if inter_step_ts in rows.keys():
-				valid_values += 1
-				step_row["cpu_percent"] += rows[inter_step_ts]["cpu_percent"]
-				step_row["ram_used"] += rows[inter_step_ts]["ram_used"]
-				step_row["disk_used"] += rows[inter_step_ts]["disk_used"]
-				step_row["cpu_temp"] += rows[inter_step_ts]["cpu_temp"]
-		
-		if valid_values> 0:
-			metrics["cpu_percent"].append({ "x": step_ts, "y": step_row["cpu_percent"] / valid_values })
-			metrics["ram_used"].append({ "x": step_ts, "y": step_row["ram_used"] / valid_values })
-			metrics["disk_used"].append({ "x": step_ts, "y": step_row["disk_used"] / valid_values })
-			metrics["cpu_temp"].append({ "x": step_ts, "y": step_row["cpu_temp"] / valid_values })
+
+	for ts_center in range(start, stop + 1, step):
+		sums = {"cpu_percent": 0, "ram_used": 0, "disk_used": 0, "cpu_temp": 0}
+		count = 0
+		low  = ts_center - half_window
+		high = ts_center + half_window
+
+		for t in range(low, high + 1, 5):
+			if t in row_map:
+				count += 1
+				row = row_map[t]
+				sums["cpu_percent"] += row["cpu_percent"]
+				sums["ram_used"]    += row["ram_used"]
+				sums["disk_used"]   += row["disk_used"]
+				sums["cpu_temp"]    += row["cpu_temp"]
+
+		if count:
+			metrics["cpu_percent"].append({ "x": ts_center, "y": sums["cpu_percent"] / count })
+			metrics["ram_used"].append({    "x": ts_center, "y": sums["ram_used"]    / count })
+			metrics["disk_used"].append({   "x": ts_center, "y": sums["disk_used"]   / count })
+			metrics["cpu_temp"].append({    "x": ts_center, "y": sums["cpu_temp"]    / count })
 
 	return metrics
-

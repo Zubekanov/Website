@@ -279,7 +279,9 @@ def api_compressed_metrics():
 	
 	data = validation["request_data"]
 	start = data.get("start", None)
+	if start is not None: start = int(start)
 	stop = data.get("stop", None)
+	if stop is not None: stop = int(stop)
 	step = data.get("step", 5)
  
 	# Simple check to prevent ridiculous requests from being processed.
