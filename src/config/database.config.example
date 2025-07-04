@@ -1,3 +1,5 @@
 DATABASE=[Your database name]
 USER=[Your database username]
 PASSWORD=[Your database password]
+
+DRIVE_PATH=[Path to mass storage drive]

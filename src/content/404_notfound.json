@@ -1,0 +1,18 @@
+{
+    "page_title" : "404 - Not Found",
+    "preload_icons" : [
+        "/static/icons/online-light.png",
+        "/static/icons/online-dark.png",
+        "/static/icons/offline-light.png",
+        "/static/icons/offline-dark.png"
+    ],
+    "navbar_left" : "nameplate.html",
+    "navbar_center" : "uptime.html",
+    "page_contents" : [
+        "404_notfound.md"
+    ],
+    "page_scripts" : [
+        "uptime_script.js",
+        "account_management.js"
+    ]
+}

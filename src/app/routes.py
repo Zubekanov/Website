@@ -180,6 +180,32 @@ def register():
 		"message": "User registered successfully. Please check your email for verification."
 	}), 201)
 
+@main.route("/profile")
+def profile():
+	user = getattr(g, "user", None)
+	if not user:
+		components = LayoutFetcher.load_layout("403_noaccount.json")
+		breadcrumbs = generate_breadcrumbs()
+		return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+
+	# Return not implemented for now
+	components = LayoutFetcher.load_layout("501_notimplemented.json")
+	breadcrumbs = generate_breadcrumbs()
+	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+
+@main.route("/settings")
+def settings():
+	user = getattr(g, "user", None)
+	if not user:
+		components = LayoutFetcher.load_layout("403_noaccount.json")
+		breadcrumbs = generate_breadcrumbs()
+		return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+
+	# Return not implemented for now
+	components = LayoutFetcher.load_layout("501_notimplemented.json")
+	breadcrumbs = generate_breadcrumbs()
+	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+
 @main.route("/forgot-password")
 def forgot_password():
 	"""

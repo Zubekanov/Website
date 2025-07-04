@@ -5,6 +5,8 @@ page_titles = {
     "forgot-password" : "Password Recovery Form",
     "reset-password" : "Reset Password",
     "verify" : "Email Verification",
+    "profile" : "User Profile",
+    "settings" : "User Settings",
 }
 
 def generate_breadcrumbs():

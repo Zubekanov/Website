@@ -31,6 +31,7 @@ class UserManagement:
 	_instance = None
 	_initialised = False
 
+	# Using singleton because psql broke a few times from concurrent access
 	def __new__(cls):
 		if cls._instance is None:
 			cls._instance = super(UserManagement, cls).__new__(cls)
