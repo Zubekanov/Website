@@ -7,6 +7,11 @@ import psutil
 from datetime import datetime
 from util.config_reader import ConfigReader
 from util.psql_manager import PSQLClient
+from util.lock_manager import get_lock
+import logging
+
+_LOCK_NAME = "server_metrics_lock"
+_LOCK = None
 
 _SLEEP_INTERVAL = 5
 _initialisation_time = time.time()
@@ -86,7 +91,7 @@ def server_metrics_worker():
 	Periodically calls log_server_metrics() every _SLEEP_INTERVAL seconds.
 	Static‐info (RAM/DISK) is still appended to flat file if it changes.
 	"""
-	print("Server metrics worker started.")
+	logging.debug("Server metrics worker started.")
 
 	# Ensure the directory for static_info exists (same as before)
 	metrics_dir = ConfigReader.logs_dir()
@@ -111,7 +116,7 @@ def server_metrics_worker():
 	if curr_ram != last_ram or curr_disk != last_disk:
 		with open(static_log_path, "a") as f:
 			f.write(f"{int(time.time())},{curr_ram},{curr_disk}\n")
-		print(f"[static_info] appended new specs: RAM={curr_ram} GiB, Disk={curr_disk} GiB")
+		logging.debug(f"[static_info] appended new specs: RAM={curr_ram} GiB, Disk={curr_disk} GiB")
 
 	last_log = 0
 	while True:
@@ -122,10 +127,12 @@ def server_metrics_worker():
 		time.sleep(0.5)
 
 def start_server_metrics_thread():
-	global _worker_started
-	if _worker_started:
+	global _LOCK
+	_LOCK = get_lock(_LOCK_NAME)
+	if not _LOCK:
+		logging.error(f"Failed to acquire lock '{_LOCK_NAME}'. Another instance may be running.")
 		return
-	_worker_started = True
+
 	threading.Thread(target=server_metrics_worker, daemon=True).start()
 
 def get_latest_metrics():

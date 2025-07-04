@@ -11,6 +11,8 @@ plots
 psql_dump.bash
 psql_dump/
 
+*.lock
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

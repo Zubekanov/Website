@@ -5,16 +5,17 @@ import threading
 from dateutil.relativedelta import relativedelta
 from util.config_reader import ConfigReader
 from util.psql_manager import PSQLClient
+from util.lock_manager import get_lock
 import logging
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
-_thread = None
-_thread_lock = threading.Lock()
-
 discord_config = ConfigReader.get_key_value_config("discord.config")
 WEBHOOK_URL = discord_config.get("DISCORD_WEBHOOK_URL")
 PING_URL = discord_config.get("WEBSITE_PING_URL", "https://zubekanov.com/api/ping")
+
+_LOCK_NAME = "discord_webhook_lock"
+_LOCK = None
 
 _PING_INTERVAL = 5
 _WAIT_THRESHOLD = 12
@@ -108,7 +109,7 @@ def send_downtime_message():
 		)
 	else:
 		send_discord_message(
-			f"❕ Server restarted within downtime threshold (`threshold={_DOWN_THRESHOLD_STRING}`)."
+			f"❕ Server restarted within downtime threshold (`threshold={_DOWN_THRESHOLD_STRING}, down={down} seconds`)."
 		)
 
 def run():
@@ -143,12 +144,10 @@ def run():
 		time.sleep(0.5)
 
 def start_discord_webhook_thread():
-	global _thread
-	with _thread_lock:
-		if _thread and _thread.is_alive():
-			return _thread
+		global _LOCK
+		_LOCK = get_lock(_LOCK_NAME)
+		if not _LOCK:
+			logging.error(f"Failed to acquire lock for '{_LOCK_NAME}'. Another instance may be running.")
+			return
+		threading.Thread(target=run, daemon=True).start
 
-		_thread = threading.Thread(target=run, daemon=True)
-		_thread.start()
-		print("Discord webhook thread started.")
-		return _thread

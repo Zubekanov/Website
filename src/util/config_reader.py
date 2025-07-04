@@ -30,6 +30,10 @@ class ConfigReader:
 	@classmethod
 	def sql_dir(cls) -> Path:
 		return cls._base_dir() / "sql"
+
+	@classmethod
+	def lock_dir(cls) -> Path:
+		return cls._base_dir() / "locks"
 	
 	@staticmethod
 	def get_content_file(filename: str) -> str:

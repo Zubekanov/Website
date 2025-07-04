@@ -7,14 +7,12 @@ from util.server_metrics import start_server_metrics_thread
 from util.discord_webhook import start_discord_webhook_thread
 from app.user_management import UserManagement as users
 
-# Configure root logger at module import time (can be customized via app.config later)
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 user_manager = users()
 
 def create_app():
-	# Standard Flask application factory
 	app = Flask(
 		__name__,
 		static_folder="../static",
@@ -22,7 +20,6 @@ def create_app():
 	)
 
 	app.register_blueprint(main)
-
 
 	logger.debug("Starting server metrics thread")
 	start_server_metrics_thread()
