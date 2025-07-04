@@ -1,6 +1,6 @@
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from util.config_reader import ConfigReader
 from util.psql_manager import PSQLClient
 import logging
@@ -16,8 +16,11 @@ RETRY_SLEEP = 60
 
 psql = PSQLClient()
 
-def log_ping():
-	psql.insert_row("uptime_log", {"timestamp": datetime.utcnow()})
+
+def log_ping(now_utc=None):
+	ts = now_utc or datetime.now(timezone.utc)
+	psql.insert_row("uptime_log", {"timestamp": ts})
+
 
 def send_discord_message(content: str):
 	payload = {"username": "zubekanov.com", "content": content}
@@ -25,11 +28,17 @@ def send_discord_message(content: str):
 		resp = requests.post(WEBHOOK_URL, json=payload)
 		resp.raise_for_status()
 	except Exception as e:
-		print(f"Discord error: {e}")
-		raise
+		print(f"Discord error (ignored): {e}")
 
-def calculate_and_send_daily_report(date):
-	start = datetime.combine(date, datetime.min.time())
+
+def calculate_and_send_daily_report(date_obj):
+	exists = psql.execute(
+		"SELECT 1 FROM daily_uptime WHERE date = %s LIMIT 1", [date_obj]
+	)
+	if exists:
+		return
+
+	start = datetime.combine(date_obj, datetime.min.time(), tzinfo=timezone.utc)
 	end = start + timedelta(days=1)
 
 	query = """
@@ -41,65 +50,87 @@ def calculate_and_send_daily_report(date):
 	ping_count = rows[0]["ping_count"]
 	seconds_up = ping_count * PING_INTERVAL
 
-	psql.insert_row("daily_uptime", {
-		"date": date,
-		"seconds_up": seconds_up
-	})
+	psql.execute(
+		"""
+		INSERT INTO daily_uptime(date, seconds_up)
+		VALUES(%s, %s)
+		ON CONFLICT (date) DO UPDATE SET seconds_up = EXCLUDED.seconds_up;
+		""", [date_obj, seconds_up]
+	)
 
 	percent = round((seconds_up / 86400) * 100, 2)
-	message = f"📊 Uptime for {date}:\n✅ {percent}% up ({seconds_up / 3600:.1f} hours)"
+	hours = seconds_up / 3600
+	message = (
+		f"📊 Uptime for {date_obj.isoformat()}:\n"
+		f"✅ {percent}% up ({hours:.1f} hours)"
+	)
 	send_discord_message(message)
-
+	
 def run():
-	last_day = datetime.utcnow().date()
-	last_failure_time = None
-	first_ever_success = None
+	rows = psql.execute("SELECT MAX(timestamp) AS last_ping FROM uptime_log", [])
+	last_ping_ts = rows[0]["last_ping"]
+
+	now_utc = datetime.now(timezone.utc)
+	if last_ping_ts is None:
+		first_ever_success = True
+		last_failure_time = None
+	else:
+		gap = now_utc - last_ping_ts
+		if gap.total_seconds() > (PING_INTERVAL * 2):
+			last_failure_time = last_ping_ts
+		else:
+			last_failure_time = None
+		first_ever_success = False
+
+	rows = psql.execute("SELECT MAX(date) AS last_date FROM daily_uptime", [])
+	last_reported_date = rows[0]["last_date"]
 
 	while True:
-		now = datetime.utcnow()
+		now_utc = datetime.now(timezone.utc)
 		try:
 			resp = requests.get(PING_URL, timeout=3)
-			if resp.status_code == 200:
-				log_ping()
+			resp.raise_for_status()
 
-				# Daily report (on new day)
-				if now.date() != last_day:
-					calculate_and_send_daily_report(last_day)
-					last_day = now.date()
+			log_ping(now_utc)
 
-				# First successful ping ever
-				if first_ever_success is None:
-					# Check DB for previous logs
-					rows = psql.execute("SELECT COUNT(*) AS n FROM uptime_log WHERE timestamp < %s", [now])
-					if rows[0]["n"] == 0:
-						detail = "(first known state)"
-					else:
-						detail = ""
+			if last_failure_time:
+				duration = now_utc - last_failure_time
+				total_secs = int(duration.total_seconds())
+				hours, rem = divmod(total_secs, 3600)
+				minutes, seconds = divmod(rem, 60)
 
-					readable_time = now.strftime("%Y-%m-%d %H:%M:%S")
-					send_discord_message(f"✅ Site online at {readable_time} {detail}")
-					first_ever_success = now
-					last_failure_time = None
+				if hours:
+					offline_detail = f"offline for {hours}h {minutes}m {seconds}s"
+				else:
+					offline_detail = f"offline for {minutes}m {seconds}s"
 
-				# If recovering from failure
-				elif last_failure_time:
-					duration = now - last_failure_time
-					minutes, seconds = divmod(int(duration.total_seconds()), 60)
-					hours, minutes = divmod(minutes, 60)
-					detail = f"(offline for {hours}h {minutes}m {seconds}s)" if hours else f"(offline for {minutes}m {seconds}s)"
-					readable_time = now.strftime("%Y-%m-%d %H:%M:%S")
-					send_discord_message(f"✅ Site online at {readable_time} {detail}")
-					last_failure_time = None
+				if first_ever_success:
+					detail = f"(first known state; {offline_detail})"
+				else:
+					detail = f"({offline_detail})"
 
-				time.sleep(PING_INTERVAL)
+				readable = now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+				send_discord_message(f"❗ Site online at {readable} {detail}")
 
-			else:
-				raise Exception(f"Non-200 response: {resp.status_code}")
+				first_ever_success = False
+				last_failure_time = None
+
+			elif first_ever_success:
+				readable = now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+				send_discord_message(f"❗ Site online at {readable} (first known state)")
+				first_ever_success = False
+
+			today = now_utc.date()
+			if last_reported_date and today > last_reported_date:
+				calculate_and_send_daily_report(last_reported_date)
+				last_reported_date = today
+
+			time.sleep(PING_INTERVAL)
 
 		except Exception as e:
 			print(f"Ping failed: {e}")
 			if last_failure_time is None:
-				last_failure_time = datetime.utcnow()
+				last_failure_time = datetime.now(timezone.utc)
 			time.sleep(RETRY_SLEEP)
 
 def start_discord_webhook_thread():
