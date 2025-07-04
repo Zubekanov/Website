@@ -17,6 +17,7 @@ WEBHOOK_URL = discord_config.get("DISCORD_WEBHOOK_URL")
 PING_URL = discord_config.get("WEBSITE_PING_URL", "https://zubekanov.com/api/ping")
 
 _PING_INTERVAL = 5
+_WAIT_THRESHOLD = 12
 _RETRY_SLEEP = 60
 _DOWN_THRESHOLD = _RETRY_SLEEP * 2
 _DOWN_THRESHOLD_STRING = (f"{_DOWN_THRESHOLD // 60} minutes" if _DOWN_THRESHOLD >= 60 else f"{_DOWN_THRESHOLD} seconds")
@@ -115,6 +116,7 @@ def run():
 
 	last_log = 0
 	waiting = False
+	dropped_pings = 0
 	while True:
 		now = int(time.time())
 		interval = _PING_INTERVAL if not waiting else _RETRY_SLEEP
@@ -122,13 +124,17 @@ def run():
 		if now % interval == 0 and last_log != now:
 			result = ping_website()
 
-			if not result and not waiting:
+			if not result:
+				dropped_pings += 1
+
+			if not result and not waiting and dropped_pings >= _WAIT_THRESHOLD:
 				if ping_204():
 					send_discord_message("❗ Connectivity OK but website is unavailable, please diagnose.", ping_admin=True)
 				waiting = True
 			last_log = now
 
 			if result:
+				dropped_pings = 0
 				if waiting:
 					waiting = False
 					send_downtime_message()
