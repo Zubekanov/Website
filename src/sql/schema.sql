@@ -40,19 +40,21 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 );
 
 CREATE TABLE IF NOT EXISTS server_metrics (
-  ts          BIGINT      PRIMARY KEY,
-  cpu_percent REAL        NOT NULL,
-  ram_used    REAL        NOT NULL,
-  disk_used   REAL        NOT NULL,
-  cpu_temp    REAL
+    ts              BIGINT      PRIMARY KEY,
+    cpu_percent     REAL        NOT NULL,
+    ram_used        REAL        NOT NULL,
+    disk_used       REAL        NOT NULL,
+    cpu_temp        REAL
 );
 
-CREATE TABLE IF NOT EXISTS uptime_log (
-	id SERIAL PRIMARY KEY,
-	timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS uptime (
+	epoch           BIGINT      NOT NULL DEFAULT FLOOR(EXTRACT(EPOCH FROM NOW()))
 );
 
-CREATE TABLE IF NOT EXISTS daily_uptime (
-	date DATE PRIMARY KEY,
-	seconds_up INTEGER NOT NULL DEFAULT 0
+CREATE TABLE IF NOT EXISTS uptime_reports (
+    id              SERIAL      PRIMARY KEY,
+    report_date     DATE        NOT NULL DEFAULT CURRENT_DATE,
+    created_at      TIMESTAMP   NOT NULL,
+    sent_at         TIMESTAMP,
+    uptime          FLOAT       NOT NULL
 );
