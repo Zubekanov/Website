@@ -51,8 +51,7 @@ def send_discord_message(contents: str, ping_admin: bool = False):
 			contents = f"Attention <@{admin_id}>: {contents}"
 	payload = {
 		"content": f"[{time_str}]: {contents}",
-		"username": "Website Monitor",
-		"avatar_url": "https://zubekanov.com/favicon.ico"
+		"username": "zubekanov.com",
 	}
 	try:
 		response = requests.post(WEBHOOK_URL, json=payload, timeout=10)
