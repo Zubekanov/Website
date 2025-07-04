@@ -3,6 +3,9 @@ import requests
 from datetime import datetime, timedelta
 from util.config_reader import ConfigReader
 from util.psql_manager import PSQLClient
+import logging
+
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 discord_config = ConfigReader.get_key_value_config("discord.config")
 WEBHOOK_URL = discord_config.get("DISCORD_WEBHOOK_URL")
@@ -17,7 +20,7 @@ def log_ping():
 	psql.insert_row("uptime_log", {"timestamp": datetime.utcnow()})
 
 def send_discord_message(content: str):
-	payload = {"username": "UptimeBot", "content": content}
+	payload = {"username": "zubekanov.com", "content": content}
 	try:
 		resp = requests.post(WEBHOOK_URL, json=payload)
 		resp.raise_for_status()
@@ -49,7 +52,8 @@ def calculate_and_send_daily_report(date):
 
 def run():
 	last_day = datetime.utcnow().date()
-	first_success = True
+	last_failure_time = None
+	first_ever_success = None
 
 	while True:
 		now = datetime.utcnow()
@@ -58,22 +62,46 @@ def run():
 			if resp.status_code == 200:
 				log_ping()
 
-				if first_success or now.date() != last_day:
-					if not first_success:
-						calculate_and_send_daily_report(last_day)
-
-					send_discord_message(f"✅ Site online at {now.isoformat()}")
+				# Daily report (on new day)
+				if now.date() != last_day:
+					calculate_and_send_daily_report(last_day)
 					last_day = now.date()
-					first_success = False
+
+				# First successful ping ever
+				if first_ever_success is None:
+					# Check DB for previous logs
+					rows = psql.execute("SELECT COUNT(*) AS n FROM uptime_log WHERE timestamp < %s", [now])
+					if rows[0]["n"] == 0:
+						detail = "(first known state)"
+					else:
+						detail = ""
+
+					readable_time = now.strftime("%Y-%m-%d %H:%M:%S")
+					send_discord_message(f"✅ Site online at {readable_time} {detail}")
+					first_ever_success = now
+					last_failure_time = None
+
+				# If recovering from failure
+				elif last_failure_time:
+					duration = now - last_failure_time
+					minutes, seconds = divmod(int(duration.total_seconds()), 60)
+					hours, minutes = divmod(minutes, 60)
+					detail = f"(offline for {hours}h {minutes}m {seconds}s)" if hours else f"(offline for {minutes}m {seconds}s)"
+					readable_time = now.strftime("%Y-%m-%d %H:%M:%S")
+					send_discord_message(f"✅ Site online at {readable_time} {detail}")
+					last_failure_time = None
 
 				time.sleep(PING_INTERVAL)
+
 			else:
-				raise Exception(f"Non-200: {resp.status_code}")
+				raise Exception(f"Non-200 response: {resp.status_code}")
+
 		except Exception as e:
 			print(f"Ping failed: {e}")
-			first_success = True
+			if last_failure_time is None:
+				last_failure_time = datetime.utcnow()
 			time.sleep(RETRY_SLEEP)
-		
+
 def start_discord_webhook_thread():
 	import threading
 	thread = threading.Thread(target=run, daemon=True)
