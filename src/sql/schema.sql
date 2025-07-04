@@ -46,3 +46,13 @@ CREATE TABLE IF NOT EXISTS server_metrics (
   disk_used   REAL        NOT NULL,
   cpu_temp    REAL
 );
+
+CREATE TABLE IF NOT EXISTS uptime_log (
+	id SERIAL PRIMARY KEY,
+	timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS daily_uptime (
+	date DATE PRIMARY KEY,
+	seconds_up INTEGER NOT NULL DEFAULT 0
+);

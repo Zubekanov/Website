@@ -190,7 +190,7 @@ def profile():
 
 	# Return not implemented for now
 	components = LayoutFetcher.load_layout("501_notimplemented.json")
-	breadcrumbs = generate_breadcrumbs()
+	breadcrumbs = generate_breadcrumbs(user=user)
 	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
 
 @main.route("/settings")
@@ -317,3 +317,11 @@ def api_compressed_metrics():
 	metric = metrics.get_range_metrics(start=start, stop=stop, step=step)
 
 	return jsonify(metric)
+
+@main.route("/api/ping")
+def api_ping():
+	"""
+	Endpoint to check if the server is up and running.
+	Returns a 200 OK response with a JSON message.
+	"""
+	return jsonify({"message": "pong"}), 200

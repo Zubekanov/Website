@@ -4,6 +4,7 @@ import logging
 from flask import Flask, request, g, url_for
 from app.routes import main
 from util.server_metrics import start_server_metrics_thread
+from util.discord_webhook import start_discord_webhook_thread
 from app.user_management import UserManagement as users
 
 # Configure root logger at module import time (can be customized via app.config later)
@@ -25,6 +26,8 @@ def create_app():
 
 	logger.debug("Starting server metrics thread")
 	start_server_metrics_thread()
+	logger.debug("Starting Discord webhook thread")
+	start_discord_webhook_thread()
 
 	@app.before_request
 	def load_auth_token():
