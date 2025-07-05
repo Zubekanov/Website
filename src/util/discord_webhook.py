@@ -5,7 +5,7 @@ import threading
 from dateutil.relativedelta import relativedelta
 from util.config_reader import ConfigReader
 from util.psql_manager import PSQLClient
-from util.lock_manager import get_lock
+from util.lock_manager import get_lock, get_lock_file_path
 import logging
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
@@ -145,9 +145,10 @@ def run():
 
 def start_discord_webhook_thread():
 		global _LOCK
-		_LOCK = get_lock(_LOCK_NAME)
-		if not _LOCK:
-			logging.error(f"Failed to acquire lock for '{_LOCK_NAME}'. Another instance may be running.")
+		_LOCK = open(get_lock_file_path(_LOCK_NAME), "w")
+		res = get_lock(_LOCK_NAME, _LOCK)
+		if not res:
 			return
+		logging.info(f"Discord webhook thread started with lock '{_LOCK_NAME}'")
 		threading.Thread(target=run, daemon=True).start
 
