@@ -16,7 +16,6 @@ _LOCK = None
 _SLEEP_INTERVAL = 5
 _initialisation_time = time.time()
 _worker_started = False
-_last_fetched_metrics = {}
 
 def get_local_data():
 	return {
@@ -59,9 +58,7 @@ def get_static_metrics():
 def log_server_metrics():
 	"""
 	Fetch current metrics and insert into `server_metrics` table.
-	Also update _last_fetched_metrics so get_latest_metrics() still works.
 	"""
-	global _last_fetched_metrics
 	data = get_local_data()
 	ts = int(time.time())
 
@@ -84,7 +81,6 @@ def log_server_metrics():
 
 	# Keep the same structure for get_latest_metrics()
 	data["timestamp"] = ts
-	_last_fetched_metrics = data
 
 def server_metrics_worker():
 	"""
@@ -139,7 +135,21 @@ def get_latest_metrics():
 	"""
 	Return the most recent sample that was written (or {} if none).
 	"""
-	return _last_fetched_metrics
+	client = PSQLClient()
+	most_recent = client.execute(
+		"SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp "
+		"FROM server_metrics ORDER BY ts DESC LIMIT 1;"
+	)
+	if not most_recent:
+		return {}
+	row = most_recent[0]
+	return {
+		"timestamp": row["ts"],
+		"cpu_percent": row["cpu_percent"],
+		"ram_used": row["ram_used"],
+		"disk_used": row["disk_used"],
+		"cpu_temp": row["cpu_temp"]
+	}
 
 def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	"""
