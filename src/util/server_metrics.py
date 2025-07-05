@@ -132,7 +132,7 @@ def start_server_metrics_thread():
 	res = get_lock(_LOCK_NAME, _LOCK)
 	if not res:
 		return
-	logging.info(f"Server metrics thread started with lock '{_LOCK_NAME}'")
+	logging.info(f"Server metrics thread started with lock '{_LOCK}'")
 	threading.Thread(target=server_metrics_worker, daemon=True).start()
 
 def get_latest_metrics():

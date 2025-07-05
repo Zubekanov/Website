@@ -149,6 +149,6 @@ def start_discord_webhook_thread():
 		res = get_lock(_LOCK_NAME, _LOCK)
 		if not res:
 			return
-		logging.info(f"Discord webhook thread started with lock '{_LOCK_NAME}'")
-		threading.Thread(target=run, daemon=True).start
+		logging.info(f"Discord webhook thread started with lock '{_LOCK}'")
+		threading.Thread(target=run, daemon=True).start()
 
