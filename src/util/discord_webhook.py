@@ -268,6 +268,7 @@ def run():
 				if waiting:
 					waiting = False
 					send_downtime_message()
+					report_check()
 				psql.execute("INSERT INTO uptime DEFAULT VALUES;")
 			
 		if now % 3600 == 0:
