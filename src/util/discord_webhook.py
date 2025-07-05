@@ -7,6 +7,7 @@ from util.config_reader import ConfigReader
 from util.psql_manager import PSQLClient
 from util.lock_manager import get_lock, get_lock_file_path
 import logging
+from zoneinfo import ZoneInfo
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
@@ -22,6 +23,21 @@ _WAIT_THRESHOLD = 12
 _RETRY_SLEEP = 60
 _DOWN_THRESHOLD = _RETRY_SLEEP * 2
 _DOWN_THRESHOLD_STRING = (f"{_DOWN_THRESHOLD // 60} minutes" if _DOWN_THRESHOLD >= 60 else f"{_DOWN_THRESHOLD} seconds")
+
+_DAY_SECONDS = 24 * 60 * 60
+_DAILY_PINGS = _DAY_SECONDS // _PING_INTERVAL
+
+_THRESHOLD_2 = 0.50
+_THRESHOLD_3 = 0.90
+_THRESHOLD_4 = 0.98
+_SPK_EMOJI_0 = "⬛"
+_SPK_EMOJI_1 = "🟥"
+_SPK_EMOJI_2 = "🟧"
+_SPK_EMOJI_3 = "🟨"
+_SPK_EMOJI_4 = "🟩"
+
+_X_AXIS = "`12      03      06      09      12      03      06      09      `\n`AM      AM      AM      AM      PM      PM      PM      PM      `"
+
 
 psql = PSQLClient()
 
@@ -86,6 +102,117 @@ def human_delta(start: datetime, end: datetime) -> str:
 	parts = parts[:2]
 	return ", ".join(f"{val} {label}" for val, label in parts)
 
+def startup_report_check():
+	"""
+	Check the database for days with uptime data and no logged reports.
+	"""
+	tz = ZoneInfo(discord_config.get("TIMEZONE", "Australia/Sydney"))
+	today = datetime.datetime.now(tz).date()
+
+	midnight = (
+		datetime.datetime.combine(today, datetime.time(0, 0))
+		.replace(tzinfo=tz)
+		.timestamp()
+	)
+	_debug_reports_created = 0
+	while True:
+		rows = psql.execute(
+			"SELECT MAX(epoch) AS latest FROM uptime WHERE epoch < %s;",
+			(midnight, )
+		)
+		if not rows or rows[0]['latest'] is None:
+			logging.info(f"Completed startup report check, created {_debug_reports_created} reports.")
+			break
+		last_epoch = rows[0]['latest']
+		days_since = (int(time.time()) - last_epoch) // _DAY_SECONDS
+		report_end = midnight - (days_since * _DAY_SECONDS)
+		report_start = report_end - _DAY_SECONDS
+		report_date = datetime.datetime.fromtimestamp(report_start, tz).date()
+		
+		hour_seconds = 3600
+		window_start = report_start
+		window_end = window_start + hour_seconds
+
+		cumulative_percentage = 0.0
+		emoji_sparkline = ""
+
+		while window_start < report_end:
+			rows = psql.execute(
+				"SELECT COUNT(*) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
+				(window_start, window_end)
+			)
+			if not rows or rows[0]['count'] == 0:
+				window_start += hour_seconds
+				window_end += hour_seconds
+				emoji_sparkline += _SPK_EMOJI_0
+				continue
+
+			window_start += hour_seconds
+			window_end += hour_seconds
+
+			hourly_percentage = rows[0]['count'] / (hour_seconds // _PING_INTERVAL)
+			if hourly_percentage > _THRESHOLD_4:
+				emoji_sparkline += _SPK_EMOJI_4
+			elif hourly_percentage > _THRESHOLD_3:	
+				emoji_sparkline += _SPK_EMOJI_3
+			elif hourly_percentage > _THRESHOLD_2:
+				emoji_sparkline += _SPK_EMOJI_2
+			else:
+				emoji_sparkline += _SPK_EMOJI_1
+
+			cumulative_percentage += ((hourly_percentage / 24) * 100.0)
+
+		psql.insert_row("uptime_reports", {
+			"report_date": report_date,
+			"created_at": datetime.datetime.now(),
+			"uptime": round(cumulative_percentage, 2),
+			"emoji_sparkline": emoji_sparkline
+		})
+
+		midnight = report_start
+		_debug_reports_created += 1
+	
+def send_unsent_reports():
+	rows = psql.execute(
+		"SELECT * FROM uptime_reports WHERE sent_at IS NULL ORDER BY report_date ASC;"
+	)
+
+	if not rows:
+		logging.info("No unsent reports found.")
+		return
+
+	for row in rows:
+		report_date = row['report_date']
+		report_epoch = int(datetime.datetime.combine(
+			report_date, datetime.time(12, 0, 0),
+			tzinfo=ZoneInfo(discord_config.get("TIMEZONE", "Australia/Sydney"))
+		).timestamp())
+		uptime = row['uptime']
+		report_id = row['id']
+		emoji_sparkline = row['emoji_sparkline']
+
+		message = f"📊 Uptime Report for <t:{report_epoch}:D>:\nDaily uptime: `{uptime}%`\n{emoji_sparkline}\n{_X_AXIS}"
+		if send_discord_message(message):
+			psql.execute(
+				"UPDATE uptime_reports SET sent_at = %s WHERE id = %s;",
+				(datetime.datetime.now(), report_id)
+			)
+			logging.info(f"Sent report for {report_date}.")
+
+def report_check():
+	last_report_date = psql.execute(
+		"SELECT MAX(report_date) AS last_report FROM uptime_reports;"
+	)
+	last_report_date = datetime.datetime.fromisoformat(last_report_date[0]['last_report']) if last_report_date and last_report_date[0]['last_report'] else None
+	if not last_report_date:
+		return
+	next_report_date = last_report_date + datetime.timedelta(days=1)
+	next_report_midnight = datetime.datetime.combine(next_report_date, datetime.time(0, 0, 0), tzinfo=ZoneInfo(discord_config.get("TIMEZONE", "Australia/Sydney"))).timestamp()
+
+	if time.time() >= next_report_midnight:
+		startup_report_check()
+	send_unsent_reports()
+
 def send_downtime_message():
 	rows = psql.execute("SELECT MAX(epoch) AS latest FROM uptime;")
 	
@@ -114,6 +241,8 @@ def send_downtime_message():
 
 def run():
 	send_downtime_message()
+	startup_report_check()
+	send_unsent_reports()
 
 	last_log = 0
 	waiting = False
@@ -140,6 +269,11 @@ def run():
 					waiting = False
 					send_downtime_message()
 				psql.execute("INSERT INTO uptime DEFAULT VALUES;")
+			
+		if now % 3600 == 0:
+			report_check()
+			if not waiting:
+				logging.info("Hourly report check completed.")
 		
 		time.sleep(0.5)
 
