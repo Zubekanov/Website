@@ -30,11 +30,13 @@ _DAILY_PINGS = _DAY_SECONDS // _PING_INTERVAL
 _THRESHOLD_2 = 0.50
 _THRESHOLD_3 = 0.90
 _THRESHOLD_4 = 0.98
+_THRESHOLD_ERROR = 1.0
 _SPK_EMOJI_0 = "⬛"
 _SPK_EMOJI_1 = "🟥"
 _SPK_EMOJI_2 = "🟧"
 _SPK_EMOJI_3 = "🟨"
 _SPK_EMOJI_4 = "🟩"
+_ERR_EMOJI_X = "❌"
 
 _X_AXIS = "`12      03      06      09      12      03      06      09      `\n`AM      AM      AM      AM      PM      PM      PM      PM      `"
 
@@ -159,7 +161,9 @@ def startup_report_check():
 			window_end += hour_seconds
 
 			hourly_percentage = rows[0]['count'] / (hour_seconds // _PING_INTERVAL)
-			if hourly_percentage > _THRESHOLD_4:
+			if hourly_percentage > _THRESHOLD_ERROR:
+				emoji_sparkline += _ERR_EMOJI_X
+			elif hourly_percentage > _THRESHOLD_4:
 				emoji_sparkline += _SPK_EMOJI_4
 			elif hourly_percentage > _THRESHOLD_3:	
 				emoji_sparkline += _SPK_EMOJI_3
@@ -167,6 +171,11 @@ def startup_report_check():
 				emoji_sparkline += _SPK_EMOJI_2
 			else:
 				emoji_sparkline += _SPK_EMOJI_1
+
+			if hourly_percentage > 1:
+				logging.warning(
+					f"Hourly percentage {hourly_percentage} exceeds 100% in window {window_start} - {window_end}. ")
+				hourly_percentage = 1.0
 
 			cumulative_percentage += ((hourly_percentage * 100) / 24)
 
@@ -268,7 +277,9 @@ def _debug_generate_and_send_todays_report():
 		window_end += hour_seconds
 
 		hourly_percentage = rows[0]['count'] / (hour_seconds // _PING_INTERVAL)
-		if hourly_percentage > _THRESHOLD_4:
+		if hourly_percentage > _THRESHOLD_ERROR:
+			emoji_sparkline += _ERR_EMOJI_X
+		elif hourly_percentage > _THRESHOLD_4:
 			emoji_sparkline += _SPK_EMOJI_4
 		elif hourly_percentage > _THRESHOLD_3:	
 			emoji_sparkline += _SPK_EMOJI_3
@@ -276,6 +287,12 @@ def _debug_generate_and_send_todays_report():
 			emoji_sparkline += _SPK_EMOJI_2
 		else:
 			emoji_sparkline += _SPK_EMOJI_1
+		
+		if hourly_percentage > 1:
+			logging.warning(
+				f"Hourly percentage {hourly_percentage} exceeds 100% in window {window_start} - {window_end}. "
+			)
+			hourly_percentage = 1.0
 
 		cumulative_percentage += ((hourly_percentage * 100) / 24)
 		logging.debug(
@@ -371,4 +388,3 @@ def start_discord_webhook_thread():
 			return
 		logging.info(f"Discord webhook thread started with lock '{_LOCK}'")
 		threading.Thread(target=run, daemon=True).start()
-
