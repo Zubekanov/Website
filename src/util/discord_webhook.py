@@ -130,10 +130,10 @@ def startup_report_check():
 			""",
 			(today, )
 		)
-		if not rows or rows[0][0] is None:
+		if not rows or rows[0].get("epoch") is None:
 			logging.info(f"Completed startup report check, created {_debug_reports_created} reports.")
 			break
-		last_epoch = rows[0][0]
+		last_epoch = rows[0].get("epoch")
 		days_since = (int(time.time()) - last_epoch) // _DAY_SECONDS
 		report_end = midnight - (days_since * _DAY_SECONDS)
 		report_start = report_end - _DAY_SECONDS
