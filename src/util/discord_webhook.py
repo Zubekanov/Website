@@ -108,7 +108,6 @@ def startup_report_check():
 	"""
 	tz = ZoneInfo(discord_config.get("TIMEZONE", "Australia/Sydney"))
 	today = datetime.datetime.now(tz).date()
-
 	midnight = (
 		datetime.datetime.combine(today, datetime.time(0, 0))
 		.replace(tzinfo=tz)
@@ -117,13 +116,22 @@ def startup_report_check():
 	_debug_reports_created = 0
 	while True:
 		rows = psql.execute(
-			"SELECT MAX(epoch) AS latest FROM uptime WHERE epoch < %s;",
-			(midnight, )
+			"""
+			SELECT * FROM uptime u WHERE
+			NOT EXISTS (
+				SELECT 1 FROM uptime_reports r
+				WHERE r.report_date = u.epoch_date
+			)
+			AND u.epoch_date < %s
+			ORDER BY u.epoch DESC
+			LIMIT 1;
+			""",
+			(today, )
 		)
-		if not rows or rows[0]['latest'] is None:
+		if not rows or rows[0][0] is None:
 			logging.info(f"Completed startup report check, created {_debug_reports_created} reports.")
 			break
-		last_epoch = rows[0]['latest']
+		last_epoch = rows[0][0]
 		days_since = (int(time.time()) - last_epoch) // _DAY_SECONDS
 		report_end = midnight - (days_since * _DAY_SECONDS)
 		report_start = report_end - _DAY_SECONDS

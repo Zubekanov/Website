@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS server_metrics (
 );
 
 CREATE TABLE IF NOT EXISTS uptime (
-	epoch           BIGINT      NOT NULL DEFAULT FLOOR(EXTRACT(EPOCH FROM NOW()))
+	epoch           BIGINT      NOT NULL DEFAULT FLOOR(EXTRACT(EPOCH FROM NOW())),
+    epoch_date      DATE        NOT NULL DEFAULT CURRENT_DATE
 );
 
 CREATE TABLE IF NOT EXISTS uptime_reports (
