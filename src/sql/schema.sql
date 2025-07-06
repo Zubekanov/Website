@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS server_metrics (
 
 CREATE TABLE IF NOT EXISTS uptime (
 	epoch           BIGINT      NOT NULL DEFAULT FLOOR(EXTRACT(EPOCH FROM NOW())),
-    epoch_date      DATE        NOT NULL DEFAULT CURRENT_DATE
+    epoch_date      DATE        NOT NULL DEFAULT CURRENT_DATE,
+    UNIQUE(epoch)
 );
 
 CREATE TABLE IF NOT EXISTS uptime_reports (
@@ -58,5 +59,6 @@ CREATE TABLE IF NOT EXISTS uptime_reports (
     created_at      TIMESTAMP   NOT NULL,
     sent_at         TIMESTAMP,
     uptime          FLOAT       NOT NULL,
-    emoji_sparkline TEXT        NOT NULL
+    emoji_sparkline TEXT        NOT NULL,
+    UNIQUE(report_date)
 );

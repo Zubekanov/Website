@@ -146,7 +146,7 @@ def startup_report_check():
 
 		while window_start < report_end:
 			rows = psql.execute(
-				"SELECT COUNT(*) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
+				"SELECT COUNT(UNIQUE epoch) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
 				(window_start, window_end)
 			)
 			if not rows or rows[0]['count'] == 0:
@@ -168,7 +168,19 @@ def startup_report_check():
 			else:
 				emoji_sparkline += _SPK_EMOJI_1
 
-			cumulative_percentage += ((hourly_percentage / 24) * 100.0)
+			cumulative_percentage += ((hourly_percentage * 100) / 24)
+
+			logging.debug(
+				f"Window {window_start} - {window_end}: "
+				f"{rows[0]['count']} pings, "
+				f"{hourly_percentage * 100:.2f}% uptime"
+			)
+		
+		logging.debug(
+			f"Report for {report_date}: "
+			f"{cumulative_percentage:.2f}% cumulative uptime, "
+			f"emoji sparkline: {emoji_sparkline}"
+		)
 
 		psql.insert_row("uptime_reports", {
 			"report_date": report_date,
@@ -221,6 +233,70 @@ def report_check():
 		startup_report_check()
 	send_unsent_reports()
 
+def _debug_generate_and_send_todays_report():
+	"""
+	This function is for debugging purposes only.
+	It generates and sends today's report immediately.
+	"""
+	tz = ZoneInfo(discord_config.get("TIMEZONE", "Australia/Sydney"))
+	today = datetime.datetime.now(tz).date()
+	midnight = (
+		datetime.datetime.combine(today, datetime.time(0, 0))
+		.replace(tzinfo=tz)
+		.timestamp()
+	)
+	
+	hour_seconds = 3600
+	window_start = midnight
+	window_end = window_start + hour_seconds
+
+	cumulative_percentage = 0.0
+	emoji_sparkline = ""
+
+	while window_start < midnight + _DAY_SECONDS:
+		rows = psql.execute(
+			"SELECT COUNT(DISTINCT epoch) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
+			(window_start, window_end)
+		)
+		if not rows or rows[0]['count'] == 0:
+			window_start += hour_seconds
+			window_end += hour_seconds
+			emoji_sparkline += _SPK_EMOJI_0
+			continue
+
+		window_start += hour_seconds
+		window_end += hour_seconds
+
+		hourly_percentage = rows[0]['count'] / (hour_seconds // _PING_INTERVAL)
+		if hourly_percentage > _THRESHOLD_4:
+			emoji_sparkline += _SPK_EMOJI_4
+		elif hourly_percentage > _THRESHOLD_3:	
+			emoji_sparkline += _SPK_EMOJI_3
+		elif hourly_percentage > _THRESHOLD_2:
+			emoji_sparkline += _SPK_EMOJI_2
+		else:
+			emoji_sparkline += _SPK_EMOJI_1
+
+		cumulative_percentage += ((hourly_percentage * 100) / 24)
+		logging.debug(
+			f"Window {window_start} - {window_end}: "
+			f"{rows[0]['count']} pings, "
+			f"{hourly_percentage * 100:.2f}% uptime"
+		)
+	
+	logging.debug(
+		f"Debug report: "
+		f"{cumulative_percentage:.2f}% cumulative uptime, "
+		f"emoji sparkline: {emoji_sparkline}"
+	)
+	message= f"📊 `DEBUG UPTIME REPORT FOR` <t:{int(midnight)}:D>:\nDaily uptime: `{cumulative_percentage:.2f}%`\n{emoji_sparkline}\n{_X_AXIS}"
+	if send_discord_message(message):
+		logging.info("Today's debug report sent successfully.")
+	else:
+		logging.error("Failed to send today's debug report.")
+
+	logging.info(f"Today's report generated with {cumulative_percentage:.2f}% uptime.")
+
 def send_downtime_message():
 	rows = psql.execute("SELECT MAX(epoch) AS latest FROM uptime;")
 	
@@ -248,6 +324,7 @@ def send_downtime_message():
 		)
 
 def run():
+	#_debug_generate_and_send_todays_report()
 	send_downtime_message()
 	startup_report_check()
 	send_unsent_reports()
