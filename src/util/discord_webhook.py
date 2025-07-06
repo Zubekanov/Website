@@ -148,7 +148,7 @@ def startup_report_check():
 
 		while window_start < report_end:
 			rows = psql.execute(
-				"SELECT COUNT(UNIQUE epoch) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
+				"SELECT COUNT(DISTINCT epoch) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
 				(window_start, window_end)
 			)
 			if not rows or rows[0]['count'] == 0:
