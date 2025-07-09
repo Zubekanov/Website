@@ -232,7 +232,7 @@ def report_check():
 	last_report_date = psql.execute(
 		"SELECT MAX(report_date) AS last_report FROM uptime_reports;"
 	)
-	last_report_date = datetime.datetime.fromisoformat(last_report_date[0]['last_report']) if last_report_date and last_report_date[0]['last_report'] else None
+	last_report_date = last_report_date[0]['last_report'] if last_report_date and last_report_date[0]['last_report'] else None
 	if not last_report_date:
 		return
 	next_report_date = last_report_date + datetime.timedelta(days=1)
