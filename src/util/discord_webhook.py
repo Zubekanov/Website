@@ -8,6 +8,7 @@ from util.psql_manager import PSQLClient
 from util.lock_manager import get_lock, get_lock_file_path
 import logging
 from zoneinfo import ZoneInfo
+from psycopg2 import errors as psycopg2_errors
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
@@ -371,7 +372,10 @@ def run():
 					waiting = False
 					send_downtime_message()
 					report_check()
-				psql.execute("INSERT INTO uptime DEFAULT VALUES;")
+				try:
+					psql.execute("INSERT INTO uptime DEFAULT VALUES;")
+				except psycopg2_errors.UniqueViolation:
+					logging.warning("Duplicate entry in uptime table, ignoring.")
 			
 		if now % 3600 == 0:
 			report_check()
