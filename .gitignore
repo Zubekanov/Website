@@ -1,3 +1,6 @@
+# Temporary ignores while integration is worked out
+popugame.*
+
 # Remove password and API key containing files.
 *.config
 logs/*
