@@ -159,6 +159,9 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	over an empty span.
 	Returns a dict of series just like get_last_hour_metrics()/get_all_metrics().
 	"""
+	start = int(start)
+	stop = int(stop)
+	step = int(step)
 	step = max(5, ((step + 4) // 5) * 5)
 
 	client = PSQLClient()
