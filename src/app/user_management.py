@@ -42,15 +42,6 @@ class UserManagement:
 			return
 		UserManagement._initialised = True
 
-		try:
-			schema = ConfigReader.get_sql("schema.sql")
-			for stmt in schema:
-				psql.execute(query=stmt)
-			logger.debug("Database schema initialized successfully.")
-		except Exception as e:
-			logger.exception("Error initializing database schema: %s", e)
-			raise
-
 	def clean_user_data(self) -> None:
 		"""
 		Remove all expired verification requests and auth tokens from the database.
@@ -469,8 +460,12 @@ class UserManagement:
 		"""
 		Warning: Debug-only method to truncate users and all related data.
 		"""
+		if not current_app.config.get("DEBUG", False):
+			raise RuntimeError("Refusing to wipe users outside of DEBUG mode")
+
 		try:
 			psql.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE;")
 			logger.debug("All user data wiped (debug).")
 		except Exception as e:
 			logger.exception("Failed to wipe user data: %s", e)
+			raise

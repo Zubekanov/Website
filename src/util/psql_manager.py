@@ -1,6 +1,9 @@
+import logging
 from psycopg2 import sql
 from psycopg2.pool import ThreadedConnectionPool
 from util.config_reader import ConfigReader
+
+logger = logging.getLogger(__name__)
 
 # Load database config
 database_config = ConfigReader.get_key_value_config("database.config")
@@ -34,6 +37,16 @@ class PSQLClient:
 			database=self.database,
 			user=self.user
 		)
+
+		try:
+			schema_statements = ConfigReader.get_sql("schema.sql")
+			for stmt in schema_statements:
+				if stmt.strip():  # skip empties
+					self.execute(query=stmt)
+			logger.debug("Database schema initialized successfully.")
+		except Exception as e:
+			logger.exception("Error initializing database schema: %s", e)
+			raise
 
 	def close(self):
 		"""Close all pooled connections."""
@@ -365,6 +378,237 @@ class PSQLClient:
 			updated_count += 1
 
 		return updated_count
+
+	def get_rows_by_predicates(
+		self,
+		table: str,
+		predicates: list = None,     # [("col", ">=", val), ("col", "<", val)]
+		columns: list = None,        # ["col", ("count", "*", "alias"), ("count_distinct", "col", "alias"), ("avg","col","alias"), ...]
+		order_by: list = None,       # [("col_or_alias","ASC"|"DESC")]
+		limit: int = None,
+		group_by: list = None,       # ["col", "col2"]  (identifiers only)
+		schema: str = "public"
+	):
+		"""
+		Select rows with flexible predicates and safe aggregate columns.
+
+		`columns` entries may be:
+		- "colname"  -> SELECT colname
+		- ("count", "*", "alias") -> SELECT COUNT(*) AS alias
+		- ("count_distinct", "col", "alias")
+		- ("min"|"max"|"avg"|"sum", "col", "alias")
+
+		All identifiers are validated/bound via psycopg2.sql. Operators are whitelisted.
+		"""
+		valid_ops = {"=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "ILIKE", "IN", "NOT IN"}
+		agg_funcs = {"count", "count_distinct", "min", "max", "avg", "sum"}
+
+		# Discover valid columns for identifier validation
+		valid_columns = self._get_table_columns(table, schema)
+		if columns is None:
+			select_list = sql.SQL("*")
+		else:
+			select_bits = []
+			for c in columns:
+				# Plain identifier column
+				if isinstance(c, str):
+					if c not in valid_columns:
+						raise ValueError(f"Unknown column in SELECT: {c}")
+					select_bits.append(sql.Identifier(c))
+					continue
+
+				# Aggregate tuple
+				if not (isinstance(c, (list, tuple)) and len(c) == 3):
+					raise ValueError("Aggregate column spec must be a 3-tuple (func, col_or_*, alias)")
+				func, col, alias = c
+				func = str(func).lower()
+				if func not in agg_funcs:
+					raise ValueError(f"Unsupported aggregate: {func}")
+
+				if func == "count" and col == "*":
+					expr = sql.SQL("COUNT(*)")
+				else:
+					# Validate identifier for aggregate argument
+					if col not in valid_columns:
+						raise ValueError(f"Unknown column in aggregate: {col}")
+					arg = sql.Identifier(col)
+					if func == "count_distinct":
+						expr = sql.SQL("COUNT(DISTINCT {})").format(arg)
+					else:
+						# MIN/MAX/AVG/SUM/COUNT(col)
+						expr = sql.SQL("{}({})").format(sql.SQL(func.upper()), arg)
+
+				expr = sql.SQL("{} AS {}").format(expr, sql.Identifier(alias))
+				select_bits.append(expr)
+
+			select_list = sql.SQL(", ").join(select_bits)
+
+		# FROM
+		q = sql.SQL("SELECT {cols} FROM {schema}.{tbl}").format(
+			cols=select_list,
+			schema=sql.Identifier(schema),
+			tbl=sql.Identifier(table)
+		)
+
+		# WHERE
+		params = []
+		where_parts = []
+		if predicates:
+			for col, op, val in predicates:
+				op = op.upper()
+				if op not in valid_ops:
+					raise ValueError(f"Unsupported operator: {op}")
+				if op in {"IN", "NOT IN"}:
+					if not isinstance(val, (list, tuple, set)) or not val:
+						raise ValueError(f"{op} requires a non-empty sequence")
+					if col not in valid_columns:
+						raise ValueError(f"Unknown column in predicate: {col}")
+					ph = sql.SQL(", ").join(sql.Placeholder() for _ in val)
+					where_parts.append(sql.SQL("{} {} ({})").format(sql.Identifier(col), sql.SQL(op), ph))
+					params.extend(list(val))
+				else:
+					if col not in valid_columns:
+						raise ValueError(f"Unknown column in predicate: {col}")
+					where_parts.append(sql.SQL("{} {} {}").format(sql.Identifier(col), sql.SQL(op), sql.Placeholder()))
+					params.append(val)
+
+		if where_parts:
+			q += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)
+
+		# GROUP BY (identifiers only)
+		if group_by:
+			for g in group_by:
+				if g not in valid_columns:
+					raise ValueError(f"Unknown column in GROUP BY: {g}")
+			q += sql.SQL(" GROUP BY ") + sql.SQL(", ").join(sql.Identifier(g) for g in group_by)
+
+		# ORDER BY (allow alias names or real columns)
+		if order_by:
+			order_bits = []
+			for col, direction in order_by:
+				dir_up = direction.upper()
+				if dir_up not in {"ASC", "DESC"}:
+					raise ValueError("order_by direction must be 'ASC' or 'DESC'")
+				# If it's a selected plain column, validate as identifier; otherwise treat as alias (identifier as well)
+				order_bits.append(sql.SQL("{} {}").format(sql.Identifier(col), sql.SQL(dir_up)))
+			q += sql.SQL(" ORDER BY ") + sql.SQL(", ").join(order_bits)
+
+		# LIMIT
+		if limit is not None:
+			if not isinstance(limit, int) or limit <= 0:
+				raise ValueError("limit must be a positive integer")
+			q += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+
+		return self.execute(q, params)
+
+	def get_min_max(self, table: str, column: str, schema: str = "public"):
+		"""
+		Return the minimum and maximum value of `column` in `table`.
+		"""
+		q = sql.SQL("SELECT MIN({col}) AS min_val, MAX({col}) AS max_val FROM {schema}.{tbl};").format(
+			col=sql.Identifier(column),
+			schema=sql.Identifier(schema),
+			tbl=sql.Identifier(table)
+		)
+		result = self.execute(q)
+		return result[0] if result else None
+
+	def select_with_join(
+		self,
+		base_table: str,
+		columns: list,
+		joins: list = None,         # e.g. [("LEFT JOIN", "uptime_reports r", "r.report_date = u.epoch_date")]
+		predicates: list = None,    # e.g. [("u.epoch_date", "<", today)]
+		raw_predicates: list = None, # e.g. ["r.report_date IS NULL"]
+		order_by: list = None,
+		limit: int = None
+	):
+		"""
+		Perform a SELECT with optional JOINs and predicates.
+		`columns` is a list of SQL strings (with aliases if needed).
+		`joins` is a list of (join_type, table_expr, on_clause).
+		"""
+		select_sql = sql.SQL(", ").join(sql.SQL(c) for c in columns)
+
+		q = sql.SQL("SELECT {cols} FROM {base}").format(
+			cols=select_sql,
+			base=sql.SQL(base_table)
+		)
+
+		if joins:
+			for join_type, table_expr, on_clause in joins:
+				q += sql.SQL(" {} {} ON {}").format(
+					sql.SQL(join_type),
+					sql.SQL(table_expr),
+					sql.SQL(on_clause)
+				)
+
+		clauses, params = [], []
+		if predicates:
+			for col, op, val in predicates:
+				clauses.append(sql.SQL("{} {} {}").format(sql.SQL(col), sql.SQL(op), sql.Placeholder()))
+				params.append(val)
+		if raw_predicates:
+			for raw in raw_predicates:
+				clauses.append(sql.SQL(raw))
+		if clauses:
+			q += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(clauses)
+
+		if order_by:
+			bits = [sql.SQL("{} {}").format(sql.SQL(c), sql.SQL(d)) for c, d in order_by]
+			q += sql.SQL(" ORDER BY ") + sql.SQL(", ").join(bits)
+
+		if limit:
+			q += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+
+		return self.execute(q, params)
+
+	def count_rows(self, table: str, 
+				conditions: dict = None, 
+				distinct: str = None, 
+				schema: str = "public") -> int:
+		"""
+		Return the row count for `table`, optionally applying equality `conditions`
+		and/or counting DISTINCT values of a given column.
+		"""
+		# Choose COUNT(*) vs COUNT(DISTINCT col)
+		if distinct:
+			count_expr = sql.SQL("COUNT(DISTINCT {})").format(sql.Identifier(distinct))
+		else:
+			count_expr = sql.SQL("COUNT(*)")
+
+		q = sql.SQL("SELECT {count} AS count FROM {schema}.{table}").format(
+			count=count_expr,
+			schema=sql.Identifier(schema),
+			table=sql.Identifier(table)
+		)
+
+		params = []
+		if conditions:
+			valid_columns = self._get_table_columns(table, schema)
+			invalid = [k for k in conditions if k not in valid_columns]
+			if invalid:
+				raise ValueError(f"Invalid columns in conditions: {invalid}")
+
+			clauses = [
+				sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
+				for k in conditions
+			]
+			q += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(clauses)
+			params = list(conditions.values())
+
+		result = self.execute(q, params)
+		return result[0]["count"] if result else 0
+
+	def insert_default_row(self, table: str, schema: str = "public"):
+		"""
+		Insert a row into `table` with all DEFAULT values.
+		"""
+		q = sql.SQL("INSERT INTO {schema}.{table} DEFAULT VALUES;").format(
+			schema=sql.Identifier(schema),
+			table=sql.Identifier(table)
+		)
+		self.execute(q)
 
 
 if __name__ == "__main__":

@@ -277,6 +277,15 @@ def reset_password_submit():
 
 	return make_response(jsonify({"message": "Password reset successfully."}), 200)
 
+@main.route("/tournament-manager")
+def tournament_manager():
+	"""
+	Render the tournament manager page.
+	"""
+	components = LayoutFetcher.load_layout("swiss_manager.json")
+	breadcrumbs = generate_breadcrumbs()
+	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+
 @main.route("/api/uptime")
 def api_uptime():
 	return jsonify({"uptime_seconds": metrics.get_uptime()})

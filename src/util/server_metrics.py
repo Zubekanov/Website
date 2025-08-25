@@ -136,13 +136,16 @@ def get_latest_metrics():
 	Return the most recent sample that was written (or {} if none).
 	"""
 	client = PSQLClient()
-	most_recent = client.execute(
-		"SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp "
-		"FROM server_metrics ORDER BY ts DESC LIMIT 1;"
+	rows = client.get_rows_by_predicates(
+		table="server_metrics",
+		predicates=[],
+		columns=["ts", "cpu_percent", "ram_used", "disk_used", "cpu_temp"],
+		order_by=[("ts", "DESC")],
+		limit=1
 	)
-	if not most_recent:
+	if not rows:
 		return {}
-	row = most_recent[0]
+	row = rows[0]
 	return {
 		"timestamp": row["ts"],
 		"cpu_percent": row["cpu_percent"],
@@ -150,6 +153,7 @@ def get_latest_metrics():
 		"disk_used": row["disk_used"],
 		"cpu_temp": row["cpu_temp"]
 	}
+
 
 def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	"""
@@ -163,10 +167,8 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 	step = max(5, ((step + 4) // 5) * 5)
 
 	client = PSQLClient()
-	bound_row = client.execute(
-		"SELECT MIN(ts) AS min_ts FROM server_metrics;"
-	)[0]
-	min_ts = bound_row["min_ts"]
+	bounds = client.get_min_max("server_metrics", "ts")
+	min_ts = bounds["min_val"]
 	max_ts = int(time.time())
 
 	if start is None:
@@ -179,16 +181,17 @@ def get_range_metrics(start: int, stop: int, step: int) -> dict:
 		raise ValueError("Start timestamp must be ≤ stop timestamp.")
 
 	start += (5 - start % 5) % 5    # bump up to next multiple of 5
-	stop  -= stop % 5              	# drop down to previous multiple of 5
+	stop  -= stop % 5               # drop down to previous multiple of 5
 
-	query = """
-		SELECT ts, cpu_percent, ram_used, disk_used, cpu_temp
-		  FROM server_metrics
-		 WHERE ts >= %s
-		   AND ts <= %s
-		 ORDER BY ts;
-	"""
-	rows = client.execute(query, [start, stop])
+	rows = client.get_rows_by_predicates(
+		table="server_metrics",
+		predicates=[
+			("ts", ">=", start),
+			("ts", "<=", stop),
+		],
+		columns=["ts", "cpu_percent", "ram_used", "disk_used", "cpu_temp"],
+		order_by=[("ts", "ASC")]
+	)
 
 	row_map = {r["ts"]: r for r in rows}
 

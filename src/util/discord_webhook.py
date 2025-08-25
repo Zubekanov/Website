@@ -107,39 +107,38 @@ def human_delta(start: datetime, end: datetime) -> str:
 
 def startup_report_check():
 	"""
-	Check the database for days with uptime data and no logged reports.
+	Backfill one daily uptime report per loop, newest missing date first.
+	Terminates when there are no more missing dates before 'today'.
 	"""
 	tz = ZoneInfo(discord_config.get("TIMEZONE", "Australia/Sydney"))
 	today = datetime.datetime.now(tz).date()
-	midnight = (
-		datetime.datetime.combine(today, datetime.time(0, 0))
-		.replace(tzinfo=tz)
-		.timestamp()
-	)
 	_debug_reports_created = 0
+
 	while True:
-		rows = psql.execute(
-			"""
-			SELECT * FROM uptime u WHERE
-			NOT EXISTS (
-				SELECT 1 FROM uptime_reports r
-				WHERE r.report_date = u.epoch_date
-			)
-			AND u.epoch_date < %s
-			ORDER BY u.epoch DESC
-			LIMIT 1;
-			""",
-			(today, )
+		# Pick the latest day in 'uptime' that has no matching report yet
+		rows = psql.select_with_join(
+			base_table="uptime u",
+			columns=["u.epoch_date AS report_date"],
+			joins=[("LEFT JOIN", "uptime_reports r", "r.report_date = u.epoch_date")],
+			predicates=[("u.epoch_date", "<", today)],
+			raw_predicates=["r.report_date IS NULL"],
+			order_by=[("u.epoch_date", "DESC")],
+			limit=1
 		)
-		if not rows or rows[0].get("epoch") is None:
+
+
+		if not rows:
 			logging.info(f"Completed startup report check, created {_debug_reports_created} reports.")
 			break
-		last_epoch = rows[0].get("epoch")
-		days_since = (int(time.time()) - last_epoch) // _DAY_SECONDS
-		report_end = midnight - (days_since * _DAY_SECONDS)
-		report_start = report_end - _DAY_SECONDS
-		report_date = datetime.datetime.fromtimestamp(report_start, tz).date()
-		
+
+		report_date = rows[0]['report_date']  # <-- use the DB date directly
+
+		# Compute that day's [start, end) in the configured timezone
+		day_start_dt = datetime.datetime.combine(report_date, datetime.time(0, 0), tzinfo=tz)
+		day_end_dt = day_start_dt + datetime.timedelta(days=1)
+		report_start = int(day_start_dt.timestamp())
+		report_end = int(day_end_dt.timestamp())
+
 		hour_seconds = 3600
 		window_start = report_start
 		window_end = window_start + hour_seconds
@@ -148,63 +147,52 @@ def startup_report_check():
 		emoji_sparkline = ""
 
 		while window_start < report_end:
-			rows = psql.execute(
-				"SELECT COUNT(DISTINCT epoch) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
-				(window_start, window_end)
+			rows_count = psql.count_rows(
+				table="uptime",
+				distinct="epoch",
+				conditions={"epoch >=": window_start, "epoch <": window_end}
 			)
-			if not rows or rows[0]['count'] == 0:
-				window_start += hour_seconds
-				window_end += hour_seconds
-				emoji_sparkline += _SPK_EMOJI_0
-				continue
 
-			window_start += hour_seconds
-			window_end += hour_seconds
+			count = rows_count
+			hourly_percentage = count / (hour_seconds // _PING_INTERVAL) if count else 0.0
 
-			hourly_percentage = rows[0]['count'] / (hour_seconds // _PING_INTERVAL)
 			if hourly_percentage > _THRESHOLD_ERROR:
 				emoji_sparkline += _ERR_EMOJI_X
 			elif hourly_percentage > _THRESHOLD_4:
 				emoji_sparkline += _SPK_EMOJI_4
-			elif hourly_percentage > _THRESHOLD_3:	
+			elif hourly_percentage > _THRESHOLD_3:
 				emoji_sparkline += _SPK_EMOJI_3
 			elif hourly_percentage > _THRESHOLD_2:
 				emoji_sparkline += _SPK_EMOJI_2
 			else:
-				emoji_sparkline += _SPK_EMOJI_1
+				emoji_sparkline += _SPK_EMOJI_1 if count else _SPK_EMOJI_0
 
 			if hourly_percentage > 1:
-				logging.warning(
-					f"Hourly percentage {hourly_percentage} exceeds 100% in window {window_start} - {window_end}. ")
+				logging.warning(f"Hourly percentage {hourly_percentage} exceeds 100% in window {window_start} - {window_end}.")
 				hourly_percentage = 1.0
 
 			cumulative_percentage += ((hourly_percentage * 100) / 24)
 
-			logging.debug(
-				f"Window {window_start} - {window_end}: "
-				f"{rows[0]['count']} pings, "
-				f"{hourly_percentage * 100:.2f}% uptime"
-			)
-		
-		logging.debug(
-			f"Report for {report_date}: "
-			f"{cumulative_percentage:.2f}% cumulative uptime, "
-			f"emoji sparkline: {emoji_sparkline}"
-		)
+			window_start += hour_seconds
+			window_end += hour_seconds
 
 		psql.insert_row("uptime_reports", {
 			"report_date": report_date,
-			"created_at": datetime.datetime.now(),
+			"created_at": datetime.datetime.now(tz),
 			"uptime": round(cumulative_percentage, 2),
 			"emoji_sparkline": emoji_sparkline
 		})
 
-		midnight = report_start
 		_debug_reports_created += 1
-	
+
 def send_unsent_reports():
-	rows = psql.execute(
-		"SELECT * FROM uptime_reports WHERE sent_at IS NULL ORDER BY report_date ASC;"
+	rows = psql.get_rows_by_predicates(
+		table="uptime_reports",
+		columns=["*"],
+		predicates=[],
+		raw_predicates=["sent_at IS NULL"],
+		order_by=[("report_date", "ASC")],
+		limit=None
 	)
 
 	if not rows:
@@ -223,17 +211,25 @@ def send_unsent_reports():
 
 		message = f"📊 Uptime Report for <t:{report_epoch}:D>:\nDaily uptime: `{uptime}%`\n{emoji_sparkline}\n{_X_AXIS}"
 		if send_discord_message(message):
-			psql.execute(
-				"UPDATE uptime_reports SET sent_at = %s WHERE id = %s;",
-				(datetime.datetime.now(), report_id)
+			psql.update_rows_by_conditions(
+				table="uptime_reports",
+				updates={"sent_at": datetime.datetime.now()},
+				conditions={"id": report_id},
+				lower_limit=1,
+				upper_limit=1
 			)
 			logging.info(f"Sent report for {report_date}.")
 
 def report_check():
-	last_report_date = psql.execute(
-		"SELECT MAX(report_date) AS last_report FROM uptime_reports;"
+	rows = psql.get_rows_by_predicates(
+		table="uptime_reports",
+		columns=[("max", "report_date", "last_report")]
 	)
-	last_report_date = last_report_date[0]['last_report'] if last_report_date and last_report_date[0]['last_report'] else None
+
+	last_report_date = None
+	if rows and rows[0]["last_report"]:
+		last_report_date = rows[0]["last_report"]
+
 	if not last_report_date:
 		return
 	next_report_date = last_report_date + datetime.timedelta(days=1)
@@ -264,11 +260,17 @@ def _debug_generate_and_send_todays_report():
 	emoji_sparkline = ""
 
 	while window_start < midnight + _DAY_SECONDS:
-		rows = psql.execute(
-			"SELECT COUNT(DISTINCT epoch) AS count FROM uptime WHERE epoch >= %s AND epoch < %s;",
-			(window_start, window_end)
+		rows = psql.get_rows_by_predicates(
+			table="uptime",
+			columns=[("count_distinct", "epoch", "count")],
+			predicates=[
+				("epoch", ">=", window_start),
+				("epoch", "<", window_end)
+			]
 		)
-		if not rows or rows[0]['count'] == 0:
+		count = rows[0]["count"] if rows else 0
+
+		if not rows or count == 0:
 			window_start += hour_seconds
 			window_end += hour_seconds
 			emoji_sparkline += _SPK_EMOJI_0
@@ -277,7 +279,7 @@ def _debug_generate_and_send_todays_report():
 		window_start += hour_seconds
 		window_end += hour_seconds
 
-		hourly_percentage = rows[0]['count'] / (hour_seconds // _PING_INTERVAL)
+		hourly_percentage = count / (hour_seconds // _PING_INTERVAL)
 		if hourly_percentage > _THRESHOLD_ERROR:
 			emoji_sparkline += _ERR_EMOJI_X
 		elif hourly_percentage > _THRESHOLD_4:
@@ -316,13 +318,17 @@ def _debug_generate_and_send_todays_report():
 	logging.info(f"Today's report generated with {cumulative_percentage:.2f}% uptime.")
 
 def send_downtime_message():
-	rows = psql.execute("SELECT MAX(epoch) AS latest FROM uptime;")
-	
-	if not rows or rows[0]['latest'] is None:
+	rows = psql.get_rows_by_predicates(
+		table="uptime",
+		columns=[("max", "epoch", "latest")]
+	)
+	latest = rows[0]["latest"] if rows and rows[0]["latest"] is not None else None
+
+	if not rows or latest is None:
 		send_discord_message("❗ Server initialised with no previous uptime data.")
 		return
 
-	last_epoch = rows[0]['latest']
+	last_epoch = latest
 
 	now = int(time.time())
 	down = now - last_epoch
@@ -373,7 +379,7 @@ def run():
 					send_downtime_message()
 					report_check()
 				try:
-					psql.execute("INSERT INTO uptime DEFAULT VALUES;")
+					psql.insert_default_row("uptime")
 				except psycopg2_errors.UniqueViolation:
 					logging.warning("Duplicate entry in uptime table, ignoring.")
 			
