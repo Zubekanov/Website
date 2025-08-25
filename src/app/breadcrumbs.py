@@ -1,13 +1,7 @@
 from flask import request
+from util.config_reader import ConfigReader
 
-page_titles = {
-    "server" : "Server Overview",
-    "forgot-password" : "Password Recovery Form",
-    "reset-password" : "Reset Password",
-    "verify" : "Email Verification",
-    "profile" : "{username}'s Profile",
-    "settings" : "Account Settings",
-}
+page_titles = ConfigReader.get_key_value_config("breadcrumbs.config")
 
 def generate_breadcrumbs(user=None):
     """Automatically generate breadcrumbs from the current request path."""
