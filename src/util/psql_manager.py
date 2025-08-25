@@ -382,8 +382,8 @@ class PSQLClient:
 	def get_rows_by_predicates(
 		self,
 		table: str,
-		predicates: list = None,     # [("col", ">=", val), ("col", "<", val)]
-		columns: list = None,        # ["col", ("count", "*", "alias"), ("count_distinct", "col", "alias"), ("avg","col","alias"), ...]
+		predicates: list = None,     # [("col", ">=", val), ("col", "<", val), ("col","IS NULL", None)]
+		columns: list = None,        # ["*", "col", ("count","*","alias"), ("count_distinct","col","alias"), ("avg","col","alias"), ...]
 		order_by: list = None,       # [("col_or_alias","ASC"|"DESC")]
 		limit: int = None,
 		group_by: list = None,       # ["col", "col2"]  (identifiers only)
@@ -393,55 +393,63 @@ class PSQLClient:
 		Select rows with flexible predicates and safe aggregate columns.
 
 		`columns` entries may be:
-		- "colname"  -> SELECT colname
+		- "*" or "colname"  -> SELECT * / SELECT colname
 		- ("count", "*", "alias") -> SELECT COUNT(*) AS alias
 		- ("count_distinct", "col", "alias")
 		- ("min"|"max"|"avg"|"sum", "col", "alias")
 
-		All identifiers are validated/bound via psycopg2.sql. Operators are whitelisted.
+		`predicates` support: =, <>, !=, <, <=, >, >=, LIKE, ILIKE, IN, NOT IN, IS NULL, IS NOT NULL.
+		For IS NULL / IS NOT NULL, pass value=None.
 		"""
-		valid_ops = {"=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "ILIKE", "IN", "NOT IN"}
+		valid_ops = {
+			"=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "ILIKE",
+			"IN", "NOT IN", "IS NULL", "IS NOT NULL"
+		}
 		agg_funcs = {"count", "count_distinct", "min", "max", "avg", "sum"}
 
 		# Discover valid columns for identifier validation
 		valid_columns = self._get_table_columns(table, schema)
+
+		# SELECT list
 		if columns is None:
 			select_list = sql.SQL("*")
 		else:
-			select_bits = []
-			for c in columns:
-				# Plain identifier column
-				if isinstance(c, str):
-					if c not in valid_columns:
-						raise ValueError(f"Unknown column in SELECT: {c}")
-					select_bits.append(sql.Identifier(c))
-					continue
+			#  allow "*" explicitly in the list
+			if isinstance(columns, (list, tuple)) and len(columns) == 1 and columns[0] == "*":
+				select_list = sql.SQL("*")
+			else:
+				select_bits = []
+				for c in columns:
+					# Plain identifier column
+					if isinstance(c, str):
+						if c not in valid_columns:
+							raise ValueError(f"Unknown column in SELECT: {c}")
+						select_bits.append(sql.Identifier(c))
+						continue
 
-				# Aggregate tuple
-				if not (isinstance(c, (list, tuple)) and len(c) == 3):
-					raise ValueError("Aggregate column spec must be a 3-tuple (func, col_or_*, alias)")
-				func, col, alias = c
-				func = str(func).lower()
-				if func not in agg_funcs:
-					raise ValueError(f"Unsupported aggregate: {func}")
+					# Aggregate tuple
+					if not (isinstance(c, (list, tuple)) and len(c) == 3):
+						raise ValueError("Aggregate column spec must be a 3-tuple (func, col_or_*, alias)")
+					func, col, alias = c
+					func = str(func).lower()
+					if func not in agg_funcs:
+						raise ValueError(f"Unsupported aggregate: {func}")
 
-				if func == "count" and col == "*":
-					expr = sql.SQL("COUNT(*)")
-				else:
-					# Validate identifier for aggregate argument
-					if col not in valid_columns:
-						raise ValueError(f"Unknown column in aggregate: {col}")
-					arg = sql.Identifier(col)
-					if func == "count_distinct":
-						expr = sql.SQL("COUNT(DISTINCT {})").format(arg)
+					if func == "count" and col == "*":
+						expr = sql.SQL("COUNT(*)")
 					else:
-						# MIN/MAX/AVG/SUM/COUNT(col)
-						expr = sql.SQL("{}({})").format(sql.SQL(func.upper()), arg)
+						if col not in valid_columns:
+							raise ValueError(f"Unknown column in aggregate: {col}")
+						arg = sql.Identifier(col)
+						if func == "count_distinct":
+							expr = sql.SQL("COUNT(DISTINCT {})").format(arg)
+						else:
+							expr = sql.SQL("{}({})").format(sql.SQL(func.upper()), arg)
 
-				expr = sql.SQL("{} AS {}").format(expr, sql.Identifier(alias))
-				select_bits.append(expr)
+					expr = sql.SQL("{} AS {}").format(expr, sql.Identifier(alias))
+					select_bits.append(expr)
 
-			select_list = sql.SQL(", ").join(select_bits)
+				select_list = sql.SQL(", ").join(select_bits)
 
 		# FROM
 		q = sql.SQL("SELECT {cols} FROM {schema}.{tbl}").format(
@@ -455,21 +463,23 @@ class PSQLClient:
 		where_parts = []
 		if predicates:
 			for col, op, val in predicates:
-				op = op.upper()
-				if op not in valid_ops:
+				op_up = op.upper()
+				if op_up not in valid_ops:
 					raise ValueError(f"Unsupported operator: {op}")
-				if op in {"IN", "NOT IN"}:
+				if col not in valid_columns:
+					raise ValueError(f"Unknown column in predicate: {col}")
+
+				if op_up in {"IN", "NOT IN"}:
 					if not isinstance(val, (list, tuple, set)) or not val:
 						raise ValueError(f"{op} requires a non-empty sequence")
-					if col not in valid_columns:
-						raise ValueError(f"Unknown column in predicate: {col}")
 					ph = sql.SQL(", ").join(sql.Placeholder() for _ in val)
-					where_parts.append(sql.SQL("{} {} ({})").format(sql.Identifier(col), sql.SQL(op), ph))
+					where_parts.append(sql.SQL("{} {} ({})").format(sql.Identifier(col), sql.SQL(op_up), ph))
 					params.extend(list(val))
+				elif op_up in {"IS NULL", "IS NOT NULL"}:  # 
+					where_parts.append(sql.SQL("{} {}").format(sql.Identifier(col), sql.SQL(op_up)))
+					# no param
 				else:
-					if col not in valid_columns:
-						raise ValueError(f"Unknown column in predicate: {col}")
-					where_parts.append(sql.SQL("{} {} {}").format(sql.Identifier(col), sql.SQL(op), sql.Placeholder()))
+					where_parts.append(sql.SQL("{} {} {}").format(sql.Identifier(col), sql.SQL(op_up), sql.Placeholder()))
 					params.append(val)
 
 		if where_parts:
@@ -489,7 +499,6 @@ class PSQLClient:
 				dir_up = direction.upper()
 				if dir_up not in {"ASC", "DESC"}:
 					raise ValueError("order_by direction must be 'ASC' or 'DESC'")
-				# If it's a selected plain column, validate as identifier; otherwise treat as alias (identifier as well)
 				order_bits.append(sql.SQL("{} {}").format(sql.Identifier(col), sql.SQL(dir_up)))
 			q += sql.SQL(" ORDER BY ") + sql.SQL(", ").join(order_bits)
 
@@ -500,6 +509,7 @@ class PSQLClient:
 			q += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
 
 		return self.execute(q, params)
+
 
 	def get_min_max(self, table: str, column: str, schema: str = "public"):
 		"""

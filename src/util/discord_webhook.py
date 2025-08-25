@@ -189,10 +189,8 @@ def send_unsent_reports():
 	rows = psql.get_rows_by_predicates(
 		table="uptime_reports",
 		columns=["*"],
-		predicates=[],
-		raw_predicates=["sent_at IS NULL"],
-		order_by=[("report_date", "ASC")],
-		limit=None
+		predicates=[("sent_at", "IS NULL", None)],
+		order_by=[("report_date", "ASC")]
 	)
 
 	if not rows:
