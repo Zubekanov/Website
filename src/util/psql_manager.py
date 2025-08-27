@@ -138,8 +138,11 @@ class PSQLClient:
 		)
 		return [r['column_name'] for r in result]
 
-	def insert_row(self, table, data: dict):
-		"""Insert a row into `table` using column-value mapping from `data`."""
+	def insert_row(self, table, data: dict, returning: list[str] = None):
+		"""
+		Insert a row into `table` using column-value mapping from `data`.
+		Optionally return specified columns (e.g. ['uid'] or ['*']).
+		"""
 		if not data:
 			raise ValueError("Data dictionary is empty.")
 
@@ -155,12 +158,23 @@ class PSQLClient:
 		values = list(data.values())
 		placeholders = [sql.Placeholder() for _ in values]
 
-		q = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({placeholders});").format(
+		q = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({placeholders})").format(
 			table=sql.Identifier(table),
 			fields=sql.SQL(', ').join(columns),
 			placeholders=sql.SQL(', ').join(placeholders)
 		)
-		self.execute(q, values)
+
+		if returning:
+			# allow ['*'] or list of column names
+			if returning == ["*"]:
+				q += sql.SQL(" RETURNING *")
+			else:
+				ret_cols = [sql.Identifier(c) for c in returning]
+				q += sql.SQL(" RETURNING ") + sql.SQL(', ').join(ret_cols)
+
+		result = self.execute(q, values)
+		return result  # list of dicts if RETURNING was used, else None
+
 
 	def get_rows_by_conditions(self, table, conditions: dict):
 		"""Get rows from `table` where each key-value in `conditions` is matched."""
