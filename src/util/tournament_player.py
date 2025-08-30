@@ -7,11 +7,9 @@ client = PSQLClient()
 default_display_prefix = "Tournament User "
 
 class Tournament_User:
-    def __init__(self, uid=None, user_id=None, display_name=None, created_at=None):
+    def __init__(self, uid=None):
         self.uid = uid
-        self.user_id = user_id
-        self.display_name = display_name
-        self.created_at = created_at
+        self.contents = client.get_rows_by_conditions("tournament_users", {"uid": uid})[0]
 
     @classmethod
     def create(cls):
@@ -19,23 +17,13 @@ class Tournament_User:
             "user_id": None,
             "display_name": Tournament_User.generate_temporary_display_name(default_display_prefix)
         }, returning=["*"])[0]
-        return cls(
-            uid=t_user['uid'],
-            user_id=t_user['user_id'],
-            display_name=t_user['display_name'],
-            created_at=t_user['created_at']
-        )
+        return cls(uid=t_user['uid'])
 
     @classmethod
     def load_from_id(cls, tournament_user_id):
         t_user = client.get_rows_by_conditions("tournament_users", {"id": tournament_user_id})
         if t_user:
-            return cls(
-                uid=t_user[0]['uid'],
-                user_id=t_user[0]['user_id'],
-                display_name=t_user[0]['display_name'],
-                created_at=t_user[0]['created_at']
-            )
+            return cls(uid=t_user[0]['uid'])
         return None
 
     @classmethod
@@ -47,13 +35,8 @@ class Tournament_User:
             if not t_user:
                 tid = Tournament_User.add_new_user(user_id=uid)
                 t_user = client.get_rows_by_conditions("tournament_users", {"uid": tid})
-            
-            return cls( 
-                uid=t_user[0]['uid'],
-                user_id=t_user[0]['user_id'],
-                display_name=t_user[0]['display_name'],
-                created_at=t_user[0]['created_at']
-            )
+
+            return cls(uid=t_user[0]['uid'])
         return None
 
     @staticmethod

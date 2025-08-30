@@ -6,16 +6,27 @@ from util.tournament_player import Tournament_User
 client = PSQLClient()
 
 class Tournament:
-    def __init__(self, created_by=None, display_name=None):
-        pass
+    def __init__(self, uid=None):
+        self.uid = uid
+        self.contents = client.get_rows_by_conditions("tournament", {"uid": uid})[0]
 
     @classmethod
     def create(cls):
-        pass
+        tournament = client.insert_row("tournament", {
+            "uid": None,
+            "display_name": cls._generate_temporary_tournament_display_name(),
+            "share_code": cls._generate_unique_share_code()
+        }, returning=["uid"])
+        if tournament:
+            return cls(uid=tournament[0]["uid"])
+        return None
 
     @classmethod
-    def load_from_id(cls):
-        pass
+    def load_from_id(cls, tournament_id):
+        tournament = client.get_rows_by_conditions("tournament", {"id": tournament_id})
+        if tournament:
+            return cls(uid=tournament[0]["uid"])
+        return None
 
     @staticmethod
     def _generate_unique_share_code(length=5, max_attempts=20):

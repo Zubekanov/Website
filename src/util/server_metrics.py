@@ -3,6 +3,7 @@ import time
 import threading
 
 import psutil
+from pathlib import Path
 
 from datetime import datetime
 from util.config_reader import ConfigReader
@@ -45,10 +46,6 @@ def get_disk_total():
 def get_uptime():
 	return int(time.time() - _initialisation_time)
 
-def _static_info_path():
-	base = ConfigReader.logs_dir()
-	return os.path.join(base, "server_metrics", "static_info.log")
-
 def get_static_metrics():
 	return {
 		"ram_total": get_ram_total(),
@@ -85,32 +82,32 @@ def log_server_metrics():
 def server_metrics_worker():
 	"""
 	Periodically calls log_server_metrics() every _SLEEP_INTERVAL seconds.
-	Static‐info (RAM/DISK) is still appended to flat file if it changes.
+	Static-info (RAM/DISK) is still appended to a flat file if it changes.
 	"""
 	logging.debug("Server metrics worker started.")
 
-	# Ensure the directory for static_info exists (same as before)
-	metrics_dir = ConfigReader.logs_dir()
-	static_dir = os.path.join(metrics_dir, "server_metrics")
-	os.makedirs(static_dir, exist_ok=True)
-	static_log_path = os.path.join(static_dir, "static_info.log")
+	# Use namespace path (no call) → Path object
+	metrics_dir: Path = ConfigReader().logs_dir.base
+	static_dir: Path = metrics_dir / "server_metrics"
+	static_dir.mkdir(parents=True, exist_ok=True)
+	static_log_path: Path = static_dir / "static_info.log"
 
 	def _read_last_static():
-		if not os.path.exists(static_log_path):
+		if not static_log_path.exists():
 			return None, None
-		with open(static_log_path, "r") as f:
+		with static_log_path.open("r") as f:
 			lines = [l.strip() for l in f if l.strip()]
 		if not lines:
 			return None, None
 		_, ram_s, disk_s = lines[-1].split(",")
 		return float(ram_s), float(disk_s)
 
-	# Record static metrics if they changed (same as original)
+	# Record static metrics if they changed
 	last_ram, last_disk = _read_last_static()
 	curr_ram = get_ram_total()
 	curr_disk = get_disk_total()
 	if curr_ram != last_ram or curr_disk != last_disk:
-		with open(static_log_path, "a") as f:
+		with static_log_path.open("a") as f:
 			f.write(f"{int(time.time())},{curr_ram},{curr_disk}\n")
 		logging.debug(f"[static_info] appended new specs: RAM={curr_ram} GiB, Disk={curr_disk} GiB")
 

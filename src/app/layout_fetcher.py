@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import json
 import markdown
 from util.config_reader import ConfigReader
@@ -16,11 +17,15 @@ def is_content(item: str) -> bool:
 class LayoutFetcher:
 	@staticmethod
 	def load_layout(layout_json_filename: str) -> dict:
-		base_content_dir = ConfigReader.content_dir()
+		# Namespace → Path
+		base_content_dir: Path = ConfigReader().content_dir.base
 
-		layout_path = os.path.join(base_content_dir, layout_json_filename)
-		with open(layout_path, "r") as f:
-			layout_config : dict = json.load(f)
+		layout_path: Path = base_content_dir / layout_json_filename
+		if not layout_path.exists():
+			raise FileNotFoundError(f"Layout file '{layout_json_filename}' not found in {base_content_dir}")
+
+		with layout_path.open("r", encoding="utf-8") as f:
+			layout_config: dict = json.load(f)
 
 		return LayoutFetcher.parse_iterable(layout_config)
 	

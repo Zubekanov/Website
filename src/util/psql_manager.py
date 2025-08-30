@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Load database config
 database_config = ConfigReader.get_key_value_config("database.config")
+schema_json = ConfigReader.get_json("schema.json")
 
 class PSQLClient:
 	"""
@@ -587,15 +588,27 @@ class PSQLClient:
 
 		return self.execute(q, params)
 
-	def count_rows(self, table: str, 
-				conditions: dict = None, 
-				distinct: str = None, 
-				schema: str = "public") -> int:
+	def count_rows(
+		self,
+		table: str,
+		conditions: dict | None = None,           # supports {"col": v} and {"col >=": v}
+		predicates: list[tuple] | None = None,     # e.g. [("epoch", ">=", 123), ("epoch", "<", 456)]
+		distinct: str | None = None,
+		schema: str = "public"
+	) -> int:
 		"""
-		Return the row count for `table`, optionally applying equality `conditions`
-		and/or counting DISTINCT values of a given column.
+		Return COUNT(*) (or COUNT(DISTINCT <col>)) from `table`, with optional filters.
+
+		Filters can be provided either as:
+		- conditions dict with equality or operator-in-key:
+			{"col": val, "ts >=": 100, "ts <": 200, "id IN": [1,2,3]}
+		- predicates list of (col, op, val) tuples:
+			[("ts", ">=", 100), ("ts", "<", 200)]
+		Supported ops: =, <>, !=, <, <=, >, >=, LIKE, ILIKE, IN, NOT IN
 		"""
-		# Choose COUNT(*) vs COUNT(DISTINCT col)
+		valid_ops = {"=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "ILIKE", "IN", "NOT IN"}
+
+		# COUNT(*) vs COUNT(DISTINCT col)
 		if distinct:
 			count_expr = sql.SQL("COUNT(DISTINCT {})").format(sql.Identifier(distinct))
 		else:
@@ -608,21 +621,60 @@ class PSQLClient:
 		)
 
 		params = []
-		if conditions:
-			valid_columns = self._get_table_columns(table, schema)
-			invalid = [k for k in conditions if k not in valid_columns]
-			if invalid:
-				raise ValueError(f"Invalid columns in conditions: {invalid}")
+		where_parts = []
 
-			clauses = [
-				sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
-				for k in conditions
-			]
-			q += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(clauses)
-			params = list(conditions.values())
+		# Column validation
+		valid_columns = self._get_table_columns(table, schema)
+		def _ensure_col(c: str):
+			if c not in valid_columns:
+				raise ValueError(f"Unknown column: {c}")
+
+		# Parse conditions dict (supports operator in key)
+		if conditions:
+			for key, val in conditions.items():
+				key = str(key).strip()
+				parts = key.split(None, 1)  # split on first whitespace
+				if len(parts) == 1:
+					col, op = parts[0], "="
+				else:
+					col, op = parts[0], parts[1].upper()
+				_ensure_col(col)
+				if op not in valid_ops:
+					raise ValueError(f"Unsupported operator: {op}")
+				if op in {"IN", "NOT IN"}:
+					if not isinstance(val, (list, tuple, set)) or not val:
+						raise ValueError(f"{op} requires a non-empty sequence")
+					ph = sql.SQL(", ").join(sql.Placeholder() for _ in val)
+					where_parts.append(sql.SQL("{} {} ({})").format(sql.Identifier(col), sql.SQL(op), ph))
+					params.extend(list(val))
+				else:
+					where_parts.append(sql.SQL("{} {} {}").format(sql.Identifier(col), sql.SQL(op), sql.Placeholder()))
+					params.append(val)
+
+		# Parse predicates list
+		if predicates:
+			for col, op, val in predicates:
+				col = str(col)
+				op = str(op).upper()
+				_ensure_col(col)
+				if op not in valid_ops:
+					raise ValueError(f"Unsupported operator: {op}")
+				if op in {"IN", "NOT IN"}:
+					if not isinstance(val, (list, tuple, set)) or not val:
+						raise ValueError(f"{op} requires a non-empty sequence")
+					ph = sql.SQL(", ").join(sql.Placeholder() for _ in val)
+					where_parts.append(sql.SQL("{} {} ({})").format(sql.Identifier(col), sql.SQL(op), ph))
+					params.extend(list(val))
+				else:
+					where_parts.append(sql.SQL("{} {} {}").format(sql.Identifier(col), sql.SQL(op), sql.Placeholder()))
+					params.append(val)
+
+		if where_parts:
+			q += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)
 
 		result = self.execute(q, params)
-		return result[0]["count"] if result else 0
+		return int(result[0]["count"]) if result else 0
+
 
 	def insert_default_row(self, table: str, schema: str = "public"):
 		"""
