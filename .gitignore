@@ -1,10 +1,16 @@
 node_modules
 
 # Remove password and API key containing files.
-*.config
+*.conf
 logs/*
 plots/*
 plots
+
+# Remove content of caches
+cache/*
+
+# Remove build webpage scripts
+webpages/*
 
 # Gmail API credentials
 **/config/*.json
