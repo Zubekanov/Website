@@ -1,13 +1,12 @@
 import logging
 from psycopg2 import sql
 from psycopg2.pool import ThreadedConnectionPool
-from util.config_reader import ConfigReader
+from util.config_reader import *
 
 logger = logging.getLogger(__name__)
 
 # Load database config
 database_config = ConfigReader.get_key_value_config("database.config")
-schema_json = ConfigReader.get_json("schema.json")
 
 class PSQLClient:
 	"""

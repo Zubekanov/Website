@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import json
 import markdown
-from util.config_reader import ConfigReader
+from util.config_reader import *
 
 content_types = (
 	'.md', '.html', '.txt', '.js', '.pdf', 

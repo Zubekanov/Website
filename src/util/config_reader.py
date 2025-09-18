@@ -90,7 +90,7 @@ class ConfigReader:
 	def _ns_root(cls) -> Path:
 		return cls._base_dir()
 
-	# default namespaces (you can add more at runtime)
+	# default namespaces
 	_NAMESPACES = {
 		"config_dir": "config",
 		"content_dir": "content",
@@ -108,7 +108,7 @@ class ConfigReader:
 
 	# Expose namespaces as properties (so you can call ConfigReader.sql_dir.*)
 	@property
-	def config_dir(self) -> _DirNS: return self._ns("config_dir")  # type: ignore[attr-defined]
+	def config_dir(self) -> _DirNS:  return self._ns("config_dir")  # type: ignore[attr-defined]
 	@property
 	def content_dir(self) -> _DirNS: return self._ns("content_dir") # type: ignore[attr-defined]
 	@property
@@ -147,7 +147,7 @@ class ConfigReader:
 		"""
 		cls._NAMESPACES[public_name] = str(relative_path)
 
-	# ---- Backwards-compatible helpers (now proxy to namespaces) ----
+	# ---- Backwards-compatible helpers ----
 	@classmethod
 	def get_raw(cls, filename: str) -> str:
 		return cls().config_dir.get_raw(filename)
@@ -197,7 +197,15 @@ class ConfigReader:
 
 		raise FileNotFoundError(f"Content file '{filename}' not found in {content_dir}")
 
-	# ---- OAuth / GCP helpers (unchanged) ----
+	@staticmethod
+	def generate_sql_dict(filename: str) -> None:
+		"""
+		From a schema.sql file, generates a dict with the table structure.
+		"""
+		# TODO
+		pass
+
+	# ---- OAuth / GCP helpers ----
 	@classmethod
 	def get_credentials(
 		cls,
