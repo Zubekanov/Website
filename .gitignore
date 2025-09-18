@@ -1,5 +1,4 @@
-# Temporary ignores while integration is worked out
-popugame.*
+node_modules
 
 # Remove password and API key containing files.
 *.config
