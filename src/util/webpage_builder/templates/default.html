@@ -4,15 +4,15 @@
 	<meta charset="utf-8" />
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>{{ title }}</title>
+	<title>{{ title|default('Joseph Wong') }}</title>
 
 	<!-- SEO & Social -->
-	<meta name="description" content="{{ meta_description|default('') }}" />
-	<meta name="keywords" content="{{ meta_keywords|default('') }}" />
+	<meta name="description" content="{{ meta_description|default('Personal website hosting various projects and information.') }}" />
+	<meta name="keywords" content="{{ meta_keywords|default('Joseph Wong, personal website, portfolio') }}" />
 	<link rel="canonical" href="{{ canonical_url|default(request.url if request else '') }}" />
 	<meta name="robots" content="{{ robots|default('index,follow') }}" />
-	<meta name="author" content="{{ author|default('') }}" />
-	<meta name="theme-color" content="{{ theme_color|default('#0ea5e9') }}" />
+	<meta name="author" content="{{ author|default('Joseph Wong') }}" />
+	<meta name="theme-color" content="{{ theme_color|default('#1f1f1f') }}" />
 
 	<!-- Open Graph -->
 	<meta property="og:title" content="{{ og_title|default(title) }}" />
@@ -20,7 +20,7 @@
 	<meta property="og:url" content="{{ og_url|default(canonical_url) }}" />
 	<meta property="og:type" content="{{ og_type|default('website') }}" />
 	<meta property="og:image" content="{{ og_image|default('') }}" />
-	<meta property="og:image:alt" content="{{ og_image_alt|default('') }}" />
+	<meta property="og:image:alt" content="{{ og_image_alt|default('No OG image currently set.') }}" />
 
 	<!-- Twitter Cards -->
 	<meta name="twitter:card" content="{{ twitter_card|default('summary_large_image') }}" />
@@ -35,15 +35,9 @@
 	<link rel="apple-touch-icon" href="{{ apple_touch_icon|default('/apple-touch-icon.png') }}" />
 	<link rel="manifest" href="{{ manifest_href|default('/site.webmanifest') }}" />
 
-	<!-- Alternate languages & feeds (optional) -->
-	<!-- Example: <link rel="alternate" hreflang="en" href="https://example.com/en/" /> -->
-	{{ alternates_html|default('')|safe }}
-	<link rel="alternate" type="application/rss+xml" title="RSS" href="{{ rss_href|default('') }}" />
-
 	<!-- Networking hints -->
 	<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-	<!-- Example: <link rel="dns-prefetch" href="//cdn.example.com" /> -->
 	{{ preconnect_html|default('')|safe }}
 
 	<!-- Preload critical assets (images, fonts, css) -->
@@ -67,12 +61,6 @@
 		})();
 	</script>
 	{{ scripts_head_html|default('')|safe }}
-
-	<!-- Structured data (JSON-LD) -->
-	<script type="application/ld+json">{{ structured_data_jsonld|default('{}')|safe }}</script>
-
-	<!-- Security hints (CSP via meta is limited; prefer headers) -->
-	<meta http-equiv="Content-Security-Policy" content="{{ csp_meta|default("default-src 'self'; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';") }}" />
 </head>
 
 <body class="{{ body_class|default('min-h-screen antialiased') }}">
