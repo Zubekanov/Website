@@ -1,0 +1,3 @@
+[submodule "src/util/file_config_utils"]
+	path = src/util/file_config_utils
+	url = https://github.com/Zubekanov/file_config_utils.git
