@@ -15,13 +15,31 @@ from sql.psql_client import PSQLClient
 # Helpers / fixtures
 # --------------------------
 
+def _conn_kwargs_from_env():
+	"""
+	Read connection details from standard PG* env vars with safe defaults.
+	Tests operate inside the connected database (schemas/tables only).
+	"""
+	return {
+		"database": os.getenv("PGDATABASE", "postgres"),
+		"user": os.getenv("PGUSER", "postgres"),
+		"password": os.getenv("PGPASSWORD"),            # may be None for local trust
+		"host": os.getenv("PGHOST", "localhost"),
+		"port": int(os.getenv("PGPORT", "5432")),
+	}
+
+
 @pytest.fixture(scope="session")
 def client():
 	"""
-	Session-scoped singleton instance.
-	Relies on config/psql.conf being valid for connecting.
+	Session-scoped pooled client (per-DSN cache).
+	Initialised dynamically from environment, no config files.
 	"""
-	return PSQLClient()
+	kwargs = _conn_kwargs_from_env()
+	c = PSQLClient.get(**kwargs)
+	yield c
+	# Ensure pools are closed after the test session
+	PSQLClient.closeall()
 
 
 @pytest.fixture
@@ -47,13 +65,24 @@ def fq(schema, table):
 
 
 # --------------------------
-# 1) Singleton
+# 1) Client cache (per-DSN)
 # --------------------------
 
-def test_singleton_identity():
-	a = PSQLClient()
-	b = PSQLClient()
-	assert a is b, "Expected PSQLClient() to return the same singleton instance"
+def test_client_cache_identity():
+	kwargs = _conn_kwargs_from_env()
+
+	a = PSQLClient.get(**kwargs)
+	b = PSQLClient.get(**kwargs)
+	assert a is b, "Expected PSQLClient.get(...) to return the same instance for identical params"
+
+	# Different DSN (e.g., min/max pool sizes differ) → different instance
+	c = PSQLClient.get(**kwargs, minconn=2, maxconn=11)
+	assert c is not a, "Different pool sizing should yield a distinct cached client"
+
+	# Direct construction is allowed but is not cached (by design)
+	d = PSQLClient(**kwargs)
+	assert d is not a, "Direct __init__ does not consult the cache"
+	d.close()
 
 
 # --------------------------

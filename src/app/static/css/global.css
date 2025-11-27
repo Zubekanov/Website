@@ -1,0 +1,44 @@
+:root {
+	--brackets: #ffc811;
+	--dark_blue: #569cd6;
+	--default: #1f1f1f;
+	--functions: #dcdcaa;
+	--objects: #4ec9a2;
+	--return: #c586c0;
+	--string: #ce9178;
+	--variables: #68cdfe;
+
+	--background: #f3f3f3;
+    --border: #ededed;
+	--contents: #ffffff;
+
+    --info_box: #16825d;
+    --info_box_text: #dae1be;
+
+	--font-base: Consolas, Menlo, "Liberation Mono", "Courier New", monospace;
+}
+
+html[data-theme="dark"] {
+	--background: #181818;
+    --border: #333333;
+	--contents: #1f1f1f;
+	--default: #cccccc;
+
+    --info_box: #007acc;
+    --info_box_text: #dcf6f8;
+}
+
+html {
+	font-family: var(--font-base);
+	background: var(--background);
+	color: var(--default);
+}
+
+.token-string   { color: var(--string); }
+.token-func     { color: var(--functions); }
+.token-var      { color: var(--variables); }
+.token-bracket  { color: var(--brackets); }
+.token-darkblue { color: var(--dark_blue); }
+.token-default  { color: var(--default); }
+.token-object   { color: var(--objects); }
+.token-return   { color: var(--return); }

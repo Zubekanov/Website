@@ -1,65 +1,146 @@
 import logging
 from math import ceil
+from typing import Optional, Iterable
 from psycopg2 import sql
 from psycopg2.pool import ThreadedConnectionPool
-from util.fcr.file_config_reader import FileConfigReader
 
 logger = logging.getLogger(__name__)
 
-fcr = FileConfigReader()
-psql_conf = fcr.load_config('config/psql.conf')
 
 class PSQLClient:
-	_instance = None
-	_initialised = False
+	"""
+	Thread-safe PostgreSQL client with a connection pool and convenience helpers.
 
-	def __new__(cls, *args, **kwargs):
-		if cls._instance is None:
-			cls._instance = super(PSQLClient, cls).__new__(cls)
-		return cls._instance
+	Create directly:
+		client = PSQLClient(database="WebsiteDev", user="postgres", password="...", host="localhost", port=5432)
 
-	def __init__(self, database: str | None = None, user: str | None = None, minconn: int = 1, maxconn: int = 10):
-		if PSQLClient._initialised:
-			return
-		PSQLClient._initialised = True
+	Or reuse an existing pool by DSN via the cache:
+		client = PSQLClient.get(database="WebsiteDev", user="postgres", host="localhost")
 
-		# Database hosted locally so host, port, and password are omitted.
-		self.database = database or psql_conf.get("DATABASE", "postgres")
-		self.user     = user or     psql_conf.get("USER", "postgres")
+	Call `close()` when you're done with a specific client instance, or `PSQLClient.closeall()` to close all cached pools.
+	"""
 
+	# Cache of instances keyed by a DSN-ish tuple for easy reuse
+	_cache: dict[tuple, "PSQLClient"] = {}
+
+	@classmethod
+	def get(
+		cls,
+		*,
+		database: str = "postgres",
+		user: str = "postgres",
+		password: Optional[str] = None,
+		host: Optional[str] = None,
+		port: Optional[int] = None,
+		minconn: int = 1,
+		maxconn: int = 10,
+		**conn_kwargs
+	) -> "PSQLClient":
+		"""
+		Return a cached client for the same connection parameters, creating it if needed.
+		Extra psycopg2 connection kwargs can be passed via **conn_kwargs (e.g., sslmode="require", options="...").
+		"""
+		key = (
+			host, port, database, user, password,
+			tuple(sorted(conn_kwargs.items())) if conn_kwargs else None,
+			minconn, maxconn
+		)
+		if key not in cls._cache:
+			cls._cache[key] = cls(
+				database=database, user=user, password=password,
+				host=host, port=port, minconn=minconn, maxconn=maxconn, **conn_kwargs
+			)
+			logger.debug("Created new cached PSQLClient for key: %s", key)
+		else:
+			logger.debug("Reusing cached PSQLClient for key: %s", key)
+		return cls._cache[key]
+
+	@classmethod
+	def closeall(cls) -> None:
+		"""Close all cached connection pools and clear the cache."""
+		items = list(cls._cache.items())
+		cls._cache.clear()
+		for _, client in items:
+			try:
+				client.close()
+			except Exception:
+				logger.exception("Error closing pooled client")
+
+	def __init__(
+		self,
+		*,
+		database: str = "postgres",
+		user: str = "postgres",
+		password: Optional[str] = None,
+		host: Optional[str] = None,
+		port: Optional[int] = None,
+		minconn: int = 1,
+		maxconn: int = 10,
+		**conn_kwargs
+	):
+		# Store connect params for __repr__ / debugging
+		self.database = database
+		self.user = user
+		self.host = host
+		self.port = port
+		self._conn_kwargs = dict(conn_kwargs)
+		if password is not None:
+			self._conn_kwargs["password"] = password
+		if host is not None:
+			self._conn_kwargs["host"] = host
+		if port is not None:
+			self._conn_kwargs["port"] = port
+
+		logger.debug("Creating PSQLClient for %s@%s:%s/%s", user, host or "", port or "", database)
+
+		# Create pool
 		self.pool = ThreadedConnectionPool(
 			minconn, maxconn,
 			database=self.database,
-			user=self.user
+			user=self.user,
+			**self._conn_kwargs
 		)
 
-		# TODO Reimplement schema checking and/or execution.
+	def __repr__(self) -> str:
+		host = self.host or ""
+		port = f":{self.port}" if self.port else ""
+		return f"<PSQLClient {self.user}@{host}{port}/{self.database} pool={getattr(self.pool, 'minconn', '?')}-{getattr(self.pool, 'maxconn', '?')}>"
+
+	# ---------- Pool plumbing ----------
+	def close(self) -> None:
+		"""Close this client's pool."""
+		try:
+			self.pool.closeall()
+		except Exception:
+			logger.exception("Error closing connection pool")
 
 	def _get_conn(self):
-		"""Get a connection from the pool."""
 		return self.pool.getconn()
 
 	def _put_conn(self, conn):
-		"""Return a connection to the pool."""
 		self.pool.putconn(conn)
 
-	def _execute(self, query, params: list | None = None) -> list[dict] | None:
+	# ---------- Execution helpers ----------
+	def _execute(self, query, params: Optional[Iterable] = None) -> list[dict] | None:
+		"""
+		Executes SQL (string or psycopg2.sql Composable).
+		Returns list[dict] for result sets, otherwise None.
+		Commits on success; rolls back on exception.
+		"""
 		conn = self._get_conn()
 		try:
+			if not isinstance(query, str):
+				query = query.as_string(conn)
 			with conn.cursor() as cur:
-				cur.execute(query, params or [])
-				status = (cur.statusmessage or "").upper()
+				cur.execute(query, list(params or []))
 				has_result = cur.description is not None
-
 				if has_result:
 					colnames = [d[0] for d in cur.description]
 					rows = cur.fetchall()
-					# Commit if this was DML with RETURNING
-					if status.startswith(("INSERT", "UPDATE", "DELETE", "MERGE")):
-						conn.commit()
+					# If it's DML with RETURNING, this commit covers the write
+					conn.commit()
 					return [dict(zip(colnames, r)) for r in rows]
 				else:
-					# No result set (DDL/DML without RETURNING)
 					conn.commit()
 					return None
 		except Exception:
@@ -68,8 +149,7 @@ class PSQLClient:
 		finally:
 			self._put_conn(conn)
 
-	# ---------- Database-level helpers (autocommit required) ----------
-	def _execute_autocommit(self, query, params=None):
+	def _execute_autocommit(self, query, params: Optional[Iterable] = None):
 		"""
 		Execute a statement that must run outside a transaction (e.g., CREATE/DROP DATABASE).
 		Returns None or list[dict] like _execute.
@@ -77,18 +157,21 @@ class PSQLClient:
 		conn = self._get_conn()
 		prev = getattr(conn, "autocommit", False)
 		try:
+			if not isinstance(query, str):
+				query = query.as_string(conn)
 			conn.autocommit = True
 			with conn.cursor() as cur:
-				cur.execute(query, params or [])
+				cur.execute(query, list(params or []))
 				if cur.description:
 					names = [d[0] for d in cur.description]
-					rows  = cur.fetchall()
+					rows = cur.fetchall()
 					return [dict(zip(names, r)) for r in rows]
 				return None
 		finally:
 			conn.autocommit = prev
 			self._put_conn(conn)
 
+	# ---------- Database-level helpers (autocommit required) ----------
 	def database_exists(self, db_name: str) -> bool:
 		q = "SELECT 1 FROM pg_database WHERE datname = %s;"
 		return bool(self._execute(q, [db_name]))
@@ -185,8 +268,8 @@ class PSQLClient:
 		self,
 		schema: str,
 		table: str,
-		columns: dict[str, str],               # e.g. {"id":"BIGSERIAL PRIMARY KEY","name":"TEXT NOT NULL"}
-		constraints: list[str] | None = None,  # e.g. ["UNIQUE (name)"]
+		columns: dict[str, str],
+		constraints: list[str] | None = None,
 		if_not_exists: bool = True,
 		temporary: bool = False
 	) -> None:
@@ -258,7 +341,8 @@ class PSQLClient:
 		)
 		self._execute(q)
 
-	def _split_qualified(self, qname) -> tuple[str|None, str]:
+	# ---------- Name helpers ----------
+	def _split_qualified(self, qname) -> tuple[Optional[str], str]:
 		"""
 		Accepts 'schema.table', 'table', or ('schema','table').
 		Returns (schema_or_None, table).
@@ -284,11 +368,12 @@ class PSQLClient:
 			return sql.SQL("{}.{}").format(sql.Identifier(schema), sql.Identifier(table))
 		return sql.Identifier(table)
 
+	# ---------- Simple INSERT ----------
 	def insert_row(self, table: str, data: dict) -> dict | None:
 		if not data:
 			raise ValueError("Data dictionary is empty.")
 		columns = list(data.keys())
-		values  = list(data.values())
+		values = list(data.values())
 
 		query = sql.SQL(
 			"INSERT INTO {tbl} ({fields}) VALUES ({placeholders}) RETURNING *"
@@ -300,19 +385,19 @@ class PSQLClient:
 		result = self._execute(query, values)
 		return result[0] if result else None
 
+	# ---------- Pagination core ----------
 	def _paged_execute(
 		self, query, params: list | None = None, page_limit: int = 50, page_num: int = 0,
 		order_by: str | None = None, order_dir: str = "ASC", tiebreaker: str | None = None,
 		base_qualifier: str | sql.Composable | None = None,
 	) -> list[dict]:
-		# --- validate paging args ---
 		if not isinstance(page_limit, int) or page_limit <= 0:
 			raise ValueError("page_limit must be a positive integer.")
 		if not isinstance(page_num, int) or page_num < 0:
 			raise ValueError("page_num must be a non-negative integer.")
 
 		params = list(params or [])
-		limit  = page_limit
+		limit = page_limit
 		offset = page_limit * page_num
 
 		conn = self._get_conn()
@@ -326,7 +411,6 @@ class PSQLClient:
 			if head not in {"SELECT", "WITH"}:
 				raise ValueError(f"_paged_execute expects a SELECT/CTE, got: {head or 'EMPTY'}")
 
-			# Resolve qualifier (schema/table or alias) if provided
 			qual_str = None
 			if base_qualifier:
 				if isinstance(base_qualifier, sql.Composable):
@@ -353,7 +437,7 @@ class PSQLClient:
 
 		return self._execute(final_sql, params + [limit, offset]) or []
 
-
+	# ---------- Column discovery for base table ----------
 	def _get_table_columns(self, table: str) -> list[str]:
 		schema, tbl = self._split_qualified(table)
 		if schema:
@@ -374,38 +458,24 @@ class PSQLClient:
 			rows = self._execute(q, [tbl]) or []
 		return [r["column_name"] for r in rows]
 
+	# ---------- Unified SELECT with filters/joins/paging ----------
 	def get_rows_with_filters(
 		self,
 		table: str,
-		equalities: dict | None = None,             # {"col": val, ...} on the base table only
-		raw_conditions: str | list[str] | None = None,  # SQL fragments (without 'WHERE')
-		raw_params: list | None = None,              # params for placeholders in raw_conditions, in order
-		joins: list[tuple[str, str, str]] | None = None,  # [(join_type, table_expr, on_clause), ...]
+		equalities: dict | None = None,
+		raw_conditions: str | list[str] | None = None,
+		raw_params: list | None = None,
+		joins: list[tuple[str, str, str]] | None = None,
 		page_limit: int = 50,
 		page_num: int = 0,
-		order_by: str | None = None,                 # base-table column to order by
-		order_dir: str = "ASC"                       # 'ASC' | 'DESC'
+		order_by: str | None = None,
+		order_dir: str = "ASC"
 	) -> tuple[list[dict], int]:
-		"""
-		Unified row fetcher with equality filters, raw conditions, joins, ordering, and pagination.
-
-		Returns: (rows, total_pages). If no matches, returns ([], 0).
-
-		Notes:
-		- `equalities` are validated against the *base table* columns only.
-		- `raw_conditions` lets you express arbitrary predicates (including join columns);
-		pass parameters via `raw_params`.
-		- `joins` items are appended verbatim: e.g. ("LEFT JOIN", "schema.other o", "o.fk = t.id").
-		- Ordering is on a base-table column; if not provided, uses 'id' if present, otherwise the base table's first column.
-		- Uses a stable tiebreaker on 'id' (if available and different from order_by) to minimise page overlap with OFFSET.
-		"""
-		# --- validate paging args ---
 		if not isinstance(page_limit, int) or page_limit <= 0:
 			raise ValueError("page_limit must be a positive integer.")
 		if not isinstance(page_num, int) or page_num < 0:
 			raise ValueError("page_num must be a non-negative integer.")
 
-		# --- discover base-table columns & validate equality filters ---
 		valid_columns = self._get_table_columns(table)
 		if not valid_columns:
 			raise ValueError(f"Table '{table}' does not exist.")
@@ -415,7 +485,6 @@ class PSQLClient:
 			if invalid:
 				raise ValueError(f"Invalid columns for condition: {invalid}")
 
-		# --- order by & tiebreaker (base-table columns only) ---
 		if order_by is not None:
 			if order_by not in valid_columns:
 				raise ValueError(f"Unknown order_by column: {order_by}")
@@ -433,7 +502,6 @@ class PSQLClient:
 		if joins:
 			for j in joins:
 				if isinstance(j, str):
-					# Accept a fully-formed raw JOIN fragment
 					from_clause += sql.SQL(" ") + sql.SQL(j)
 				else:
 					try:
@@ -450,7 +518,7 @@ class PSQLClient:
 		params = []
 
 		if equalities:
-			items = list(equalities.items())  # preserve param order
+			items = list(equalities.items())
 			where_parts.extend(
 				sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
 				for k, _ in items
@@ -468,7 +536,6 @@ class PSQLClient:
 
 		where_sql = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts) if where_parts else sql.SQL("")
 
-		# --- total count (counts result rows after joins) ---
 		q_count = sql.SQL("SELECT COUNT(*) AS cnt") + from_clause + where_sql + sql.SQL(";")
 		count_result = self._execute(q_count, params)
 		total = int(count_result[0]["cnt"]) if count_result else 0
@@ -477,7 +544,6 @@ class PSQLClient:
 
 		total_pages = ceil(total / page_limit)
 
-		# --- SELECT page (delegate pagination to _paged_execute) ---
 		q_select = sql.SQL("SELECT *") + from_clause + where_sql
 		rows = self._paged_execute(
 			q_select,
@@ -492,33 +558,18 @@ class PSQLClient:
 
 		return rows, total_pages
 
+	# ---------- DELETE with filters/joins ----------
 	def delete_rows_with_filters(
 		self,
 		table: str,
-		equalities: dict | None = None,                 # {"col": val, ...} on the base table only
-		raw_conditions: str | list[str] | None = None,  # SQL fragments for WHERE (without 'WHERE')
-		raw_params: list | None = None,                 # params for placeholders in raw_conditions
-		joins: list[tuple[str, str, str]] | None = None # [(join_type, table_expr, on_clause), ...]
+		equalities: dict | None = None,
+		raw_conditions: str | list[str] | None = None,
+		raw_params: list | None = None,
+		joins: list[tuple[str, str, str]] | None = None
 	) -> int:
-		"""
-		Delete rows from `table` filtered by equalities and/or raw conditions, with optional joins.
-
-		Returns:
-			int: number of rows deleted.
-
-		Parameters:
-			- table: base table name (no alias).
-			- equalities: dict of {base_table_column: value}. Validated against the base table's columns.
-			- raw_conditions: string or list of strings appended to WHERE (caller is responsible for correctness).
-			- raw_params: parameters for placeholders used inside raw_conditions (in order).
-			- joins: list of (join_type, table_expr, on_clause). join_type is ignored for DELETE;
-					tables in `table_expr` are listed in USING and each `on_clause` is ANDed into WHERE.
-		"""
-		# Require some filter
 		if not equalities and not raw_conditions:
 			raise ValueError("Provide at least one of 'equalities' or 'raw_conditions'.")
 
-		# Validate base-table columns for equalities
 		valid_columns = self._get_table_columns(table)
 		if not valid_columns:
 			raise ValueError(f"Table '{table}' does not exist.")
@@ -527,33 +578,29 @@ class PSQLClient:
 			if invalid:
 				raise ValueError(f"Invalid columns for condition: {invalid}")
 
-		# USING clause from joins (ignore join_type for DELETE)
 		using_clause = sql.SQL("")
 		on_parts = []
 		if joins:
 			using_bits = []
 			for _join_type, table_expr, on_clause in joins:
-				using_bits.append(sql.SQL(table_expr))          # raw: may include schema and alias
-				on_parts.append(sql.SQL(on_clause))             # raw: predicate added to WHERE
+				using_bits.append(sql.SQL(table_expr))
+				on_parts.append(sql.SQL(on_clause))
 			if using_bits:
 				using_clause = sql.SQL(" USING ") + sql.SQL(", ").join(using_bits)
 
-		# WHERE parts: equalities then join on-clauses then raw conditions
 		where_parts = []
 		params = []
 
 		if equalities:
-			items = list(equalities.items())  # preserve param order
+			items = list(equalities.items())
 			where_parts.extend(
 				sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
 				for k, _ in items
 			)
 			params.extend(v for _, v in items)
 
-		# join ON predicates
 		where_parts.extend(on_parts)
 
-		# raw conditions
 		if raw_conditions:
 			if isinstance(raw_conditions, str):
 				where_parts.append(sql.SQL(raw_conditions))
@@ -563,24 +610,18 @@ class PSQLClient:
 				params.extend(list(raw_params))
 
 		if not where_parts:
-			# Defensive: if joins provided but no predicates, this would wipe whole table
 			raise ValueError("No WHERE predicates built. Refusing to delete without filters.")
 
 		where_sql = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)
 
-		# DELETE ... USING ... WHERE ... RETURNING 1
 		q = sql.SQL("DELETE FROM ") + self._ident_qualified(table)
 		q = q + using_clause + where_sql + sql.SQL(" RETURNING 1;")
 
 		result = self._execute(q, params)
 		return len(result) if result else 0
 
-
+	# ---------- UPDATE (equalities only) ----------
 	def update_rows_with_equalities(self, table: str, updates: dict, equalities: dict) -> int:
-		"""
-		Update rows matching the given equality conditions with the provided updates.
-		- Returns the number of rows updated.
-		"""
 		if not updates:
 			raise ValueError("Updates dictionary is empty.")
 		if not equalities:
@@ -589,11 +630,11 @@ class PSQLClient:
 		valid_columns = self._get_table_columns(table)
 		if not valid_columns:
 			raise ValueError(f"Table '{table}' does not exist.")
-		
+
 		invalid_updates = [k for k in updates if k not in valid_columns]
 		if invalid_updates:
 			raise ValueError(f"Invalid columns for update: {invalid_updates}")
-		
+
 		invalid_conditions = [k for k in equalities if k not in valid_columns]
 		if invalid_conditions:
 			raise ValueError(f"Invalid columns for condition: {invalid_conditions}")
@@ -616,34 +657,25 @@ class PSQLClient:
 		set_params = [v for _, v in update_items]
 		where_params = [v for _, v in where_items]
 
-		query = sql.SQL("UPDATE {tbl} SET {sets} WHERE {conds} RETURNING *;").format(
+		query = sql.SQL("UPDATE {tbl} SET {sets} WHERE {conds} RETURNING 1;").format(
 			tbl=self._ident_qualified(table),
 			sets=set_sql,
 			conds=where_sql
 		)
 
-
 		result = self._execute(query, set_params + where_params)
 		return len(result) if result else 0
-	
+
+	# ---------- UPDATE with filters/joins ----------
 	def update_rows_with_filters(
 		self,
 		table: str,
-		updates: dict,                                  # {base_table_col: value}
-		equalities: dict | None = None,                 # {base_table_col: value}
-		raw_conditions: str | list[str] | None = None,  # SQL fragments (no 'WHERE')
-		raw_params: list | None = None,                 # params for raw_conditions placeholders
-		joins: list[tuple[str, str, str]] | None = None # [(join_type, table_expr, on_clause), ...]
+		updates: dict,
+		equalities: dict | None = None,
+		raw_conditions: str | list[str] | None = None,
+		raw_params: list | None = None,
+		joins: list[tuple[str, str, str]] | None = None
 	) -> int:
-		"""
-		Update rows in `table` using:
-		- validated equality predicates on the base table,
-		- optional raw SQL predicates,
-		- optional joins (Postgres UPDATE ... FROM ... pattern).
-
-		Returns the number of rows updated.
-		"""
-		# Validate inputs
 		if not updates:
 			raise ValueError("Updates dictionary is empty.")
 
@@ -660,7 +692,6 @@ class PSQLClient:
 			if invalid_conds:
 				raise ValueError(f"Invalid columns for condition: {invalid_conds}")
 
-		# SET clause
 		update_items = list(updates.items())
 		set_clauses = [
 			sql.SQL("{} = {}").format(sql.Identifier(k), sql.Placeholder())
@@ -669,18 +700,16 @@ class PSQLClient:
 		set_sql = sql.SQL(", ").join(set_clauses)
 		set_params = [v for _, v in update_items]
 
-		# FROM (joins) and ON parts
 		from_clause = sql.SQL("")
 		on_parts = []
 		if joins:
 			from_bits = []
 			for _join_type, table_expr, on_clause in joins:
-				from_bits.append(sql.SQL(table_expr))   # may include schema and alias
-				on_parts.append(sql.SQL(on_clause))     # added to WHERE
+				from_bits.append(sql.SQL(table_expr))
+				on_parts.append(sql.SQL(on_clause))
 			if from_bits:
 				from_clause = sql.SQL(" FROM ") + sql.SQL(", ").join(from_bits)
 
-		# WHERE parts: equalities, join ON predicates, then raw conditions
 		where_parts = []
 		params = []
 
@@ -692,10 +721,8 @@ class PSQLClient:
 			)
 			params.extend(v for _, v in where_items)
 
-		# join ON predicates
 		where_parts.extend(on_parts)
 
-		# raw conditions
 		if raw_conditions:
 			if isinstance(raw_conditions, str):
 				where_parts.append(sql.SQL(raw_conditions))
@@ -709,13 +736,11 @@ class PSQLClient:
 
 		where_sql = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)
 
-		# UPDATE ... SET ... FROM ... WHERE ... RETURNING 1
 		q = sql.SQL("UPDATE {tbl} SET {sets}").format(
 			tbl=self._ident_qualified(table),
 			sets=set_sql
 		)
 		q = q + from_clause + where_sql + sql.SQL(" RETURNING 1;")
 
-		# If you prefer your private wrapper, swap to self._execute
 		result = self._execute(q, set_params + params)
 		return len(result) if result else 0

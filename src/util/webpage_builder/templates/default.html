@@ -30,20 +30,16 @@
 	<meta name="twitter:image" content="{{ twitter_image|default(og_image) }}" />
 
 	<!-- Icons & Manifest -->
-	<link rel="icon" href="{{ favicon_ico|default('/favicon.ico') }}" sizes="any" />
-	<link rel="icon" type="image/svg+xml" href="{{ favicon_svg|default('/favicon.svg') }}" />
-	<link rel="apple-touch-icon" href="{{ apple_touch_icon|default('/apple-touch-icon.png') }}" />
-	<link rel="manifest" href="{{ manifest_href|default('/site.webmanifest') }}" />
+	<link rel="icon" href="{{ favicon_ico|default('/static/favicon/favicon.ico') }}" sizes="any" />
+	<link rel="apple-touch-icon" href="{{ apple_touch_icon|default('/static/favicon/apple-touch-icon.png') }}" />
+	<link rel="manifest" href="{{ manifest_href|default('/static/favicon/site.webmanifest') }}" />
 
 	<!-- Networking hints -->
 	<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 	{{ preconnect_html|default('')|safe }}
 
-	<!-- Preload critical assets (images, fonts, css) -->
-	<!-- Example font preload:
-	<link rel="preload" as="font" href="/fonts/Inter-Variable.woff2" type="font/woff2" crossorigin>
-	-->
+	<!-- Preload -->
 	{{ preload_html|default('')|safe }}
 
 	<!-- Styles -->
