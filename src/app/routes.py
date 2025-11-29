@@ -7,4 +7,4 @@ main = flask.Blueprint("main", __name__)
 
 @main.route("/")
 def landing_page():
-    return build_landing_page()
+    return build_test_page()
