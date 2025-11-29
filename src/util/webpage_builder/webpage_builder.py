@@ -10,6 +10,8 @@ def build_test_page():
         "Item1",
         "Item2",
         "Item3",
-    ], interval=4000, banner_type="ticker")
+    ], banner_type="ticker", interval=4000)
+    for i in range(1000):
+        builder._add_main_content_html(f"<p>Paragraph {i+1}</p>\n")
     html = builder.serve_html()
     return html

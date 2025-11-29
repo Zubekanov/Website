@@ -59,10 +59,7 @@
 	{{ scripts_head_html|default('')|safe }}
 </head>
 
-<body class="{{ body_class|default('min-h-screen antialiased') }}">
-	<a class="skip-link" href="#main" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to content</a>
-
-	<!-- Page shell landmarks -->
+<body class="{{ body_class|default('content') }}">
 	<header id="site-header" role="banner">
 		{{ header_html|default('')|safe }}
 	</header>
@@ -72,10 +69,8 @@
 	</nav>
 
 	<main id="main" tabindex="-1">
-		<!-- Above-the-fold / skeleton -->
 		{{ above_fold_html|default('')|safe }}
 
-		<!-- Primary page content -->
 		{{ body_html|default('')|safe }}
 	</main>
 

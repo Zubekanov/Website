@@ -204,3 +204,10 @@ class WebPageBuilder(ABC):
 			return
 
 		self.config_values["header_html"] = existing + banner_html
+
+	def _add_main_content_html(self, content_html: str) -> None:
+		"""
+		Append content to the main_content_html config value.
+		"""
+		existing = self.config_values.get("body_html", "")
+		self.config_values["body_html"] = existing + content_html
