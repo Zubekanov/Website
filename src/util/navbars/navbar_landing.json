@@ -1,0 +1,63 @@
+{
+    "logo": {
+        "type": "text",
+        "image_src": "",
+        "text": "Joseph Wong",
+        "href": "/"
+    },
+
+    "items": [
+        {
+            "label": "Button 1",
+            "type": "mega",
+            "sections": [
+                {
+                    "label": "Section 1",
+                    "items": [
+                        {
+                            "label": "Item 1",
+                            "desc": "A super very long description for item 1 to test text wrapping in the mega menu layout.",
+                            "href": "/item1"
+                        },
+                        {
+                            "label": "Item 2",
+                            "desc": "This is item 2",
+                            "href": "/item2"
+                        }
+                    ]
+                },
+                {
+                    "label": "A ultra mega long section title to test text wrapping",
+                    "items": [
+                        {
+                            "label": "Item 3",
+                            "desc": "This is item 3",
+                            "href": "/item3"
+                        },
+                        {
+                            "label": "Item 4",
+                            "desc": "A really long and tedious description for item 4 to test text wrapping in the mega menu layout.",
+                            "href": "/item4"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Button 2",
+            "type": "link",
+            "href": "/button2"
+        },
+        {
+            "label": "Button 3",
+            "type": "link",
+            "href": "/button3"
+        }
+    ],
+
+    "account": {
+        "label": "Log In / Sign Up",
+        "type": "link",
+        "href": "/login"
+    }
+}

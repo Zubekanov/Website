@@ -34,6 +34,28 @@ html {
 	color: var(--default);
 }
 
+html, body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+main {
+	flex: 1 0 auto;
+	background: var(--contents);
+	padding: 20px;
+}
+
+a {
+	color: var(--dark_blue);
+	text-decoration: none;
+}
+
 .token-string   { color: var(--string); }
 .token-func     { color: var(--functions); }
 .token-var      { color: var(--variables); }

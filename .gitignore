@@ -1,7 +1,9 @@
 node_modules
+*.pdf
 
 # Remove password and API key containing files.
 *.conf
+*.config
 logs/*
 plots/*
 plots

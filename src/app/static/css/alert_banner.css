@@ -1,6 +1,5 @@
 .alert-banner {
 	position: relative;
-	left: 0;
 
 	display: flex;
 	align-items: center;
@@ -12,7 +11,8 @@
 	font-size: 0.9rem;
 
 	border-bottom: 1px solid var(--border);
-	padding: 6px 12px;
+	padding-top: 4px;
+	padding-bottom: 4px;
 	z-index: 1;
 
 	transition: transform 0.25s ease, opacity 0.25s ease;

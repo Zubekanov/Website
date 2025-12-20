@@ -1,0 +1,44 @@
+.metric-plot-grid {
+	--plots-per-row: 0;
+	--plot-gap: 1rem;
+
+	display: grid;
+	gap: var(--plot-gap);
+	width: 100%;
+	align-items: start;
+}
+
+.metric-plot-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+}
+
+.metric-plot-grid[style*="--plots-per-row"] {
+	grid-template-columns: repeat(var(--plots-per-row), minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+	.metric-plot-grid[style*="--plots-per-row"] {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 600px) {
+	.metric-plot-grid[style*="--plots-per-row"] {
+		grid-template-columns: 1fr;
+	}
+}
+
+.metric-plot {
+	--plot-line: var(--dark_blue);
+	--plot-grid: var(--border);
+	--plot-font: var(--default);
+	--plot-hover-bg: var(--contents);
+	--plot-bg: transparent;
+
+	color: var(--plot-font);
+
+	width: 100%;
+	aspect-ratio: 16 / 9;
+	background: transparent;
+	min-width: 0;
+}

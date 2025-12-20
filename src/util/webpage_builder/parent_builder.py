@@ -3,9 +3,15 @@ import re
 
 from util.fcr.file_config_reader import FileConfigReader
 from flask import render_template_string
+import pandas as pd
+
+from util.webpage_builder.metrics_builder import METRICS_NAMES
 
 fcr = FileConfigReader()
 
+BUILD_MS = "__BUILD_MS__"
+
+_default_footer_html = fcr.find("default_footer.html")
 
 class WebPageBuilder(ABC):
 	def __init__(self, template_name: str = "default.html"):
@@ -20,15 +26,16 @@ class WebPageBuilder(ABC):
 		# Resources to be turned into HTML at render time
 		self.scripts: set[str] = set()
 		self.stylesheets: set[str] = set()
+		# Don't think there's a reason not to include global to everything yet.
+		self.stylesheets.add("/static/css/global.css")
 
-		# Raw template source (string)
 		self.template_src: str = fcr.find(template_name)
 
-		# Config-driven values that will be substituted into the template
 		self.config_values: dict[str, str] = {}
-
-		# Config entries marked "automated": True (subclass can interpret)
 		self.automated_fields: dict[str, dict] = {}
+
+		self.add_default_footer_before = False
+		self.add_default_footer_after = True
 
 	def load_page_config(self, config_name: str) -> None:
 		"""
@@ -145,6 +152,8 @@ class WebPageBuilder(ABC):
 			# optionally mutate builder.config_values, scripts, stylesheets, etc.
 			return builder.serve_html()
 		"""
+		self._apply_default_footer()
+
 		values = self._build_replacement_dict()
 
 		tpl = self._apply_values_to_template(self.template_src, values)
@@ -158,7 +167,7 @@ class WebPageBuilder(ABC):
 		banner_type: str = "static",
 	) -> None:
 		"""
-		banner_type: "static" | "ticker"
+		banner_type: "static" | "ticker" 
 		"""
 
 		self.stylesheets.add("/static/css/alert_banner.css")
@@ -205,9 +214,237 @@ class WebPageBuilder(ABC):
 
 		self.config_values["header_html"] = existing + banner_html
 
+	def _build_nav_html(self, config: str) -> str:
+		config = fcr.find(config)
+		logo = config["logo"]
+		items = config["items"]
+		account = config.get("account")
+
+		self.stylesheets.add("/static/css/navbar.css")
+		self.scripts.add("/static/js/navbar.js")
+
+		nav_items_html = []
+
+		for item in items:
+			if item["type"] == "link":
+				nav_items_html.append(f"""
+				<li class="nav-item">
+					<a href="{item['href']}" class="nav-link">{item['label']}</a>
+				</li>
+				""")
+			elif item["type"] == "mega":
+				sections_html = []
+				for section in item["sections"]:
+					sec_items = "\n".join(
+						f"""
+						<a href="{entry['href']}" class="mega-item">
+							<span class="mega-item__label">{entry['label']}</span>
+							<span class="mega-item__desc">{entry['desc']}</span>
+						</a>
+						""" for entry in section["items"]
+					)
+					sections_html.append(f"""
+					<div class="mega-section">
+						<h3 class="mega-section__title">{section['label']}</h3>
+						<div class="mega-section__items">
+							{sec_items}
+						</div>
+					</div>
+					""")
+
+				menu_html = "\n".join(sections_html)
+
+				nav_items_html.append(f"""
+				<li class="nav-item nav-item--has-menu" data-nav-menu>
+					<button class="nav-link nav-link--trigger" type="button">
+						<span>{item['label']}</span>
+						<span class="nav-link__chevron" aria-hidden="true">▾</span>
+					</button>
+					<div class="nav-mega" aria-hidden="true">
+						<div class="nav-mega__panel">
+							{menu_html}
+						</div>
+					</div>
+				</li>
+				""")
+
+		items_html = "\n".join(nav_items_html)
+
+		account_html = ""
+		if account:
+			account_html = f"""
+			<a href="{account['href']}" class="nav-account">{account['label']}</a>
+			"""
+
+		self.config_values["nav_html"] = self.config_values.get("nav_html", "") + f"""
+		<header id="site-header" class="site-header">
+			<nav class="navbar" aria-label="Primary">
+				<div class="navbar__left">
+					<a href="{logo['href']}" class="navbar__logo">{logo['text']}</a>
+				</div>
+				<div class="navbar__center">
+					<ul class="nav-list">
+						{items_html}
+					</ul>
+				</div>
+				<div class="navbar__right">
+					{account_html}
+				</div>
+			</nav>
+		</header>
+		"""
+
 	def _add_main_content_html(self, content_html: str) -> None:
 		"""
 		Append content to the main_content_html config value.
 		"""
 		existing = self.config_values.get("body_html", "")
 		self.config_values["body_html"] = existing + content_html
+
+	def _add_plotly_metric_graph(self, metric_name: str, graph_title: str = None) -> None:
+		self.stylesheets.add("/static/css/plotly.css")
+
+		self.scripts.add("https://cdn.plot.ly/plotly-2.35.2.min.js")
+		self.scripts.add("/static/js/plotly.js")
+
+		if metric_name not in METRICS_NAMES.keys():
+			raise ValueError(f"Metric '{metric_name}' is not recognized.")
+		
+		contents = f"""
+		<div class="metric-plot-container">
+			<div class="metric-plot" data-metric="{metric_name}"></div>
+		</div>
+		"""
+		self._add_main_content_html(contents)
+
+	def _add_plotly_metric_graph_grid(
+		self,
+		metric_names: list[str],
+		force_per_row: int | None = None,
+		grid_title: str | None = None
+	) -> None:
+		self.stylesheets.add("/static/css/plotly.css")
+		self.scripts.add("https://cdn.plot.ly/plotly-2.35.2.min.js")
+		self.scripts.add("/static/js/plotly.js")
+
+		for metric_name in metric_names:
+			if metric_name not in METRICS_NAMES:
+				raise ValueError(f"Metric '{metric_name}' is not recognized.")
+
+		graph_divs = "\n".join(
+			f'<div class="metric-plot" data-metric="{metric_name}"></div>'
+			for metric_name in metric_names
+		)
+
+		# Optional: clamp to a sensible range if you want
+		style_attr = ""
+		if force_per_row is not None:
+			if not isinstance(force_per_row, int) or force_per_row <= 0:
+				raise ValueError("force_per_row must be a positive integer.")
+			style_attr = f' style="--plots-per-row: {force_per_row};"'
+
+		grid_wrapper = f"""
+		<div class="metric-plot-grid"{style_attr}>
+			{graph_divs}
+		</div>
+		"""
+
+		self._add_main_content_html(grid_wrapper)
+
+	def _add_footer_content_html(self, content_html: str) -> None:
+		"""
+		Append content to the footer_html config value.
+		"""
+		self.stylesheets.add("/static/css/footer.css")
+
+		existing = self.config_values.get("footer_html", "")
+		self.config_values["footer_html"] = existing + content_html
+
+	def _enable_default_footer_before(self) -> None:
+		self.add_default_footer_before = True
+		self.add_default_footer_after = False
+
+	def _enable_default_footer_after(self) -> None:
+		self.add_default_footer_before = False
+		self.add_default_footer_after = True
+
+	def _remove_default_footer(self) -> None:
+		self.add_default_footer_before = False
+		self.add_default_footer_after = False
+
+	def _apply_default_footer(self) -> None:
+		if self.add_default_footer_before or self.add_default_footer_after:
+			existing_footer = self.config_values.get("footer_html", "")
+			self.stylesheets.add("/static/css/footer.css")
+
+			if self.add_default_footer_before:
+				footer_parts = [
+					_default_footer_html,
+					existing_footer,
+				]
+			else:
+				footer_parts = [
+					existing_footer,
+					_default_footer_html,
+				]
+
+			self.config_values["footer_html"] = "\n".join(footer_parts)
+
+	def _add_login_window(self) -> None:
+		self.stylesheets.add("/static/css/login.css")
+		# self.scripts.add("/static/js/login.js")
+
+		existing = self.config_values.get("body_html", "")
+
+		login_html = f"""
+		<div class="login-container">
+			<div class="login-window">
+				<h2> Login </h2>
+				{HTMLHelper.link_string("Test String", href="/")}
+				{HTMLHelper.link_string("Test String", href="/login")}
+				{HTMLHelper.link_string("Don't have an account? Register here.", url_for="main.register_page")}
+			</div>
+		</div>
+		"""
+
+		self.config_values["body_html"] = existing + login_html
+
+	def _add_register_window(self) -> None:
+		pass
+
+# TODO: Refactor to this when implementing more graphs
+class PlotlyGraph():
+	def __init__(
+			self, 
+			initial_data: pd.DataFrame,
+			update_route: str = None,
+			if_update_keep_old: bool = False,
+			title: str = None,
+			units: str = None,
+			layout: dict = None,
+		):
+
+		self.data = initial_data
+		self.update_route = update_route
+		self.if_update_keep_old = if_update_keep_old
+		self.title = title
+		self.units = units
+		self.layout = layout or {}
+
+class HTMLHelper():
+	@staticmethod
+	def link_string(text: str, href: str = None, url_for: str = None, class_name: str = None) -> str:
+		"""
+		Generate an HTML link string.
+		Either href or url_for must be provided.
+		"""
+		if not href and not url_for:
+			raise ValueError("Either href or url_for must be provided.")
+
+		class_attr = f' class="{class_name}"' if class_name else ""
+
+		if href:
+			return f'<a href="{href}"{class_attr}>{text}</a>'
+		else:
+			return f'<a href="{{{{ url_for(\'{url_for}\') }}}}"{class_attr}>{text}</a>'
+		

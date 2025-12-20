@@ -43,7 +43,6 @@
 	{{ preload_html|default('')|safe }}
 
 	<!-- Styles -->
-	<link rel="stylesheet" href="{{ main_css_href|default('/static/css/styles.css') }}" />
 	{{ stylesheets_html|default('')|safe }}
 
 	<!-- Head scripts -->
@@ -78,13 +77,11 @@
 		{{ aside_html|default('')|safe }}
 	</aside>
 
-	<footer id="site-footer">
+	<footer id="site-footer" class="site-footer">
 		{{ footer_html|default('')|safe }}
 	</footer>
 
 	<!-- App scripts -->
-	<script type="module" src="{{ main_module_js|default('/static/js/app.js') }}" defer></script>
-	<script nomodule src="{{ legacy_js|default('/static/js/app.legacy.js') }}" defer></script>
 	{{ scripts_html|default('')|safe }}
 
 	<!-- Analytics -->

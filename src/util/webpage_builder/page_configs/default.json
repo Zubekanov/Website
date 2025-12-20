@@ -94,9 +94,7 @@
     "stylesheets_html": {
         "default" : false,
         "automated": false,
-        "name_list": [
-            "/static/css/global.css"
-        ]
+        "name_list": []
     },
     "scripts_head_html": {
         "default" : false,
@@ -125,7 +123,7 @@
     "body_html": {
         "default" : false,
         "automated": false,
-        "value": "Webpage currently under construction."
+        "value": ""
     },
     "aside_html": {
         "default" : false,
