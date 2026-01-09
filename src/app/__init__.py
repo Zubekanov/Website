@@ -7,7 +7,10 @@ from .api import api
 from .routes import main
 from .resources import resources
 
+from sql.psql_interface import PSQLInterface
+
 _prefix_re = re.compile(r'^(?P<prefix>.+?\])\s+"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d\.\d"\s+(?P<status>\d{3})\b')
+psql = PSQLInterface()
 
 class DevLiveRewriteHandler(logging.Handler):
 	def __init__(self, dev_enabled: bool, stream=None, width: int = 120):
@@ -82,5 +85,7 @@ def create_app():
 	app.register_blueprint(resources)
 
 	setup_logging(dev_enabled=True)
+
+	psql.verify_tables()
 
 	return app

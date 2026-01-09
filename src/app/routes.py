@@ -33,6 +33,10 @@ def _timing_end(resp):
 def landing_page():
     return build_test_page()
 
+@main.route("/server-metrics")
+def server_metrics_page():
+	return build_server_metrics_page()
+
 @main.route("/login")
 def login_page():
 	return build_login_page()
@@ -40,6 +44,10 @@ def login_page():
 @main.route("/register")
 def register_page():
     return build_register_page()
+
+@main.route("/audiobookshelf-registration", methods=["GET"])
+def audiobookshelf_registration_page():
+	return build_audiobookshelf_registration_page()
 
 @main.app_errorhandler(404)
 def page_not_found(e):

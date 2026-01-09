@@ -8,21 +8,16 @@
 
     "items": [
         {
-            "label": "Button 1",
+            "label": "Projects",
             "type": "mega",
             "sections": [
                 {
-                    "label": "Section 1",
+                    "label": "Graphs",
                     "items": [
                         {
-                            "label": "Item 1",
-                            "desc": "A super very long description for item 1 to test text wrapping in the mega menu layout.",
-                            "href": "/item1"
-                        },
-                        {
-                            "label": "Item 2",
-                            "desc": "This is item 2",
-                            "href": "/item2"
+                            "label": "Server Metrics",
+                            "desc": "Live graphs and statistics for the server. <br>(ODroid-H4 Ultra)",
+                            "href": "/server-metrics"
                         }
                     ]
                 },
@@ -33,20 +28,41 @@
                             "label": "Item 3",
                             "desc": "This is item 3",
                             "href": "/item3"
-                        },
-                        {
-                            "label": "Item 4",
-                            "desc": "A really long and tedious description for item 4 to test text wrapping in the mega menu layout.",
-                            "href": "/item4"
                         }
                     ]
                 }
             ]
         },
         {
-            "label": "Button 2",
-            "type": "link",
-            "href": "/button2"
+            "label": "Services",
+            "type": "mega",
+            "sections": [
+                {
+                    "label": "Hosted Services",
+                    "items": [
+                        {
+                            "label": "Audiobookshelf",
+                            "desc": "Self-hosted audiobook and podcast server.",
+                            "href": "https://audiobookshelf.zubekanov.com/"
+                        },
+                        {
+                            "label": "Request Audiobookshelf Account",
+                            "desc": "Fill out a form to request an account on the Audiobookshelf server.",
+                            "href": "/audiobookshelf-registration"
+                        }
+                    ]
+                },
+                {
+                    "label": "Empty Section",
+                    "items": [
+                        {
+                            "label": "Item 3",
+                            "desc": "This is item 3",
+                            "href": "/item3"
+                        }
+                    ]
+                }
+            ]
         },
         {
             "label": "Button 3",
@@ -56,7 +72,7 @@
     ],
 
     "account": {
-        "label": "Log In / Sign Up",
+        "label": "Login / Register",
         "type": "link",
         "href": "/login"
     }

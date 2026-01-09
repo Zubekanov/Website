@@ -6,7 +6,11 @@
 	--objects: #4ec9a2;
 	--return: #c586c0;
 	--string: #ce9178;
+	--error: #f14c4c;
 	--variables: #68cdfe;
+	--form_text: #4d4d4d;
+	--form_body: #ffffff;
+	--form_border: #dcdcdc;
 
 	--background: #f3f3f3;
     --border: #ededed;
@@ -23,6 +27,9 @@ html[data-theme="dark"] {
     --border: #333333;
 	--contents: #1f1f1f;
 	--default: #cccccc;
+	--form_text: #989898;
+	--form_body: #313131;
+	--form_border: #3c3c3c;
 
     --info_box: #007acc;
     --info_box_text: #dcf6f8;

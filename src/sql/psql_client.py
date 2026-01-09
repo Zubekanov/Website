@@ -6,7 +6,6 @@ from psycopg2.pool import ThreadedConnectionPool
 
 logger = logging.getLogger(__name__)
 
-
 class PSQLClient:
 	"""
 	Thread-safe PostgreSQL client with a connection pool and convenience helpers.
@@ -744,3 +743,67 @@ class PSQLClient:
 
 		result = self._execute(q, set_params + params)
 		return len(result) if result else 0
+	
+	def get_column_info(self, schema: str, table: str) -> dict[str, dict]:
+		"""
+		Return dict keyed by column_name with basic metadata.
+		"""
+		q = """
+			SELECT
+				column_name,
+				data_type,
+				udt_name,
+				is_nullable,
+				column_default,
+				character_maximum_length,
+				numeric_precision,
+				numeric_scale
+			FROM information_schema.columns
+			WHERE table_schema = %s AND table_name = %s
+			ORDER BY ordinal_position;
+		"""
+		rows = self._execute(q, [schema, table]) or []
+		out = {}
+		for r in rows:
+			out[r["column_name"]] = r
+		return out
+
+	def constraint_exists(self, schema: str, table: str, constraint_name: str) -> bool:
+		q = """
+			SELECT 1
+			FROM information_schema.table_constraints
+			WHERE constraint_schema = %s
+			AND table_name = %s
+			AND constraint_name = %s;
+		"""
+		return bool(self._execute(q, [schema, table, constraint_name]))
+
+	def add_column(self, schema: str, table: str, column: str, type_sql: str) -> None:
+		q = sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}").format(
+			sql.Identifier(schema),
+			sql.Identifier(table),
+			sql.Identifier(column),
+			sql.SQL(type_sql)
+		)
+		self._execute(q)
+
+	def add_constraint(self, schema: str, table: str, constraint_sql: str) -> None:
+		"""
+		constraint_sql should be the body after 'ADD', e.g.
+		'CONSTRAINT users_email_key UNIQUE (email)'
+		"""
+		q = sql.SQL("ALTER TABLE {}.{} ADD {}").format(
+			sql.Identifier(schema),
+			sql.Identifier(table),
+			sql.SQL(constraint_sql)
+		)
+		self._execute(q)
+
+	def list_indexes(self, schema: str, table: str) -> list[dict]:
+		q = """
+			SELECT indexname, indexdef
+			FROM pg_indexes
+			WHERE schemaname = %s AND tablename = %s
+			ORDER BY indexname;
+		"""
+		return self._execute(q, [schema, table]) or []

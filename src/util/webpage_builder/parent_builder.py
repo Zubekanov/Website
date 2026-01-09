@@ -19,8 +19,6 @@ class WebPageBuilder(ABC):
 		self.sensitive = False   # If sensitive, we cannot serve from cache.
 		self.privileged = False  # If privileged, we must authenticate the user.
 
-		self.meta_title = "No Meta Title Set"
-		self.page_title = "No Title Set"
 		self.preload_resources: list[str] = []
 
 		# Resources to be turned into HTML at render time
@@ -412,6 +410,9 @@ class WebPageBuilder(ABC):
 	def _add_register_window(self) -> None:
 		pass
 
+	def set_page_title(self, title: str) -> None:
+		self.config_values["title"] = title
+
 # TODO: Refactor to this when implementing more graphs
 class PlotlyGraph():
 	def __init__(
@@ -447,4 +448,213 @@ class HTMLHelper():
 			return f'<a href="{href}"{class_attr}>{text}</a>'
 		else:
 			return f'<a href="{{{{ url_for(\'{url_for}\') }}}}"{class_attr}>{text}</a>'
-		
+
+	@staticmethod
+	def text_input(
+		label: str,
+		name: str,
+		placeholder: str = "",
+		value: str = "",
+		class_name: str = "",
+		prefill: str = None,
+	):
+		class_attr = f' class="{class_name}"' if class_name else ""
+		prefill_attr = f' data-prefill="{prefill}"' if prefill is not None else ""
+
+		return (
+			f'<label for="{name}">{label}</label>\n'
+			f'<input '
+			f'type="text" '
+			f'id="{name}" '
+			f'name="{name}" '
+			f'placeholder="{placeholder}" '
+			f'value="{value}"'
+			f'{class_attr}'
+			f'{prefill_attr}'
+			f'>\n'
+		)
+	
+	@staticmethod
+	def textarea_input(
+		label: str,
+		name: str,
+		placeholder: str = "",
+		value: str = "",
+		class_name: str = "",
+		rows: int = 6,
+		prefill: str = None,
+	):
+		class_attr = f' class="{class_name}"' if class_name else ""
+		prefill_attr = f' data-prefill="{prefill}"' if prefill is not None else ""
+
+		return (
+			f'<label for="{name}">{label}</label>\n'
+			f'<textarea '
+			f'id="{name}" '
+			f'name="{name}" '
+			f'rows="{rows}" '
+			f'placeholder="{placeholder}"'
+			f'{class_attr}'
+			f'{prefill_attr}'
+			f'>{value}</textarea>\n'
+		)
+
+	@staticmethod
+	def password_input(
+		label: str,
+		name: str,
+		placeholder: str = "",
+		value: str = "",
+		class_name: str = "",
+		prefill: str = None,
+		hide_value: bool = True,
+	):
+		class_attr = f' class="{class_name}"' if class_name else ""
+		prefill_attr = f' data-prefill="{prefill}"' if prefill is not None else ""
+		hide_attr = f' data-hide-value="{str(hide_value).lower()}"'
+
+		return (
+			f'<label for="{name}">{label}</label>\n'
+			f'<input '
+			f'type="password" '
+			f'id="{name}" '
+			f'name="{name}" '
+			f'placeholder="{placeholder}" '
+			f'value="{value}"'
+			f'{class_attr}'
+			f'{prefill_attr}'
+			f'{hide_attr}'
+			f'>\n'
+		)
+
+	@staticmethod
+	def submit_button(
+		text: str,
+		submission_fields: list[str] = None,
+		submission_route: str = "",
+		submission_method: str = "POST",
+		success_redirect: str = "",
+		failure_redirect: str = "",
+	):
+		fields_attr = (
+			f' data-submit-fields="{",".join(submission_fields)}"'
+			if submission_fields
+			else ""
+		)
+
+		route_attr = (
+			f' data-submit-route="{submission_route}"'
+			if submission_route
+			else ""
+		)
+
+		method_attr = f' data-submit-method="{submission_method.upper()}"'
+
+		success_attr = (
+			f' data-success-redirect="{success_redirect}"'
+			if success_redirect
+			else ""
+		)
+
+		failure_attr = (
+			f' data-failure-redirect="{failure_redirect}"'
+			if failure_redirect
+			else ""
+		)
+
+		return (
+			f'<button '
+			f'type="button" '
+			f'{fields_attr}'
+			f'{route_attr}'
+			f'{method_attr}'
+			f'{success_attr}'
+			f'{failure_attr}'
+			f'>{text}</button>\n'
+		)
+
+	@staticmethod
+	def hidden_input(name: str, value: str):
+		return f'<input type="hidden" name="{name}" value="{value}">\n'
+	
+	@staticmethod
+	def checkbox_input(
+		label: str,
+		name: str,
+		checked: bool = False,
+		class_name: str = "",
+	):
+		class_attr = f' class="{class_name}"' if class_name else ""
+		checked_attr = " checked" if checked else ""
+
+		return (
+			f'<label>'
+			f'<input type="checkbox" name="{name}"{class_attr}{checked_attr}> '
+			f'{label}'
+			f'</label>\n'
+		)
+	
+	@staticmethod
+	def select_input(
+		label: str,
+		name: str,
+		options: list[tuple[str, str]],
+		selected: str = "",
+		class_name: str = "",
+	):
+		class_attr = f' class="{class_name}"' if class_name else ""
+
+		options_html = "\n".join(
+			f'<option value="{value}"{" selected" if value == selected else ""}>{text}</option>'
+			for value, text in options
+		)
+
+		return (
+			f'<label for="{name}">{label}</label>\n'
+			f'<select name="{name}" id="{name}"{class_attr}>\n'
+			f'{options_html}\n'
+			f'</select>\n'
+		)
+
+	@staticmethod
+	def form_group(inner_html: str, class_name: str = "form-group"):
+		return f'<div class="{class_name}">\n{inner_html}</div>\n'
+	
+	@staticmethod
+	def dropdown(
+		label: str,
+		name: str,
+		options: list[tuple[str, str]],
+		selected: str = "",
+		placeholder: str | None = None,
+		class_name: str = "",
+		required: bool = False,
+	):
+		class_attr = f' class="{class_name}"' if class_name else ""
+		required_attr = " required" if required else ""
+
+		options_html = []
+
+		if placeholder is not None:
+			options_html.append(
+				f'<option value="" disabled{" selected" if not selected else ""}>{placeholder}</option>'
+			)
+
+		for value, text in options:
+			selected_attr = " selected" if value == selected else ""
+			options_html.append(
+				f'<option value="{value}"{selected_attr}>{text}</option>'
+			)
+
+		return (
+			f'<label for="{name}">{label}</label>\n'
+			f'<select '
+			f'id="{name}" '
+			f'name="{name}"'
+			f'{class_attr}'
+			f'{required_attr}'
+			f'>\n'
+			f'{"".join(options_html)}\n'
+			f'</select>\n'
+		)
+

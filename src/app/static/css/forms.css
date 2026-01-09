@@ -1,0 +1,209 @@
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.1rem;
+}
+
+.form-group > label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--form_text);
+}
+
+/* Message area states (works with the JS setting data-state) */
+.form-message[hidden] {
+	display: none;
+}
+
+.form-message {
+	margin-top: 0.75rem;
+	padding: 0.65rem 0.75rem;
+	border-radius: 10px;
+	border: 1px solid rgba(var(--border, 0, 0, 0), 0.25);
+	background: rgba(var(--info_box, 240, 240, 240), 1);
+}
+
+.form-message[data-state="success"] {
+	border-color: rgba(var(--accent, 0, 0, 0), 0.35);
+    color: var(--objects);
+}
+
+.form-message[data-state="error"] {
+	border-color: rgba(var(--danger, 180, 40, 40), 0.45);
+    color: var(--error);
+}
+
+.form-message {
+	/* Reserve space even when empty */
+	min-height: 1.4em; /* fallback */
+	line-height: 1.4;
+}
+
+/* Optional: scale height by number of lines */
+.form-message[data-lines="1"] {
+	min-height: 1.4em;
+}
+
+.form-message[data-lines="2"] {
+	min-height: 2.8em;
+}
+
+.form-message[data-lines="3"] {
+	min-height: 4.2em;
+}
+
+/* When hidden, still reserve space */
+.form-message[hidden] {
+	display: block;
+	visibility: hidden;
+}
+
+.form-group select {
+	width: 100%;
+	box-sizing: border-box;
+	cursor: pointer;
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="email"],
+.form-group input[type="search"],
+.form-group input[type="tel"],
+.form-group input[type="url"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    box-sizing: border-box;
+
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--form_border);
+    border-radius: 10px;
+    background: var(--form_body);
+    color: var(--form_text);
+
+    font-size: 1rem;
+    line-height: 1.25;
+
+    outline: none;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: var(--form_text);
+    opacity: 0.5;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    border-color: var(--form_text);
+    box-shadow: 0 0 0 4px rgba(152, 152, 152, 0.12);
+}
+
+.form-group label:has(> input[type="checkbox"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    color: var(--form_text);
+}
+
+.form-group input[type="checkbox"] {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+button[data-submit-route][data-submit-method] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+
+    border: 1px solid var(--form_border);
+    background: var(--form_body);
+    color: var(--form_text);
+
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+
+    cursor: pointer;
+    user-select: none;
+    transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+button[data-submit-route][data-submit-method]:hover {
+    filter: brightness(1.02);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+button[data-submit-route][data-submit-method]:active {
+    transform: translateY(1px);
+}
+
+button[data-submit-route][data-submit-method][disabled],
+button[data-submit-route][data-submit-method][data-busy="true"] {
+    opacity: 0.65;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.form-message {
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    color: var(--form_text);
+}
+
+button.primary[data-submit-route][data-submit-method] {
+    border-color: var(--form_text);
+    background: var(--form_text);
+    color: var(--form_body);
+}
+
+button.danger[data-submit-route][data-submit-method] {
+    background: rgba(var(--danger, 180, 40, 40), 1);
+    color: var(--form_body);
+    border-color: rgba(var(--danger, 180, 40, 40), 0.35);
+}
+
+/* Large text area styling */
+.form-group textarea {
+    min-height: 8rem;
+    resize: vertical;
+
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.45;
+
+    padding: 0.7rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--form_border);
+    background: var(--form_body);
+    color: var(--form_text);
+
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.form-group textarea:focus {
+    border-color: var(--form_text);
+    box-shadow: 0 0 0 4px rgba(152, 152, 152, 0.12);
+}
+
+.form-group textarea::placeholder {
+    color: var(--form_text);
+    opacity: 0.5;
+}
+
+/* Optional: explicitly “long text” variant */
+.form-group textarea.long-text {
+	min-height: 12rem;
+}

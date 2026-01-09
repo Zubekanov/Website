@@ -18,9 +18,9 @@ metrics_db = PSQLClient(
 METRICS_TABLE = "server_metrics"
 METRICS_NAMES = {
 	"cpu_used": "CPU Used",
+	"cpu_temp": "CPU Temperature",
 	"ram_used": "RAM Used",
 	"disk_used": "Disk Used",
-	"cpu_temp": "CPU Temperature",
 	"net_up": "Network Upload",
 	"net_dn": "Network Download",
 }

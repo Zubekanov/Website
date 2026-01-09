@@ -20,3 +20,30 @@
 	width: 100%;
 	max-width: min(400px, 90vw);
 }
+
+.login-window .form-group {
+	display: grid;
+	grid-template-columns: 140px 1fr;
+	gap: 0.6rem 0.9rem;
+	align-items: center;
+	width: 100%;
+}
+
+.login-window .form-group > label {
+	margin: 0;
+	font-weight: 600;
+}
+
+.login-window .form-group input,
+.login-window .form-group select,
+.login-window .form-group textarea {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* Mobile: stack again */
+@media (max-width: 520px) {
+	.login-window .form-group {
+		grid-template-columns: 1fr;
+	}
+}
