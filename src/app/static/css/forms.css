@@ -12,7 +12,6 @@
     color: var(--form_text);
 }
 
-/* Message area states (works with the JS setting data-state) */
 .form-message[hidden] {
 	display: none;
 }
@@ -36,12 +35,10 @@
 }
 
 .form-message {
-	/* Reserve space even when empty */
-	min-height: 1.4em; /* fallback */
+	min-height: 1.4em;
 	line-height: 1.4;
 }
 
-/* Optional: scale height by number of lines */
 .form-message[data-lines="1"] {
 	min-height: 1.4em;
 }
@@ -54,7 +51,6 @@
 	min-height: 4.2em;
 }
 
-/* When hidden, still reserve space */
 .form-message[hidden] {
 	display: block;
 	visibility: hidden;
@@ -173,7 +169,6 @@ button.danger[data-submit-route][data-submit-method] {
     border-color: rgba(var(--danger, 180, 40, 40), 0.35);
 }
 
-/* Large text area styling */
 .form-group textarea {
     min-height: 8rem;
     resize: vertical;
@@ -203,7 +198,6 @@ button.danger[data-submit-route][data-submit-method] {
     opacity: 0.5;
 }
 
-/* Optional: explicitly “long text” variant */
 .form-group textarea.long-text {
 	min-height: 12rem;
 }

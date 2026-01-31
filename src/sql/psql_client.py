@@ -19,7 +19,6 @@ class PSQLClient:
 	Call `close()` when you're done with a specific client instance, or `PSQLClient.closeall()` to close all cached pools.
 	"""
 
-	# Cache of instances keyed by a DSN-ish tuple for easy reuse
 	_cache: dict[tuple, "PSQLClient"] = {}
 
 	@classmethod
@@ -470,6 +469,7 @@ class PSQLClient:
 		order_by: str | None = None,
 		order_dir: str = "ASC"
 	) -> tuple[list[dict], int]:
+		
 		if not isinstance(page_limit, int) or page_limit <= 0:
 			raise ValueError("page_limit must be a positive integer.")
 		if not isinstance(page_num, int) or page_num < 0:

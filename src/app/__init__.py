@@ -86,6 +86,6 @@ def create_app():
 
 	setup_logging(dev_enabled=True)
 
-	psql.verify_tables()
+	psql.verify_tables(safe_mode=False)
 
 	return app

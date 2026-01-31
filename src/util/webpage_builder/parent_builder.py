@@ -8,6 +8,7 @@ import pandas as pd
 from util.webpage_builder.metrics_builder import METRICS_NAMES
 
 fcr = FileConfigReader()
+user_navbar_config = fcr.find("user_account.json")
 
 BUILD_MS = "__BUILD_MS__"
 
@@ -212,7 +213,7 @@ class WebPageBuilder(ABC):
 
 		self.config_values["header_html"] = existing + banner_html
 
-	def _build_nav_html(self, config: str) -> str:
+	def _build_nav_html(self, config, user: dict | None = None,) -> str:
 		config = fcr.find(config)
 		logo = config["logo"]
 		items = config["items"]
@@ -270,9 +271,50 @@ class WebPageBuilder(ABC):
 
 		account_html = ""
 		if account:
-			account_html = f"""
-			<a href="{account['href']}" class="nav-account">{account['label']}</a>
-			"""
+			if user is None:
+				account_html = f"""
+				<a href="{account['href']}" class="nav-account">{account['label']}</a>
+				"""
+			else:
+				sections_html = []
+				account = user_navbar_config["account"]
+				for section in account.get("sections", []):
+					sec_items = "\n".join(
+						f"""
+						<a href="{entry['href']}" class="mega-item">
+							<span class="mega-item__label">{entry['label']}</span>
+							<span class="mega-item__desc">{entry.get('desc','')}</span>
+						</a>
+						""" for entry in section.get("items", [])
+					)
+					sections_html.append(f"""
+					<div class="mega-section">
+						<h3 class="mega-section__title">{section.get('label','')}</h3>
+						<div class="mega-section__items">
+							{sec_items}
+						</div>
+					</div>
+					""")
+
+				menu_html = "\n".join(sections_html)
+
+				label_tpl = account.get("label", "Account")
+				for key, value in (user or {}).items():
+					label_tpl = label_tpl.replace(f"{{{{{key}}}}}", str(value))
+
+				account_html = f"""
+				<div class="nav-item nav-item--has-menu" data-nav-menu>
+					<button class="nav-link nav-link--trigger" type="button">
+						<span>{label_tpl}</span>
+						<span class="nav-link__chevron" aria-hidden="true">▾</span>
+					</button>
+					<div class="nav-mega" aria-hidden="true">
+						<div class="nav-mega__panel">
+							{menu_html}
+						</div>
+					</div>
+				</div>
+				"""
 
 		self.config_values["nav_html"] = self.config_values.get("nav_html", "") + f"""
 		<header id="site-header" class="site-header">
@@ -291,7 +333,8 @@ class WebPageBuilder(ABC):
 			</nav>
 		</header>
 		"""
-
+		return self.config_values["nav_html"]
+	
 	def _add_main_content_html(self, content_html: str) -> None:
 		"""
 		Append content to the main_content_html config value.
@@ -418,11 +461,11 @@ class PlotlyGraph():
 	def __init__(
 			self, 
 			initial_data: pd.DataFrame,
-			update_route: str = None,
+			update_route: str | None = None,
 			if_update_keep_old: bool = False,
-			title: str = None,
-			units: str = None,
-			layout: dict = None,
+			title: str | None = None,
+			units: str | None = None,
+			layout: dict | None = None,
 		):
 
 		self.data = initial_data
@@ -456,7 +499,7 @@ class HTMLHelper():
 		placeholder: str = "",
 		value: str = "",
 		class_name: str = "",
-		prefill: str = None,
+		prefill: str | None = None,
 	):
 		class_attr = f' class="{class_name}"' if class_name else ""
 		prefill_attr = f' data-prefill="{prefill}"' if prefill is not None else ""
@@ -588,12 +631,12 @@ class HTMLHelper():
 		checked_attr = " checked" if checked else ""
 
 		return (
-			f'<label>'
-			f'<input type="checkbox" name="{name}"{class_attr}{checked_attr}> '
-			f'{label}'
-			f'</label>\n'
+			f'<label class="checkbox-row">'
+			f'	<span class="checkbox-label">{label}</span>'
+			f'	<input type="checkbox" name="{name}"{class_attr}{checked_attr}>'
+			f'</label>'
 		)
-	
+
 	@staticmethod
 	def select_input(
 		label: str,

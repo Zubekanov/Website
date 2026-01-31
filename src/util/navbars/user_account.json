@@ -1,0 +1,22 @@
+{
+	"account": {
+		"label": "{{first_name}} {{last_name}}",
+		"type": "mega",
+		"sections": [
+			{
+				"items": [
+					{
+						"label": "Profile",
+						"desc": "View and edit your profile.",
+						"href": "/profile"
+					},
+					{
+						"label": "Logout",
+						"desc": "Log out of your account.",
+						"href": "/logout"
+					}
+				]
+			}
+		]
+	}
+}

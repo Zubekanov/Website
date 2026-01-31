@@ -19,10 +19,16 @@
 				"index": true
 			},
 			{
-				"name": "username",
+				"name": "first_name",
 				"type": "varchar",
 				"length": 64,
-				"unique": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "last_name",
+				"type": "varchar",
+				"length": 64,
 				"nullable": false,
 				"index": true
 			},
@@ -59,11 +65,6 @@
 				"unique": true
 			},
 			{
-				"name": "pending_users_username_idx",
-				"columns": ["username"],
-				"unique": true
-			},
-			{
 				"name": "pending_users_token_idx",
 				"columns": ["verification_token_hash"],
 				"unique": true
@@ -90,10 +91,16 @@
 				"index": true
 			},
 			{
-				"name": "username",
+				"name": "first_name",
 				"type": "varchar",
 				"length": 64,
-				"unique": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "last_name",
+				"type": "varchar",
+				"length": 64,
 				"nullable": false,
 				"index": true
 			},
@@ -125,11 +132,6 @@
 			{
 				"name": "users_email_idx",
 				"columns": ["email"],
-				"unique": true
-			},
-			{
-				"name": "users_username_idx",
-				"columns": ["username"],
 				"unique": true
 			}
 		]

@@ -10,6 +10,8 @@ from util.user_management import UserManagement
 logger = logging.getLogger(__name__)
 api = flask.Blueprint("api", __name__)
 
+_AUTH_TOKEN_NAME_ = "session"
+
 @api.route("/api/ping")
 def api_ping():
 	return flask.jsonify({"message": "pong"})
@@ -91,13 +93,43 @@ def api_metrics_update():
 @api.route("/login", methods=["POST"])
 def api_login():
 	print(flask.request.json)
-	return (
-		flask.jsonify({
-			"ok": False,
-			"message": "Login is not implemented yet.",
-		}),
-		501,
+	validation, message = UserManagement.login_user(
+		email=flask.request.json.get("email", ""),
+		password=flask.request.json.get("password", ""),
+		remember_me=flask.request.json.get("remember_me", False),
+		ip=flask.request.remote_addr or "",
+		user_agent=flask.request.headers.get("User-Agent", ""),
 	)
+
+	if validation:
+		token = message
+		message = "Login successful."
+		# Set session cookie
+	else:
+		return (
+			flask.jsonify({
+				"ok": False,
+				"message": message,
+			}),
+			401,
+		)
+	
+	resp = flask.make_response(flask.jsonify({
+		"ok": True,
+		"message": message,
+	}))
+
+	resp.set_cookie(
+		key = _AUTH_TOKEN_NAME_,
+		value = token,
+		httponly = True,
+		secure = True,
+		samesite = "Lax",
+		max_age = 30 * 24 * 60 * 60 if flask.request.json.get("remember_me", False) else 24 * 60 * 60,
+		path = "/",
+	)
+
+	return resp, 200
 
 @api.route("/register", methods=["POST"])
 def api_register():
@@ -117,6 +149,13 @@ def api_register():
 		}),
 		200 if validation[0] else 400,
 	)
+
+@api.route("/delete-account", methods=["POST"])
+def api_delete_account():
+	return flask.jsonify({
+		"ok": False,
+		"message": "Account deletion is not implemented yet.",
+	}), 501
 
 @api.route("/audiobookshelf-registration", methods=["POST"])
 def api_audiobookshelf_registration():

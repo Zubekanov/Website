@@ -1,7 +1,10 @@
+from http.client import HTTPException
 import logging
 import time
+from app.api import _AUTH_TOKEN_NAME_
 import flask
 from flask import g
+from util.user_management import UserManagement
 from util.webpage_builder.webpage_builder import *
 from util.webpage_builder.metrics_builder import *
 from bokeh.embed import server_document
@@ -12,6 +15,32 @@ main = flask.Blueprint("main", __name__)
 @main.before_app_request
 def _timing_start():
 	g._t0 = time.perf_counter()
+
+@main.before_request
+def load_user():
+	if flask.request.path.startswith("/api"):
+		return
+	g.user = None
+	auth_token = flask.request.cookies.get("session")
+	if auth_token:
+		user = UserManagement.get_user_by_session_token(auth_token)
+		if user:
+			g.user = user
+		else:
+			logging.info("Invalid session token provided.")
+
+def _ensure_user_loaded_for_error():
+	if hasattr(g, "user"):
+		return g.user
+
+	token = flask.request.cookies.get("session")
+	if not token:
+		g.user = None
+		return None
+
+	user = UserManagement.get_user_by_session_token(token)
+	g.user = user
+	return user
 
 @main.after_app_request
 def _timing_end(resp):
@@ -31,24 +60,78 @@ def _timing_end(resp):
 
 @main.route("/")
 def landing_page():
-    return build_test_page()
+    return build_test_page(g.user)
 
 @main.route("/server-metrics")
 def server_metrics_page():
-	return build_server_metrics_page()
+	return build_server_metrics_page(g.user)
+
+@main.route("/profile")
+def profile_page():
+	if not g.user:
+		return flask.redirect("/login")
+	return build_profile_page(g.user)
 
 @main.route("/login")
 def login_page():
-	return build_login_page()
+	if g.user:
+		return flask.redirect("/profile")
+	return build_login_page(g.user)
 
 @main.route("/register")
 def register_page():
-    return build_register_page()
+	if g.user:
+		return flask.redirect("/profile")
+	return build_register_page(g.user)
+
+@main.route("/logout")
+def logout_page():
+	resp = flask.make_response(flask.redirect("/"))
+	resp.set_cookie(
+		key = _AUTH_TOKEN_NAME_,
+		value = "",
+		httponly = True,
+		secure = True,
+		samesite = "Lax",
+		max_age = 0,
+		path = "/",
+	)
+	return resp
+
+@main.route("/reset-password")
+def reset_password_page():
+	return build_reset_password_page(g.user)
+
+@main.route("/reset-password/<token>")
+def reset_password_token_page(token):
+	return build_501_page(g.user)
+
+@main.route("/delete-account")
+def delete_account_page():
+	if not g.user:
+		return flask.redirect("/")
+	return build_delete_account_page(g.user)
+
+@main.route("/verify-email")
+def verify_email_page():
+	return build_verify_email_page(g.user)
+
+@main.route("/verify-email/<token>")
+def verify_email_token_page(token):
+	return build_verify_email_token_page(g.user, token)
 
 @main.route("/audiobookshelf-registration", methods=["GET"])
 def audiobookshelf_registration_page():
-	return build_audiobookshelf_registration_page()
+	return build_audiobookshelf_registration_page(g.user)
 
-@main.app_errorhandler(404)
-def page_not_found(e):
-    return build_4xx_page(e), 404
+@main.app_errorhandler(Exception)
+def handle_all_errors(e):
+	user = _ensure_user_loaded_for_error()
+
+	# HTTP errors
+	if isinstance(e, HTTPException):
+		return build_error_page(user, e), e.code
+
+	# Non-HTTP exceptions
+	logger.exception("Unhandled exception: %s", e)
+	return build_error_page(user, e) , 500

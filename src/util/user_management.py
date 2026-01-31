@@ -1,4 +1,7 @@
+import logging
+from sql.psql_interface import PSQLInterface
 
+interface = PSQLInterface()
 
 class UserManagement:
     @staticmethod
@@ -34,9 +37,44 @@ class UserManagement:
         if password != repeat_password:
             return False, "Passwords do not match."
 
-        # TODO: Actually send verification email here.
-        # Also change redirect to check email page.
+        status, message = interface.insert_pending_user({
+            "referral_source": referral_source,
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "password": password,
+        })
 
-        return False, "Input validation passed, but email verification is not implemented."
+        if not status:
+            return status, message
+        
+        # In this branch, message is the verification token
+        # TODO: Email the verification token to the user
+        print(f"Verification token for {email}: {message}")
+        
+        return True, "You will be redirected to the email verification page shortly."
+    
+    @staticmethod
+    def login_user(
+        email: str,
+        password: str,
+        remember_me: bool,
+        ip: str,
+        user_agent: str,
+    ) -> tuple[bool, str]:
+        """Login user with email and password."""
+        return interface.login_user(
+            email=email,
+            password=password,
+            remember_me=remember_me,
+            ip=ip,
+            user_agent=user_agent,
+        )
 
-        return True, "Please check your email for a verification link."
+    @staticmethod
+    def get_user_by_session_token(session_token: str) -> dict | None:
+        """Retrieve user by session token."""
+        user = interface.check_session_token(session_token)
+        if user:
+            logging.info("Session token validated for %s", user["email"])
+        return user
