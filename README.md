@@ -4,17 +4,17 @@ The website is hosted at [zubekanov.com](https://zubekanov.com), which you may b
 
 ### What the app does
 
-- **Public site + account flows**: Landing page, login, registration, email verification, password reset (stub), and profile pages.
+- **[Public site + account flows](https://zubekanov.com/)**: Landing page, login, registration, email verification, password reset (stub), and profile pages.
 - **Session-based auth**: Secure session cookies backed by hashed tokens stored in `user_sessions`, with server-side validation and cache.
-- **Email verification & messaging**: Registration creates a pending user, emails a verification link, and activates the account on success.
+- **[Email verification & messaging](https://zubekanov.com/register)**: Registration creates a pending user, emails a verification link, and activates the account on success.
 - **Integrations**
-  - **Discord webhooks**: Users can register webhooks and subscribe them to event keys; moderation events are emitted to Discord.
-  - **Audiobookshelf**: Users can submit access requests that are reviewed by admins.
-  - **Minecraft**: Users can request whitelist access; approvals manage whitelist entries and audit status.
+  - **[Discord webhooks](https://zubekanov.com/discord-webhook-registration)**: Users can register webhooks and subscribe them to event keys; moderation events are emitted to Discord.
+  - **[Audiobookshelf](https://zubekanov.com/audiobookshelf-registration)**: Users can submit access requests that are reviewed by admins.
+  - **[Minecraft](https://zubekanov.com/minecraft)**: Users can request whitelist access; approvals manage whitelist entries and audit status.
 - **Admin dashboards & approvals**: Admin-only views for handling Audiobookshelf, Discord webhook, and Minecraft approval queues.
 - **DB admin interface**: An internal “psql interface” page supports viewing/updating table data via API endpoints.
-- **Server metrics dashboard**: A metrics page renders live graphs (CPU/RAM/Disk/Network) using data from a dedicated metrics DB.
-- **Static resources**: Includes CSS/JS assets, a resume endpoint, and a light HTML builder for consistent page layouts.
+- **[Server metrics dashboard](https://zubekanov.com/server-metrics)**: A metrics page renders live graphs (CPU/RAM/Disk/Network) using data from a dedicated metrics DB.
+- **[Static resources](https://zubekanov.com/Joseph-Wong/resume)**: Includes CSS/JS assets, a resume endpoint, and a light HTML builder for consistent page layouts.
 
 ### Core building blocks
 
@@ -24,3 +24,9 @@ The website is hosted at [zubekanov.com](https://zubekanov.com), which you may b
 - **Schema configs** (`src/sql/tables/*.json`): JSON definitions used to create/verify tables on startup. In non-safe mode, unknown tables in configured schemas can be dropped.
 - **Integrations** (`src/util/integrations/*`): Discord webhook emitter, event key registry, and email delivery via Gmail OAuth.
 - **Metrics** (`src/util/webpage_builder/metrics_builder.py`): Reads from a metrics DB configured in `src/config/metrics_db.conf`.
+
+### Attributions
+
+- [Copy Icon](https://uxwing.com/copy-icon/) from uxwing.com  
+- [Open Eye Icon](https://www.flaticon.com/free-icons/eye) created by Gregor Cresnar - Flaticon  
+- [Closed Eye Icon](https://www.flaticon.com/free-icons/eye-password) created by sonnycandra - Flaticon  
