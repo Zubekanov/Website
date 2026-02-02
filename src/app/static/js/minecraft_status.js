@@ -148,39 +148,11 @@
 	};
 
 	const copyHost = () => {
-		if (!hostEl) return;
+		if (!hostEl || !hostChip) return;
 		const text = (hostEl.textContent || "").trim();
 		if (!text) return;
-		const finish = () => {
-			if (!hostChip) return;
-			hostChip.classList.add("is-copied");
-			if (hostTooltip) {
-				hostTooltip.textContent = "Copied";
-				hostTooltip.setAttribute("aria-hidden", "false");
-			}
-			setTimeout(() => hostChip.classList.remove("is-copied"), 1200);
-			if (hostTooltip) {
-				setTimeout(() => hostTooltip.setAttribute("aria-hidden", "true"), 1200);
-			}
-		};
-		if (navigator.clipboard && navigator.clipboard.writeText) {
-			navigator.clipboard.writeText(text).then(finish).catch(finish);
-		} else {
-			try {
-				const area = document.createElement("textarea");
-				area.value = text;
-				area.setAttribute("readonly", "readonly");
-				area.style.position = "absolute";
-				area.style.left = "-9999px";
-				document.body.appendChild(area);
-				area.select();
-				document.execCommand("copy");
-				document.body.removeChild(area);
-			} catch {
-				// ignore
-			}
-			finish();
-		}
+		if (typeof window.copyTextWithToast !== "function") return;
+		window.copyTextWithToast(text, hostChip, hostTooltip);
 	};
 
 	if (hostCopy) {

@@ -112,26 +112,29 @@
 
 .minecraft-host-tooltip {
 	position: absolute;
-	right: 8px;
-	top: -28px;
+	right: 6px;
+	top: 50%;
 	font-size: 11px;
 	padding: 3px 8px;
 	border-radius: 999px;
-	background: var(--default);
-	color: var(--contents);
+	background: var(--contents);
+	border: 1px solid var(--border);
+	color: var(--form_text);
 	opacity: 0;
-	transform: translateY(4px);
+	transform: translateY(-50%) scale(0.95);
 	pointer-events: none;
 	transition: opacity 140ms ease, transform 140ms ease;
+	z-index: 2;
 }
 
 .minecraft-host-chip {
 	position: relative;
+	overflow: hidden;
 }
 
 .minecraft-host-chip.is-copied .minecraft-host-tooltip {
 	opacity: 1;
-	transform: translateY(0);
+	transform: translateY(-50%) scale(1);
 }
 
 .minecraft-host-copy:hover {
