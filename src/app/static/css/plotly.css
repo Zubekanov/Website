@@ -41,4 +41,30 @@
 	aspect-ratio: 16 / 9;
 	background: transparent;
 	min-width: 0;
+	position: relative;
+	overflow: hidden;
+	box-sizing: border-box;
+	margin: 0;
+}
+
+.metric-plot.is-loading::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.04);
+	backdrop-filter: blur(1px);
+	z-index: 2;
+}
+
+.metric-plot.is-loading::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: url("/static/img/Ajax_loader_metal_512.gif") center center / 48px 48px no-repeat;
+	z-index: 3;
+}
+
+.metric-plot .js-plotly-plot {
+	position: relative;
+	z-index: 1;
 }
