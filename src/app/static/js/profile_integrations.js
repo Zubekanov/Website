@@ -74,6 +74,39 @@
 		handleAction(button);
 	});
 
+	document.addEventListener("click", (event) => {
+		const toggle = event.target.closest("[data-secret-toggle]");
+		if (!toggle) return;
+		event.preventDefault();
+		const container = toggle.closest("[data-secret]");
+		if (!container) return;
+		const isRevealed = container.classList.contains("is-revealed");
+		if (isRevealed) {
+			container.classList.remove("is-revealed");
+			toggle.setAttribute("aria-label", "Reveal secret");
+		} else {
+			container.classList.add("is-revealed");
+			toggle.setAttribute("aria-label", "Hide secret");
+		}
+	});
+
+	document.addEventListener("click", async (event) => {
+		const copyBtn = event.target.closest("[data-secret-copy]");
+		if (!copyBtn) return;
+		event.preventDefault();
+		const container = copyBtn.closest("[data-secret]");
+		if (!container) return;
+		const reveal = container.querySelector("[data-secret-reveal]");
+		if (!reveal) return;
+		const value = reveal.textContent || "";
+		if (!value.trim()) return;
+		if (typeof window.copyTextWithToast === "function") {
+			await window.copyTextWithToast(value, container, container.querySelector("[data-secret-tooltip]"));
+			return;
+		}
+		window.alert("Copy helper not available.");
+	});
+
 	const modal = document.querySelector("[data-integration-modal]");
 	if (!modal) return;
 	const modalName = modal.querySelector("[data-integration-modal-name]");

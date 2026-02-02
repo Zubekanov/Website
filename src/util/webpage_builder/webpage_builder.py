@@ -157,6 +157,7 @@ _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MD_CODE_RE = re.compile(r"`([^`]+)`")
 _MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 _MD_ITALIC_RE = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
+_MD_LIST_ITEM_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>(?:[-*+])|(?:\d+\.))\s+(?P<body>.+)$")
 
 
 def _md_inline(text: str) -> str:
@@ -166,6 +167,77 @@ def _md_inline(text: str) -> str:
 	escaped = _MD_BOLD_RE.sub(lambda m: f"<strong>{m.group(1)}</strong>", escaped)
 	escaped = _MD_ITALIC_RE.sub(lambda m: f"<em>{m.group(1)}</em>", escaped)
 	return escaped
+
+
+def _indent_len(line: str) -> int:
+	return len(line.expandtabs(4)) - len(line.lstrip(" \t").expandtabs(4))
+
+
+def _list_type(marker: str) -> str:
+	if marker.endswith(".") and marker[:-1].isdigit():
+		return "ol"
+	return "ul"
+
+
+def _parse_list(lines: list[str], start: int, base_indent: int) -> tuple[str, int]:
+	m = _MD_LIST_ITEM_RE.match(lines[start])
+	if not m:
+		return "", start
+	list_type = _list_type(m.group("marker"))
+	html_parts = [f"<{list_type}>"]
+	i = start
+	while i < len(lines):
+		m = _MD_LIST_ITEM_RE.match(lines[i])
+		if not m:
+			break
+		indent = _indent_len(lines[i])
+		if indent < base_indent:
+			break
+		if indent > base_indent:
+			break
+		if _list_type(m.group("marker")) != list_type:
+			break
+
+		body = m.group("body").strip()
+		html_parts.append(f"<li>{_md_inline(body)}")
+		i += 1
+
+		continuation: list[str] = []
+		while i < len(lines):
+			if not lines[i].strip():
+				continuation.append("")
+				i += 1
+				continue
+			m2 = _MD_LIST_ITEM_RE.match(lines[i])
+			if m2:
+				indent2 = _indent_len(lines[i])
+				if indent2 > base_indent:
+					break
+				if indent2 <= base_indent:
+					break
+			indent2 = _indent_len(lines[i])
+			if indent2 > base_indent:
+				continuation.append(lines[i].strip())
+				i += 1
+				continue
+			break
+
+		if continuation:
+			cont_text = " ".join([c for c in continuation if c]).strip()
+			if cont_text:
+				html_parts.append(f"<p>{_md_inline(cont_text)}</p>")
+
+		if i < len(lines):
+			m2 = _MD_LIST_ITEM_RE.match(lines[i])
+			if m2 and _indent_len(lines[i]) > base_indent:
+				nested_html, i = _parse_list(lines, i, _indent_len(lines[i]))
+				if nested_html:
+					html_parts.append(nested_html)
+
+		html_parts.append("</li>")
+
+	html_parts.append(f"</{list_type}>")
+	return "".join(html_parts), i
 
 
 def render_markdown(md_text: str) -> str:
@@ -228,25 +300,13 @@ def render_markdown(md_text: str) -> str:
 			i += 1
 			continue
 
-		if re.match(r"^(-|\*|\+)\s+.+", line):
+		if _MD_LIST_ITEM_RE.match(line):
 			flush_paragraph()
-			items: list[str] = []
-			while i < len(lines) and re.match(r"^(-|\*|\+)\s+.+", lines[i]):
-				item = re.sub(r"^(-|\*|\+)\s+", "", lines[i], count=1).strip()
-				items.append(f"<li>{_md_inline(item)}</li>")
-				i += 1
-			blocks.append("<ul>" + "".join(items) + "</ul>")
-			continue
-
-		if re.match(r"^\d+\.\s+.+", line):
-			flush_paragraph()
-			items = []
-			while i < len(lines) and re.match(r"^\d+\.\s+.+", lines[i]):
-				item = re.sub(r"^\d+\.\s+", "", lines[i], count=1).strip()
-				items.append(f"<li>{_md_inline(item)}</li>")
-				i += 1
-			blocks.append("<ol>" + "".join(items) + "</ol>")
-			continue
+			list_html, next_idx = _parse_list(lines, i, _indent_len(line))
+			if list_html:
+				blocks.append(list_html)
+				i = next_idx
+				continue
 
 		if re.match(r"^(-{3,}|\*{3,}|_{3,})$", line.strip()):
 			flush_paragraph()
@@ -567,6 +627,7 @@ def build_profile_page(user: dict | None) -> str:
 			admin_since = None
 	builder = PageBuilder(navbar_config=navbar_config, user=user)
 	builder._b.stylesheets.add("/static/css/profile.css")
+	builder._b.scripts.add("/static/js/copy_tooltip.js")
 	builder._b.scripts.add("/static/js/profile_integrations.js")
 	admin_line = ""
 	if admin_since:
@@ -665,7 +726,7 @@ def build_profile_page(user: dict | None) -> str:
 					str(wh.get("id")),
 					"Discord Webhook",
 					html.escape(wh.get("name") or "Webhook"),
-					html.escape(wh.get("webhook_url") or ""),
+					html_fragments.secret_field(wh.get("webhook_url") or "", label="Webhook URL"),
 					badge_html + delete_button,
 					subscriptions_html,
 				)
@@ -1286,6 +1347,7 @@ def build_minecraft_page(user: dict | None) -> str:
 
 	def add_minecraft_assets(builder: PageBuilder):
 		builder._b.stylesheets.add("/static/css/minecraft.css")
+		builder._b.scripts.add("/static/js/copy_tooltip.js")
 		builder._b.scripts.add("/static/js/minecraft_status.js")
 
 	return build_page(user, PageSpec(

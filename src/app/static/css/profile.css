@@ -129,6 +129,7 @@
 	display: grid;
 	gap: 0.35rem;
 	width: 100%;
+	min-width: 0;
 }
 
 .integration-card--empty {
@@ -152,6 +153,133 @@
 	color: var(--form_text);
 	font-size: 0.85rem;
 	word-break: break-word;
+	min-width: 0;
+}
+
+.secret-field {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	background: var(--background);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 0.2rem 0.5rem 0.2rem 0.6rem;
+	width: 100%;
+	box-sizing: border-box;
+	position: relative;
+}
+
+.secret-value {
+	font-family: var(--font-base);
+	font-size: 0.82rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1 1 auto;
+	min-width: 0;
+	position: relative;
+	max-width: 100%;
+}
+
+.secret-value--real {
+	letter-spacing: 0.02em;
+	display: none;
+}
+
+.secret-toggle {
+	border: 0;
+	background: transparent;
+	padding: 0.1rem;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+}
+
+.secret-toggle img {
+	width: 16px;
+	height: 16px;
+	display: block;
+}
+
+.secret-copy {
+	border: 0;
+	background: transparent;
+	padding: 0.1rem;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	position: relative;
+	visibility: hidden;
+	pointer-events: none;
+	z-index: 2;
+}
+
+.secret-copy img {
+	width: 16px;
+	height: 16px;
+	display: block;
+}
+
+.secret-tooltip {
+	position: absolute;
+	right: -0.2rem;
+	top: 50%;
+	background: var(--contents);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 0.15rem 0.45rem;
+	font-size: 0.65rem;
+	color: var(--form_text);
+	opacity: 0;
+	transform: translateY(-50%) scale(0.95);
+	transition: opacity 120ms ease, transform 120ms ease;
+	pointer-events: none;
+	white-space: nowrap;
+	z-index: 3;
+}
+
+.secret-field.is-revealed .secret-copy {
+	visibility: visible;
+	pointer-events: auto;
+}
+
+.secret-field.is-revealed .secret-value--real {
+	display: block;
+}
+
+.secret-field.is-revealed .secret-value[data-secret-mask] {
+	display: none;
+}
+
+.secret-field.is-revealed .secret-toggle [data-secret-icon-hidden] {
+	display: none;
+}
+
+.secret-field:not(.is-revealed) .secret-toggle [data-secret-icon-visible] {
+	display: none;
+}
+
+.secret-field.is-copied .secret-tooltip {
+	opacity: 1;
+	transform: translateY(-50%) scale(1);
+}
+
+.secret-field.is-revealed .secret-value--real {
+	-webkit-mask-image: linear-gradient(to right, #000 75%, transparent 98%);
+	mask-image: linear-gradient(to right, #000 75%, transparent 98%);
+}
+
+.secret-empty {
+	color: var(--form_text);
+}
+
+html[data-theme="dark"] .secret-toggle img,
+html[data-theme="dark"] .secret-copy img {
+	filter: invert(1) hue-rotate(180deg);
 }
 
 .integration-badge {

@@ -184,6 +184,29 @@ def integration_card(
 	)
 
 
+def secret_field(value: str, *, label: str = "Secret", mask: str | None = None) -> str:
+	escaped = html.escape(value or "")
+	if not escaped:
+		return "<span class=\"secret-empty\">(empty)</span>"
+	mask_text = mask or f"{label} hidden"
+	return (
+		"<div class=\"secret-field\" data-secret>"
+		f"<span class=\"secret-value\" data-secret-mask>{html.escape(mask_text)}</span>"
+		f"<span class=\"secret-value secret-value--real\" data-secret-reveal>{escaped}</span>"
+		"<button class=\"secret-copy\" type=\"button\" data-secret-copy "
+		"aria-label=\"Copy secret\" title=\"Copy\">"
+		"<img src=\"/static/img/copy.png\" alt=\"\">"
+		"<span class=\"secret-tooltip\" data-secret-tooltip aria-hidden=\"true\">Copied</span>"
+		"</button>"
+		"<button class=\"secret-toggle\" type=\"button\" data-secret-toggle "
+		"aria-label=\"Reveal secret\">"
+		"<img src=\"/static/img/hidden.png\" alt=\"Hidden\" data-secret-icon-hidden>"
+		"<img src=\"/static/img/eye.png\" alt=\"Visible\" data-secret-icon-visible>"
+		"</button>"
+		"</div>"
+	)
+
+
 def integration_card_empty() -> str:
 	return (
 		"<div class=\"integration-card integration-card--empty\">"
