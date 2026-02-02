@@ -65,9 +65,9 @@
             ]
         },
         {
-            "label": "Button 3",
+            "label": "Admin",
             "type": "link",
-            "href": "/button3"
+            "href": "/admin"
         }
     ],
 

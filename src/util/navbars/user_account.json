@@ -1,4 +1,11 @@
 {
+	"logo": {
+		"type": "text",
+		"image_src": "",
+		"text": "Joseph Wong",
+		"href": "/"
+	},
+	"items": [],
 	"account": {
 		"label": "{{first_name}} {{last_name}}",
 		"type": "mega",
