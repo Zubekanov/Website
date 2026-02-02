@@ -1,8 +1,8 @@
 .markdown-block {
-	background: var(--background);
+	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 0.75rem;
-	padding: 1.25rem 1.5rem;
+	border-radius: 10px;
+	padding: 1.5rem 1.75rem;
 	color: var(--default);
 	line-height: 1.6;
 	word-break: break-word;
@@ -14,14 +14,27 @@
 .markdown-block h4,
 .markdown-block h5,
 .markdown-block h6 {
-	margin: 1.25rem 0 0.6rem;
-	line-height: 1.2;
+	margin: 1.6rem 0 0.6rem;
+	line-height: 1.25;
+	font-weight: 700;
 }
 
-.markdown-block h1 { font-size: 1.65rem; }
-.markdown-block h2 { font-size: 1.35rem; }
+.markdown-block h1 {
+	font-size: 1.75rem;
+	padding-bottom: 0.3rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.markdown-block h2 {
+	font-size: 1.4rem;
+	padding-bottom: 0.25rem;
+	border-bottom: 1px solid var(--border);
+}
+
 .markdown-block h3 { font-size: 1.2rem; }
 .markdown-block h4 { font-size: 1.05rem; }
+.markdown-block h5 { font-size: 1rem; }
+.markdown-block h6 { font-size: 0.95rem; color: var(--form_text); }
 
 .markdown-block p {
 	margin: 0 0 1rem;
@@ -44,23 +57,35 @@
 	padding-left: 1.5rem;
 }
 
+.markdown-block ul ul,
+.markdown-block ul ol,
+.markdown-block ol ul,
+.markdown-block ol ol {
+	margin-top: 0.35rem;
+	margin-bottom: 0.35rem;
+}
+
 .markdown-block li {
-	margin-bottom: 0.4rem;
+	margin: 0.25rem 0;
+}
+
+.markdown-block li > p {
+	margin: 0.4rem 0 0.6rem;
 }
 
 .markdown-block code {
-	background: var(--contents);
+	background: var(--background);
 	border: 1px solid var(--border);
-	border-radius: 0.35rem;
-	padding: 0.05rem 0.35rem;
+	border-radius: 6px;
+	padding: 0.15rem 0.35rem;
 	font-size: 0.95em;
 }
 
 .markdown-block pre {
-	background: var(--contents);
+	background: var(--background);
 	border: 1px solid var(--border);
-	border-radius: 0.6rem;
-	padding: 0.9rem 1rem;
+	border-radius: 8px;
+	padding: 0.95rem 1.1rem;
 	overflow-x: auto;
 	margin: 0 0 1rem;
 }
@@ -73,20 +98,38 @@
 
 .markdown-block blockquote {
 	margin: 0 0 1rem;
-	padding: 0.6rem 1rem;
+	padding: 0.7rem 1rem;
 	border-left: 4px solid var(--border);
-	background: var(--contents);
+	background: var(--background);
 	color: var(--form_text);
 }
 
 .markdown-block hr {
 	border: 0;
 	border-top: 1px solid var(--border);
-	margin: 1.25rem 0;
+	margin: 1.5rem 0;
+}
+
+.markdown-block table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0 0 1rem;
+}
+
+.markdown-block th,
+.markdown-block td {
+	border: 1px solid var(--border);
+	padding: 0.5rem 0.7rem;
+	text-align: left;
+}
+
+.markdown-block thead th {
+	background: var(--background);
+	font-weight: 700;
 }
 
 @media (max-width: 720px) {
 	.markdown-block {
-		padding: 1rem 1.1rem;
+		padding: 1.1rem 1.2rem;
 	}
 }
