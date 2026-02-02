@@ -147,6 +147,12 @@ class PSQLClient:
 		finally:
 			self._put_conn(conn)
 
+	def execute_query(self, query, params: Optional[Iterable] = None) -> list[dict] | None:
+		"""
+		Public wrapper for executing raw SQL (read or write).
+		"""
+		return self._execute(query, params)
+
 	def _execute_autocommit(self, query, params: Optional[Iterable] = None):
 		"""
 		Execute a statement that must run outside a transaction (e.g., CREATE/DROP DATABASE).
@@ -336,6 +342,100 @@ class PSQLClient:
 			sql.SQL("IF EXISTS") if missing_ok else sql.SQL(""),
 			sql.Identifier(schema),
 			sql.Identifier(index_name),
+		)
+		self._execute(q)
+	
+	def drop_column(
+		self,
+		schema: str,
+		table: str,
+		column: str,
+		*,
+		cascade: bool = False,
+		missing_ok: bool = True,
+	) -> None:
+		q = sql.SQL("ALTER TABLE {}.{} DROP COLUMN {} {}").format(
+			sql.Identifier(schema),
+			sql.Identifier(table),
+			sql.SQL("IF EXISTS") if missing_ok else sql.SQL(""),
+			sql.Identifier(column),
+		)
+		if cascade:
+			q = q + sql.SQL(" CASCADE")
+		self._execute(q)
+
+	def alter_column_type(
+		self,
+		schema: str,
+		table: str,
+		column: str,
+		type_sql: str,
+		*,
+		using: str | None = None,
+	) -> None:
+		q = sql.SQL("ALTER TABLE {}.{} ALTER COLUMN {} TYPE {}").format(
+			sql.Identifier(schema),
+			sql.Identifier(table),
+			sql.Identifier(column),
+			sql.SQL(type_sql),
+		)
+		if using:
+			q = q + sql.SQL(" USING ") + sql.SQL(using)
+		self._execute(q)
+
+	def alter_column_nullability(
+		self,
+		schema: str,
+		table: str,
+		column: str,
+		*,
+		nullable: bool,
+	) -> None:
+		q = sql.SQL("ALTER TABLE {}.{} ALTER COLUMN {} {}").format(
+			sql.Identifier(schema),
+			sql.Identifier(table),
+			sql.Identifier(column),
+			sql.SQL("DROP NOT NULL") if nullable else sql.SQL("SET NOT NULL"),
+		)
+		self._execute(q)
+
+	def alter_column_default(
+		self,
+		schema: str,
+		table: str,
+		column: str,
+		*,
+		default_sql: str | None = None,
+		drop: bool = False,
+	) -> None:
+		if drop:
+			q = sql.SQL("ALTER TABLE {}.{} ALTER COLUMN {} DROP DEFAULT").format(
+				sql.Identifier(schema),
+				sql.Identifier(table),
+				sql.Identifier(column),
+			)
+		else:
+			q = sql.SQL("ALTER TABLE {}.{} ALTER COLUMN {} SET DEFAULT {}").format(
+				sql.Identifier(schema),
+				sql.Identifier(table),
+				sql.Identifier(column),
+				sql.SQL(default_sql if default_sql is not None else "NULL"),
+			)
+		self._execute(q)
+
+	def drop_constraint(
+		self,
+		schema: str,
+		table: str,
+		constraint_name: str,
+		*,
+		missing_ok: bool = True,
+	) -> None:
+		q = sql.SQL("ALTER TABLE {}.{} DROP CONSTRAINT {}{}").format(
+			sql.Identifier(schema),
+			sql.Identifier(table),
+			sql.SQL("IF EXISTS ") if missing_ok else sql.SQL(""),
+			sql.Identifier(constraint_name),
 		)
 		self._execute(q)
 
@@ -807,3 +907,51 @@ class PSQLClient:
 			ORDER BY indexname;
 		"""
 		return self._execute(q, [schema, table]) or []
+
+	def list_constraints(self, schema: str, table: str) -> list[dict]:
+		q = """
+			SELECT constraint_name, constraint_type
+			FROM information_schema.table_constraints
+			WHERE constraint_schema = %s AND table_name = %s
+			ORDER BY constraint_name;
+		"""
+		return self._execute(q, [schema, table]) or []
+
+	def get_primary_key_columns(self, schema: str, table: str) -> list[str]:
+		q = """
+			SELECT kcu.column_name
+			FROM information_schema.table_constraints tc
+			JOIN information_schema.key_column_usage kcu
+				ON tc.constraint_name = kcu.constraint_name
+				AND tc.constraint_schema = kcu.constraint_schema
+			WHERE tc.constraint_schema = %s
+			AND tc.table_name = %s
+			AND tc.constraint_type = 'PRIMARY KEY'
+			ORDER BY kcu.ordinal_position;
+		"""
+		rows = self._execute(q, [schema, table]) or []
+		return [r["column_name"] for r in rows]
+
+	def get_constraint_columns(self, schema: str, table: str, constraint_name: str) -> list[str]:
+		q = """
+			SELECT kcu.column_name
+			FROM information_schema.key_column_usage kcu
+			WHERE kcu.constraint_schema = %s
+			AND kcu.table_name = %s
+			AND kcu.constraint_name = %s
+			ORDER BY kcu.ordinal_position;
+		"""
+		rows = self._execute(q, [schema, table, constraint_name]) or []
+		return [r["column_name"] for r in rows]
+
+	def list_constraint_indexes(self, schema: str, table: str) -> list[str]:
+		q = """
+			SELECT i.relname AS indexname
+			FROM pg_constraint c
+			JOIN pg_class t ON t.oid = c.conrelid
+			JOIN pg_namespace n ON n.oid = t.relnamespace
+			JOIN pg_class i ON i.oid = c.conindid
+			WHERE n.nspname = %s AND t.relname = %s AND c.conindid <> 0;
+		"""
+		rows = self._execute(q, [schema, table]) or []
+		return [r["indexname"] for r in rows]

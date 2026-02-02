@@ -1,0 +1,102 @@
+{
+	"table_name": "discord_webhook_registrations",
+	"description": "User-submitted webhook registration requests.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "name",
+			"type": "varchar",
+			"length": 80,
+			"nullable": false
+		},
+		{
+			"name": "webhook_url",
+			"type": "text",
+			"nullable": false
+		},
+		{
+			"name": "event_key",
+			"type": "varchar",
+			"length": 120,
+			"nullable": false
+		},
+		{
+			"name": "submitted_by_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "submitted_by_name",
+			"type": "varchar",
+			"length": 120,
+			"nullable": true
+		},
+		{
+			"name": "submitted_by_email",
+			"type": "varchar",
+			"length": 255,
+			"nullable": true,
+			"index": true
+		},
+		{
+			"name": "status",
+			"type": "varchar",
+			"length": 16,
+			"enum": ["pending", "denied", "approved"],
+			"default": "'pending'",
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "reviewed_at",
+			"type": "timestamptz",
+			"nullable": true
+		},
+		{
+			"name": "reviewed_by_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "discord_webhook_reg_event_idx",
+			"columns": ["event_key"],
+			"unique": false
+		},
+		{
+			"name": "discord_webhook_reg_status_idx",
+			"columns": ["status"],
+			"unique": false
+		},
+		{
+			"name": "discord_webhook_reg_reviewed_idx",
+			"columns": ["reviewed_by_user_id"],
+			"unique": false
+		}
+	]
+}

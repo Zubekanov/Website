@@ -134,38 +134,70 @@ class PSQLInterface:
 
 		return True, "User created successfully."
 	
-	def validate_verification_token(self, token: str) -> bool:
+	def validate_verification_token(self, token: str) -> tuple[bool, str]:
 		if not token or not str(token).strip():
-			return False
+			return False, "Missing verification token."
 		token_hash = self._hash_verification_token(token.strip())
 
-		pending_users = self.get_pending_user({"verification_token_hash": token_hash})
-		if not pending_users: return False
-		
-		valid = any(
-			pending_user.get("token_expires_at") and pending_user["token_expires_at"].replace(tzinfo=timezone.utc) > datetime.now(timezone.utc)
-			for pending_user in pending_users
-		)
+		try:
+			pending_users = self.get_pending_user({"verification_token_hash": token_hash})
+		except Exception as e:
+			return False, f"Failed to read pending users: {e}"
+		if not pending_users:
+			return False, "Invalid verification token."
 
-		if not valid: return False
+		now = datetime.now(timezone.utc)
+		valid = [
+			pending_user for pending_user in pending_users
+			if pending_user.get("token_expires_at")
+			and pending_user["token_expires_at"].replace(tzinfo=timezone.utc) > now
+		]
+		if not valid:
+			return False, "Verification token expired."
 
-		pending_user = next(
-			(pending_user for pending_user in pending_users if pending_user["token_expires_at"].replace(tzinfo=timezone.utc) > datetime.now(timezone.utc)),
-			None
-		)
-		
-		user = self.get_user({"email": pending_user["email"]})
-		if user: return False
+		pending_user = valid[0]
+		user_rows = self.get_user({"email": pending_user["email"]})
+		if user_rows:
+			user = user_rows[0]
+			if user.get("is_active", True):
+				if not user.get("is_anonymous"):
+					return False, "Account already verified."
+			try:
+				self._client.update_rows_with_filters(
+					"users",
+					{
+						"first_name": pending_user["first_name"],
+						"last_name": pending_user["last_name"],
+						"password_hash": pending_user["password_hash"],
+						"is_anonymous": False,
+						"is_active": True,
+					},
+					raw_conditions=["id = %s"],
+					raw_params=[user["id"]],
+				)
+			except Exception as e:
+				return False, f"Failed to restore account: {e}"
+		else:
+			status, message = self.insert_user({
+				"id": pending_user["id"],
+				"email": pending_user["email"],
+				"first_name": pending_user["first_name"],
+				"last_name": pending_user["last_name"],
+				"password_hash": pending_user["password_hash"],
+			})
+			if not status:
+				return False, message
 
-		status, message = self.insert_user({
-			"id": pending_user["id"],
-			"email": pending_user["email"],
-			"first_name": pending_user["first_name"],
-			"last_name": pending_user["last_name"],
-			"password_hash": pending_user["password_hash"],
-		})
+		try:
+			self._client.delete_rows_with_filters(
+				"pending_users",
+				raw_conditions=["id = %s"],
+				raw_params=[pending_user["id"]],
+			)
+		except Exception:
+			logger.exception("Failed to delete pending user after verification.")
 
-		return status
+		return True, "Email verified."
 	
 	def _generate_session_token(self, nbytes: int = 32) -> str:
 		return secrets.token_urlsafe(nbytes)
@@ -185,6 +217,9 @@ class PSQLInterface:
 			logger.info("Login attempt failed: No user found with email '%s'", email.lower())
 			return False, "Invalid email or password."
 		user = users[0]
+		if user.get("is_active") is False:
+			logger.info("Login attempt failed: Inactive account for email '%s'", email.lower())
+			return False, "Invalid email or password."
 		stored_hash = user.get("password_hash")
 		if not stored_hash:
 			logger.info("Login attempt failed: No password hash stored for user with email '%s'", email.lower())
@@ -196,9 +231,7 @@ class PSQLInterface:
 
 		raw_token = self._generate_session_token()
 		token_hash = self._hash_session_token(raw_token)
-
 		ttl_days = 30 if remember_me else 1
-
 		now = datetime.now(timezone.utc)
 
 		if len(ip) > 45:
@@ -207,18 +240,60 @@ class PSQLInterface:
 			user_agent = user_agent[:252] + "..."
 
 		try:
-			row = {
-				"user_id": user["id"],
-				"session_token_hash": token_hash,
-				"ip": ip,
-				"user_agent": user_agent,
-				"created_at": now,
-				"last_seen_at": now,
-				"expires_at": now + timedelta(days=ttl_days),
-				"revoked_at": None,
-			}
+			# If there is an existing active session for the same user/ip/user_agent,
+			# rotate the token hash in-place and reuse that session slot.
+			existing, _ = self._client.get_rows_with_filters(
+				"user_sessions",
+				raw_conditions=[
+					"user_id = %s",
+					"ip = %s",
+					"user_agent = %s",
+					"expires_at >= NOW()",
+					"revoked_at IS NULL",
+				],
+				raw_params=[user["id"], ip, user_agent],
+				page_limit=1,
+				page_num=0,
+				order_by="last_seen_at",
+				order_dir="DESC",
+			)
 
-			self._client.insert_row("user_sessions", row)
+			if existing:
+				self._client.update_rows_with_filters(
+					"user_sessions",
+					{
+						"session_token_hash": token_hash,
+						"last_seen_at": now,
+						"expires_at": now + timedelta(days=ttl_days),
+						"revoked_at": None,
+					},
+					raw_conditions=["id = %s"],
+					raw_params=[existing[0]["id"]],
+				)
+				# Remove any additional active sessions for the same tuple.
+				self._client.delete_rows_with_filters(
+					"user_sessions",
+					raw_conditions=[
+						"user_id = %s",
+						"ip = %s",
+						"user_agent = %s",
+						"session_token_hash <> %s",
+					],
+					raw_params=[user["id"], ip, user_agent, token_hash],
+				)
+			else:
+				row = {
+					"user_id": user["id"],
+					"session_token_hash": token_hash,
+					"ip": ip,
+					"user_agent": user_agent,
+					"created_at": now,
+					"last_seen_at": now,
+					"expires_at": now + timedelta(days=ttl_days),
+					"revoked_at": None,
+				}
+				self._client.insert_row("user_sessions", row)
+
 			self._client.update_rows_with_equalities(
 				"users",
 				{"last_login_at": now},
@@ -228,6 +303,27 @@ class PSQLInterface:
 			return False, f"Login failed: {e}"
 		
 		return True, raw_token
+
+	def update_user_password(self, user_id: str, new_password: str) -> tuple[bool, str]:
+		if not user_id:
+			return False, "user_id is required."
+		if not new_password or len(new_password) < 8:
+			return False, "Password must be at least 8 characters long."
+
+		try:
+			password_hash_bytes = bcrypt.hashpw(
+				new_password.encode("utf-8"),
+				bcrypt.gensalt(rounds=12)
+			)
+			password_hash = password_hash_bytes.decode("utf-8")
+			self._client.update_rows_with_equalities(
+				"users",
+				{"password_hash": password_hash, "is_anonymous": False},
+				{"id": user_id},
+			)
+			return True, "Password updated."
+		except Exception as e:
+			return False, f"Failed to update password: {e}"
 	
 	def check_session_token(self, raw_token: str) -> dict | None:
 		if not raw_token:
@@ -239,6 +335,14 @@ class PSQLInterface:
 		cached = session_cache.get(token_hash)
 		if cached is not None:
 			logging.info("Session token cache hit.")
+			if cached:
+				try:
+					exists = self.get_user({"id": cached.get("id")})
+				except Exception:
+					exists = []
+				if not exists:
+					session_cache.delete(token_hash)
+					return None
 			return cached or None
 
 		# DB lookup
@@ -259,7 +363,12 @@ class PSQLInterface:
 			return None
 
 		sess = rows[0]
-		user = self.get_user({"id": sess["user_id"]})[0]
+		self._cleanup_user_sessions(sess["user_id"])
+		user_rows = self.get_user({"id": sess["user_id"]})
+		if not user_rows:
+			session_cache.set(token_hash, None, ttl_seconds=30)
+			return None
+		user = user_rows[0]
 		exp = sess["expires_at"]
 		if exp.tzinfo is None:
 			exp = exp.replace(tzinfo=timezone.utc)
@@ -268,6 +377,36 @@ class PSQLInterface:
 
 		session_cache.set(token_hash, user, ttl_seconds=ttl)
 		return user
+
+	def _cleanup_user_sessions(self, user_id: str) -> None:
+		if not user_id:
+			return
+		try:
+			# Remove expired sessions for this user.
+			self._client.delete_rows_with_filters(
+				"user_sessions",
+				raw_conditions=[
+					"user_id = %s",
+					"expires_at < NOW()",
+				],
+				raw_params=[user_id],
+			)
+
+			# Enforce single active session per (user_id, ip, user_agent).
+			self._client.delete_rows_with_filters(
+				"user_sessions",
+				raw_conditions=[
+					"user_id = %s",
+					"ctid IN (SELECT ctid FROM ("
+					"SELECT ctid, ROW_NUMBER() OVER (PARTITION BY user_id, ip, user_agent "
+					"ORDER BY last_seen_at DESC NULLS LAST, created_at DESC NULLS LAST) AS rn "
+					"FROM user_sessions WHERE user_id = %s AND revoked_at IS NULL AND expires_at >= NOW()"
+					") s WHERE s.rn > 1)",
+				],
+				raw_params=[user_id, user_id],
+			)
+		except Exception:
+			logger.exception("Failed to cleanup user sessions for user_id=%s", user_id)
 	
 	# Just calls the psqlclient function but is a bit more streamlined and checks columns
 	def get_user(self, match_fields: dict):
@@ -297,6 +436,48 @@ class PSQLInterface:
 		if user:
 			return user
 		return self.get_pending_user(match_fields)
+
+	def is_admin(self, user_id: str) -> bool:
+		if not user_id:
+			return False
+		rows, _ = self._client.get_rows_with_filters(
+			"admins",
+			equalities={"user_id": user_id},
+			page_limit=1,
+			page_num=0,
+		)
+		return bool(rows)
+
+	def promote_user_to_admin(self, user_id: str, note: str | None = None) -> tuple[bool, str]:
+		if not user_id:
+			return False, "user_id is required."
+		if self.is_admin(user_id):
+			return True, "User is already an admin."
+
+		row = {
+			"user_id": user_id,
+			"note": note,
+			"created_at": datetime.now(timezone.utc),
+		}
+		try:
+			self._client.insert_row("admins", row)
+		except Exception as e:
+			return False, f"Failed to promote user: {e}"
+		return True, "User promoted to admin."
+
+	def demote_user_from_admin(self, user_id: str) -> tuple[bool, str]:
+		if not user_id:
+			return False, "user_id is required."
+		try:
+			deleted = self._client.delete_rows_with_filters(
+				"admins",
+				equalities={"user_id": user_id},
+			)
+		except Exception as e:
+			return False, f"Failed to demote user: {e}"
+		if deleted == 0:
+			return False, "User is not an admin."
+		return True, "User demoted from admin."
  
 	@property
 	def client(self):
@@ -305,10 +486,86 @@ class PSQLInterface:
 	def verify_tables(self, safe_mode: bool = True) -> None:
 		tables_dir = os.path.join(os.path.dirname(__file__), "tables")
 		json_files = glob.glob(os.path.join(tables_dir, "*.json"))
+		configured: set[tuple[str, str]] = set()
 
 		for json_file in json_files:
 			table_config_name = os.path.basename(json_file)
 			self.verify_table(table_config_name, safe_mode=safe_mode)
+			try:
+				table_config = fcr.find(table_config_name)
+				tables = self._normalise_tables_config(table_config)
+				for t in tables:
+					schema = t.get("schema", "public")
+					name = t.get("table_name")
+					if name:
+						configured.add((schema, name))
+			except Exception:
+				logger.exception("Failed to load table config for %s", table_config_name)
+
+		# Migrate legacy anonymous_users into users before dropping unknown tables.
+		self._migrate_anonymous_users_to_users()
+
+		# Drop tables not present in configs (only within configured schemas).
+		schemas = {schema for schema, _ in configured}
+		for schema in schemas:
+			try:
+				existing = set(self.client.list_tables(schema))
+			except Exception:
+				logger.exception("Failed to list tables for schema %s", schema)
+				continue
+			allowed = {name for s, name in configured if s == schema}
+			for table in sorted(existing - allowed):
+				try:
+					self.client.drop_table(schema, table, cascade=True, missing_ok=True)
+					logger.warning("Dropped table not in config: %s.%s", schema, table)
+				except Exception:
+					logger.exception("Failed to drop table %s.%s", schema, table)
+
+	def _migrate_anonymous_users_to_users(self) -> None:
+		"""
+		Migrate legacy anonymous_users rows into users with is_anonymous=true.
+		"""
+		try:
+			if not self.client.table_exists("public", "anonymous_users"):
+				return
+			if not self.client.table_exists("public", "users"):
+				return
+		except Exception:
+			logger.exception("Failed to check table existence for anonymous_users migration")
+			return
+
+		try:
+			rows = self.client.execute_query(
+				'SELECT id, first_name, last_name, email, created_at FROM "public"."anonymous_users";'
+			) or []
+		except Exception:
+			logger.exception("Failed to read anonymous_users rows for migration")
+			return
+
+		for row in rows:
+			email = (row.get("email") or "").strip().lower()
+			if not email:
+				continue
+			try:
+				existing = self.client.execute_query(
+					'SELECT id, is_anonymous FROM "public"."users" WHERE LOWER(email) = LOWER(%s) LIMIT 1;',
+					(email,),
+				) or []
+				if existing:
+					continue
+				self.client.insert_row("users", {
+					"id": row.get("id"),
+					"email": email,
+					"first_name": row.get("first_name") or "",
+					"last_name": row.get("last_name") or "",
+					"password_hash": None,
+					"is_active": True,
+					"is_anonymous": True,
+					"created_at": row.get("created_at"),
+				})
+				logger.info("Migrated anonymous user %s into users", email)
+			except Exception:
+				logger.exception("Failed to migrate anonymous user %s", email)
 
 	def verify_table(self, table_config_name: str, *, safe_mode: bool = True) -> None:
 		"""
@@ -317,7 +574,7 @@ class PSQLInterface:
 			- does NOT drop columns, does NOT change types, does NOT change nullability/defaults
 		"""
 		table_config = fcr.find(table_config_name)
-		logger.info("Verifying table(s) from config: %s", table_config_name)
+		logger.debug("Verifying table(s) from config: %s", table_config_name)
 		tables = self._normalise_tables_config(table_config)
 
 		for t in tables:
@@ -351,13 +608,14 @@ class PSQLInterface:
 			logger.info("Created table %s.%s", schema, table)
 			return
 
-		has_changes = self._alter_table_additive(schema, table, columns_cfg, indexes_cfg, safe_mode=safe_mode)
-		if not has_changes:
-			logger.info("✅ Verified table %s.%s (no changes)", schema, table)
+		if safe_mode:
+			has_changes = self._alter_table_additive(schema, table, columns_cfg, indexes_cfg, safe_mode=safe_mode)
 		else:
-			logger.info("☑️ Verified table %s.%s", schema, table)
-
-		logger.info("Table initialised with columns: %s", list(self.client.get_column_info(schema, table).keys()))
+			has_changes = self._alter_table_forceful(schema, table, columns_cfg, indexes_cfg)
+		if not has_changes:
+			logger.debug("Verified table %s.%s (no changes)", schema, table)
+		else:
+			logger.info("Verified table %s.%s (changes applied)", schema, table)
 		
 	def _create_table_from_config(self, schema: str, table: str, columns_cfg: list[dict], indexes_cfg: list[dict]) -> None:
 		columns = {}
@@ -397,6 +655,11 @@ class PSQLInterface:
 				if on_update:
 					frag += f" ON UPDATE {on_update.upper()}"
 				constraints.append(frag)
+			enum_vals = c.get("enum")
+			if enum_vals:
+				con_name = f"{table}_{c['name']}_enum_check"
+				enum_sql = self._enum_values_sql(enum_vals)
+				constraints.append(f'CONSTRAINT "{con_name}" CHECK ("{c["name"]}" IN ({enum_sql}))')
 
 		self.client.create_table(schema, table, columns, constraints=constraints, if_not_exists=True)
 
@@ -456,6 +719,14 @@ class PSQLInterface:
 					self.client.add_constraint(schema, table, frag)
 					logger.info("Added FK constraint %s on %s.%s(%s)", con_name, schema, table, c["name"])
 					changes_detected = True
+			enum_vals = c.get("enum")
+			if enum_vals:
+				con_name = f"{table}_{c['name']}_enum_check"
+				if not self.client.constraint_exists(schema, table, con_name):
+					enum_sql = self._enum_values_sql(enum_vals)
+					self.client.add_constraint(schema, table, f'CONSTRAINT "{con_name}" CHECK ("{c["name"]}" IN ({enum_sql}))')
+					logger.info("Added CHECK constraint %s on %s.%s(%s)", con_name, schema, table, c["name"])
+					changes_detected = True
 
 		if self._ensure_indexes(schema, table, indexes_cfg, columns_cfg):
 			changes_detected = True
@@ -490,6 +761,262 @@ class PSQLInterface:
 			changed = True
 
 		return changed
+
+	def _alter_table_forceful(self, schema: str, table: str, columns_cfg: list[dict], indexes_cfg: list[dict]) -> bool:
+		changed = False
+		existing_cols = self.client.get_column_info(schema, table)
+		existing_colnames = set(existing_cols.keys())
+		config_cols = {c["name"] for c in columns_cfg}
+		not_null_targets: list[str] = []
+
+		# Add missing columns with full definition
+		for c in columns_cfg:
+			name = c["name"]
+			if name in existing_colnames:
+				continue
+			type_sql = self._column_type_sql(c)
+			mod_bits = []
+			if not c.get("nullable", True):
+				# Avoid immediate NOT NULL on existing rows; enforce after cleanup.
+				not_null_targets.append(name)
+			if "default" in c and c["default"] is not None:
+				mod_bits.append(f"DEFAULT {self._default_sql(c['default'])}")
+			if c.get("primary_key", False):
+				mod_bits.append("PRIMARY KEY")
+			col_def = (type_sql + (" " + " ".join(mod_bits) if mod_bits else "")).strip()
+			self.client.add_column(schema, table, name, col_def)
+			logger.info("Added column %s.%s.%s", schema, table, name)
+			changed = True
+
+		# Alter existing columns to match type/nullability/default
+		for c in columns_cfg:
+			name = c["name"]
+			if name not in existing_cols:
+				continue
+			info = existing_cols[name]
+			expected_sig = self._expected_type_signature(c)
+			existing_sig = self._existing_type_signature(info)
+			if expected_sig != existing_sig:
+				type_sql = self._column_type_sql(c)
+				self.client.alter_column_type(schema, table, name, type_sql)
+				logger.info("Altered type of %s.%s.%s to %s", schema, table, name, type_sql)
+				changed = True
+
+			nullable_expected = bool(c.get("nullable", True))
+			nullable_current = (str(info.get("is_nullable", "YES")).upper() == "YES")
+			if nullable_expected != nullable_current:
+				if not nullable_expected:
+					self._cleanup_nulls(schema, table, name)
+				self.client.alter_column_nullability(schema, table, name, nullable=nullable_expected)
+				logger.info("Altered nullability of %s.%s.%s to %s", schema, table, name, "NULL" if nullable_expected else "NOT NULL")
+				changed = True
+
+			has_default = ("default" in c and c["default"] is not None)
+			current_default = info.get("column_default")
+			if has_default:
+				expected_default = self._normalize_default(self._default_sql(c["default"]))
+				current_norm = self._normalize_default(current_default)
+				if expected_default != current_norm:
+					self.client.alter_column_default(schema, table, name, default_sql=self._default_sql(c["default"]))
+					logger.info("Altered default of %s.%s.%s", schema, table, name)
+					changed = True
+			else:
+				if current_default is not None:
+					self.client.alter_column_default(schema, table, name, drop=True)
+					logger.info("Dropped default of %s.%s.%s", schema, table, name)
+					changed = True
+
+		# Enforce NOT NULL for newly added columns after cleaning rows.
+		for name in not_null_targets:
+			try:
+				self._cleanup_nulls(schema, table, name)
+				self.client.alter_column_nullability(schema, table, name, nullable=False)
+				logger.info("Enforced NOT NULL on %s.%s.%s after cleanup", schema, table, name)
+				changed = True
+			except Exception:
+				logger.exception("Failed to enforce NOT NULL on %s.%s.%s", schema, table, name)
+
+		# Drop extra columns
+		extras = sorted(existing_colnames - config_cols)
+		for col in extras:
+			self.client.drop_column(schema, table, col, cascade=True, missing_ok=True)
+			logger.info("Dropped extra column %s.%s.%s", schema, table, col)
+			changed = True
+
+		# Constraints (PK/UNIQUE/FK)
+		expected_constraints = set()
+		pk_columns = [c["name"] for c in columns_cfg if c.get("primary_key", False)]
+		if pk_columns:
+			expected_constraints.add(f"{table}_pkey")
+
+		for c in columns_cfg:
+			if c.get("unique", False) and not c.get("primary_key", False):
+				expected_constraints.add(f"{table}_{c['name']}_key")
+			if c.get("foreign_key"):
+				expected_constraints.add(f"{table}_{c['name']}_fkey")
+			if c.get("enum"):
+				expected_constraints.add(f"{table}_{c['name']}_enum_check")
+
+		existing_constraints = self.client.list_constraints(schema, table)
+		for con in existing_constraints:
+			if con["constraint_type"] not in {"PRIMARY KEY", "UNIQUE", "FOREIGN KEY", "CHECK"}:
+				continue
+			con_name = con["constraint_name"]
+			if con_name.endswith("_not_null"):
+				continue
+			if con_name not in expected_constraints:
+				self.client.drop_constraint(schema, table, con_name, missing_ok=True)
+				logger.info("Dropped constraint %s on %s.%s", con_name, schema, table)
+				changed = True
+
+		# Ensure primary key
+		if pk_columns:
+			pk_name = f"{table}_pkey"
+			if not self.client.constraint_exists(schema, table, pk_name):
+				col_list = ", ".join(f'"{c}"' for c in pk_columns)
+				self.client.add_constraint(schema, table, f'CONSTRAINT "{pk_name}" PRIMARY KEY ({col_list})')
+				logger.info("Added PRIMARY KEY %s on %s.%s(%s)", pk_name, schema, table, ", ".join(pk_columns))
+				changed = True
+			else:
+				current_pk_cols = self.client.get_constraint_columns(schema, table, pk_name)
+				if set(current_pk_cols) != set(pk_columns):
+					self.client.drop_constraint(schema, table, pk_name, missing_ok=True)
+					col_list = ", ".join(f'"{c}"' for c in pk_columns)
+					self.client.add_constraint(schema, table, f'CONSTRAINT "{pk_name}" PRIMARY KEY ({col_list})')
+					logger.info("Rebuilt PRIMARY KEY %s on %s.%s(%s)", pk_name, schema, table, ", ".join(pk_columns))
+					changed = True
+
+		# Ensure unique and foreign key constraints
+		for c in columns_cfg:
+			if c.get("unique", False) and not c.get("primary_key", False):
+				con_name = f"{table}_{c['name']}_key"
+				if not self.client.constraint_exists(schema, table, con_name):
+					self.client.add_constraint(schema, table, f'CONSTRAINT "{con_name}" UNIQUE ("{c["name"]}")')
+					logger.info("Added UNIQUE constraint %s on %s.%s(%s)", con_name, schema, table, c["name"])
+					changed = True
+
+			fk = c.get("foreign_key")
+			if fk:
+				con_name = f"{table}_{c['name']}_fkey"
+				if not self.client.constraint_exists(schema, table, con_name):
+					on_delete = fk.get("on_delete")
+					on_update = fk.get("on_update")
+					frag = f'CONSTRAINT "{con_name}" FOREIGN KEY ("{c["name"]}") REFERENCES "{fk["table"]}" ("{fk["column"]}")'
+					if on_delete:
+						frag += f" ON DELETE {on_delete.upper()}"
+					if on_update:
+						frag += f" ON UPDATE {on_update.upper()}"
+					self.client.add_constraint(schema, table, frag)
+					logger.info("Added FK constraint %s on %s.%s(%s)", con_name, schema, table, c["name"])
+					changed = True
+			enum_vals = c.get("enum")
+			if enum_vals:
+				con_name = f"{table}_{c['name']}_enum_check"
+				if not self.client.constraint_exists(schema, table, con_name):
+					enum_sql = self._enum_values_sql(enum_vals)
+					self.client.add_constraint(schema, table, f'CONSTRAINT "{con_name}" CHECK ("{c["name"]}" IN ({enum_sql}))')
+					logger.info("Added CHECK constraint %s on %s.%s(%s)", con_name, schema, table, c["name"])
+					changed = True
+
+		# Indexes
+		if self._ensure_indexes(schema, table, indexes_cfg, columns_cfg):
+			changed = True
+
+		expected_indexes = set()
+		for c in columns_cfg:
+			if c.get("index", False):
+				expected_indexes.add(f"{table}_{c['name']}_idx")
+		for idx in indexes_cfg:
+			expected_indexes.add(idx["name"])
+
+		existing_indexes = {r["indexname"] for r in self.client.list_indexes(schema, table)}
+		constraint_indexes = set(self.client.list_constraint_indexes(schema, table))
+		for idx_name in sorted(existing_indexes - expected_indexes - constraint_indexes):
+			self.client.drop_index(schema, idx_name, missing_ok=True)
+			logger.info("Dropped index %s on %s.%s", idx_name, schema, table)
+			changed = True
+
+		return changed
+
+	def _default_sql(self, value) -> str:
+		if isinstance(value, bool):
+			return "TRUE" if value else "FALSE"
+		if value is None:
+			return "NULL"
+		return str(value)
+
+	def _normalize_default(self, value) -> str | None:
+		if value is None:
+			return None
+		s = str(value).strip()
+		if not s:
+			return None
+		# Strip PostgreSQL type casts like ::text
+		if "::" in s:
+			s = s.split("::", 1)[0]
+		return s.strip().lower()
+
+	def _cleanup_nulls(self, schema: str, table: str, column: str) -> None:
+		"""
+		Delete rows where the given column is NULL to satisfy NOT NULL constraints.
+		"""
+		try:
+			rows = self.client.execute_query(
+				f'SELECT COUNT(*) AS cnt FROM "{schema}"."{table}" WHERE "{column}" IS NULL;'
+			) or []
+			cnt = int(rows[0]["cnt"]) if rows else 0
+			if cnt <= 0:
+				return
+			self.client.execute_query(
+				f'DELETE FROM "{schema}"."{table}" WHERE "{column}" IS NULL;'
+			)
+			logger.warning("Deleted %s rows with NULL %s.%s.%s to satisfy NOT NULL.", cnt, schema, table, column)
+		except Exception:
+			logger.exception("Failed to cleanup NULLs for %s.%s.%s", schema, table, column)
+
+	def _enum_values_sql(self, values: list) -> str:
+		escaped = []
+		for v in values:
+			s = str(v)
+			escaped.append("'" + s.replace("'", "''") + "'")
+		return ", ".join(escaped)
+
+	def _expected_type_signature(self, c: dict) -> tuple:
+		t = str(c["type"]).lower()
+		if t in {"varchar", "character varying"}:
+			return ("varchar", int(c.get("length", 0)))
+		if t in {"char", "character"}:
+			return ("char", int(c.get("length", 0)))
+		if t in {"numeric", "decimal"}:
+			prec = c.get("precision")
+			scale = c.get("scale")
+			return ("numeric", int(prec) if prec is not None else None, int(scale) if scale is not None else None)
+		if t in {"int", "integer"}:
+			return ("integer",)
+		return (t,)
+
+	def _existing_type_signature(self, info: dict) -> tuple:
+		udt = (info.get("udt_name") or "").lower()
+		data_type = (info.get("data_type") or "").lower()
+
+		if udt in {"varchar", "bpchar"}:
+			base = "varchar" if udt == "varchar" else "char"
+			return (base, int(info.get("character_maximum_length") or 0))
+		if udt in {"numeric"}:
+			return ("numeric", info.get("numeric_precision"), info.get("numeric_scale"))
+		if udt in {"int4"}:
+			return ("integer",)
+		if udt in {"int8"}:
+			return ("bigint",)
+		if udt in {"bool"}:
+			return ("boolean",)
+		if udt in {"timestamptz"}:
+			return ("timestamptz",)
+		if udt in {"timestamp"}:
+			return ("timestamp",)
+		if udt:
+			return (udt,)
+		return (data_type or "",)
 
 	def _column_type_sql(self, c: dict) -> str:
 		"""

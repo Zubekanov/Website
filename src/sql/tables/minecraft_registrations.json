@@ -1,0 +1,103 @@
+{
+	"table_name": "minecraft_registrations",
+	"description": "Minecraft server whitelist requests.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "first_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "last_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false
+		},
+		{
+			"name": "email",
+			"type": "varchar",
+			"length": 255,
+			"nullable": false
+		},
+		{
+			"name": "mc_username",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "who_are_you",
+			"type": "varchar",
+			"length": 32,
+			"nullable": false
+		},
+		{
+			"name": "additional_info",
+			"type": "text",
+			"nullable": true
+		},
+		{
+			"name": "status",
+			"type": "varchar",
+			"length": 16,
+			"enum": ["pending", "denied", "approved"],
+			"default": "'pending'",
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "reviewed_at",
+			"type": "timestamptz",
+			"nullable": true
+		},
+		{
+			"name": "reviewed_by_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "minecraft_reg_email_idx",
+			"columns": ["email"],
+			"unique": false
+		},
+		{
+			"name": "minecraft_reg_status_idx",
+			"columns": ["status"],
+			"unique": false
+		}
+	]
+}

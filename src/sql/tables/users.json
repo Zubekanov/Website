@@ -108,7 +108,14 @@
 				"name": "password_hash",
 				"type": "varchar",
 				"length": 255,
-				"nullable": false
+				"nullable": true
+			},
+			{
+				"name": "is_anonymous",
+				"type": "boolean",
+				"default": false,
+				"nullable": false,
+				"index": true
 			},
 			{
 				"name": "is_active",

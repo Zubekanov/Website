@@ -1,0 +1,86 @@
+{
+	"table_name": "discord_webhook_verifications",
+	"description": "Pending webhook verification codes.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "webhook_url",
+			"type": "text",
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "event_key",
+			"type": "varchar",
+			"length": 120,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "name",
+			"type": "varchar",
+			"length": 80,
+			"nullable": false
+		},
+		{
+			"name": "code_hash",
+			"type": "varchar",
+			"length": 128,
+			"nullable": false
+		},
+		{
+			"name": "expires_at",
+			"type": "timestamptz",
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "requested_by_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "contact_name",
+			"type": "varchar",
+			"length": 120,
+			"nullable": true
+		},
+		{
+			"name": "contact_email",
+			"type": "varchar",
+			"length": 255,
+			"nullable": true,
+			"index": true
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "discord_webhook_verify_url_idx",
+			"columns": ["webhook_url"],
+			"unique": false
+		},
+		{
+			"name": "discord_webhook_verify_expires_idx",
+			"columns": ["expires_at"],
+			"unique": false
+		}
+	]
+}
