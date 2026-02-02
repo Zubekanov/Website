@@ -60,7 +60,9 @@ def _timing_end(resp):
 
 @main.route("/")
 def landing_page():
-    return build_test_page(g.user)
+	if g.user:
+		return flask.redirect("/profile")
+	return build_readme_page(g.user)
 
 @main.route("/server-metrics")
 def server_metrics_page():
@@ -124,6 +126,50 @@ def verify_email_token_page(token):
 def audiobookshelf_registration_page():
 	return build_audiobookshelf_registration_page(g.user)
 
+@main.route("/discord-webhook-registration", methods=["GET"])
+def discord_webhook_registration_page():
+	return build_discord_webhook_registration_page(g.user)
+
+@main.route("/discord-webhook/verify", methods=["GET"])
+def discord_webhook_verify_page():
+	return build_discord_webhook_verify_page(g.user)
+
+@main.route("/discord-webhook/verified", methods=["GET"])
+def discord_webhook_verified_page():
+	return build_discord_webhook_verified_page(g.user)
+
+@main.route("/token", methods=["GET"])
+def discord_webhook_token_page():
+	return build_discord_webhook_verify_page(g.user)
+
+@main.route("/minecraft")
+def minecraft_page():
+	return build_minecraft_page(g.user)
+
+@main.route("/psql-interface")
+def psql_interface_page():
+	return build_psql_interface_page(g.user)
+
+@main.route("/admin")
+def admin_dashboard_page():
+	return build_admin_dashboard_page(g.user)
+
+@main.route("/admin/audiobookshelf-approvals")
+def admin_audiobookshelf_approvals_page():
+	return build_admin_audiobookshelf_approvals_page(g.user)
+
+@main.route("/admin/discord-webhook-approvals")
+def admin_discord_webhook_approvals_page():
+	return build_admin_discord_webhook_approvals_page(g.user)
+
+@main.route("/admin/minecraft-approvals")
+def admin_minecraft_approvals_page():
+	return build_admin_minecraft_approvals_page(g.user)
+
+@main.route("/admin/email-debug")
+def admin_email_debug_page():
+	return build_admin_email_debug_page(g.user)
+
 @main.app_errorhandler(Exception)
 def handle_all_errors(e):
 	user = _ensure_user_loaded_for_error()
@@ -131,7 +177,3 @@ def handle_all_errors(e):
 	# HTTP errors
 	if isinstance(e, HTTPException):
 		return build_error_page(user, e), e.code
-
-	# Non-HTTP exceptions
-	logger.exception("Unhandled exception: %s", e)
-	return build_error_page(user, e) , 500

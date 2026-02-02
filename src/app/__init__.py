@@ -8,6 +8,7 @@ from .routes import main
 from .resources import resources
 
 from sql.psql_interface import PSQLInterface
+from util.integrations.discord.webhook_interface import ensure_event_keys
 
 _prefix_re = re.compile(r'^(?P<prefix>.+?\])\s+"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d\.\d"\s+(?P<status>\d{3})\b')
 psql = PSQLInterface()
@@ -33,7 +34,6 @@ class DevLiveRewriteHandler(logging.Handler):
 
 		m = _prefix_re.match(msg)
 		if not m:
-			# Not an access log line
 			self._newline_if_active()
 			self.stream.write(msg + "\n")
 			self.stream.flush()
@@ -70,7 +70,6 @@ def setup_logging(dev_enabled: bool):
 	root = logging.getLogger()
 	root.setLevel(logging.INFO)
 
-	# prevent double-wiring (reloader)
 	if getattr(root, "_live_rewrite_configured", False):
 		return
 	root._live_rewrite_configured = True
@@ -87,5 +86,6 @@ def create_app():
 	setup_logging(dev_enabled=True)
 
 	psql.verify_tables(safe_mode=False)
+	ensure_event_keys(psql)
 
 	return app

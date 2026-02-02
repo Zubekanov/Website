@@ -1,0 +1,12 @@
+[
+	{
+		"event_key": "moderator.notifications",
+		"permission": "admins",
+		"description": "Moderator and admin notifications."
+	},
+	{
+		"event_key": "debug.test",
+		"permission": "admins",
+		"description": "Empty subscription key for testing allocation."
+	}
+]

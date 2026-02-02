@@ -1,7 +1,28 @@
 import logging
+import os
+
 from sql.psql_interface import PSQLInterface
+from util.integrations.email.email_interface import render_template, send_email
+from util.fcr.file_config_reader import FileConfigReader
 
 interface = PSQLInterface()
+fcr = FileConfigReader()
+
+
+def _get_base_url() -> str:
+	env_url = (os.environ.get("WEBSITE_BASE_URL") or os.environ.get("PUBLIC_BASE_URL") or "").strip()
+	if env_url:
+		return env_url
+	try:
+		conf = fcr.find("secrets.conf")
+		if isinstance(conf, dict):
+			for key in ("WEBSITE_BASE_URL", "PUBLIC_BASE_URL", "BASE_URL"):
+				val = (conf.get(key) or "").strip()
+				if val:
+					return val
+	except Exception:
+		pass
+	return "http://localhost:5000"
 
 class UserManagement:
     @staticmethod
@@ -49,8 +70,26 @@ class UserManagement:
             return status, message
         
         # In this branch, message is the verification token
-        # TODO: Email the verification token to the user
-        print(f"Verification token for {email}: {message}")
+        token = message
+        base_url = _get_base_url().rstrip("/")
+        verify_url = f"{base_url}/verify-email/{token}"
+
+        body_html = render_template("verify_email.html", {"verify_url": verify_url})
+        body_text = (
+            "Thanks for creating an account.\n\n"
+            f"Verify your email: {verify_url}\n\n"
+            "If you did not create this account, you can ignore this email.\n"
+        )
+
+        result = send_email(
+            to_addrs=[email],
+            subject="Verify your email",
+            body_text=body_text,
+            body_html=body_html,
+        )
+        if not result.ok:
+            logging.warning("Failed to send verification email to %s: %s", email, result.error)
+            return False, "We could not send a verification email. Please try again later."
         
         return True, "You will be redirected to the email verification page shortly."
     
