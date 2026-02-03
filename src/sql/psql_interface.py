@@ -86,7 +86,7 @@ class PSQLInterface:
 		token_hash = self._hash_verification_token(raw_token)
 
 		# Expiry (UTC)
-		expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+		expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
 
 		row = {
 			"email": email,

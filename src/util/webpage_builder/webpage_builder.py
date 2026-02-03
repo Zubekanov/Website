@@ -27,12 +27,13 @@ class PageBuilder:
 		self,
 		*,
 		page_config: str = "default",
-		navbar_config: str = "navbar_landing.json",
+		navbar_config: str = "auto",
 		user: dict | None = None,
 	):
 		self._b = parent_builder.WebPageBuilder()
 		self._b.load_page_config(page_config)
-		self._b._build_nav_html(navbar_config, user=user)
+		resolved_nav = resolve_navbar_config(user, navbar_config)
+		self._b._build_nav_html(resolved_nav, user=user)
 
 	def add_banner(
 		self,
@@ -107,22 +108,32 @@ def step_wrap(open_html: str, close_html: str, *, contents: tuple[Step, ...]) ->
 @dataclass(frozen=True)
 class PageSpec:
 	page_config: str = "default"
-	navbar_config: str = "navbar_landing.json"
+	navbar_config: str = "auto"
 	steps: tuple[Step, ...] = ()
 
 
 def build_page(user: dict | None, spec: PageSpec) -> str:
-	navbar_config = spec.navbar_config
-	if user and navbar_config == "navbar_landing.json":
-		try:
-			if interface.is_admin(user.get("id")):
-				navbar_config = "navbar_landing_admin.json"
-		except Exception:
-			navbar_config = spec.navbar_config
-	builder = PageBuilder(page_config=spec.page_config, navbar_config=navbar_config, user=user)
+	builder = PageBuilder(page_config=spec.page_config, navbar_config=spec.navbar_config, user=user)
 	for step in spec.steps:
 		step(builder)
 	return builder.render()
+
+
+def _is_admin_user(user: dict | None) -> bool:
+	if not user:
+		return False
+	try:
+		return bool(interface.is_admin(user.get("id")))
+	except Exception:
+		return False
+
+
+def resolve_navbar_config(user: dict | None, navbar_config: str | None) -> str:
+	if not navbar_config or navbar_config == "auto":
+		return "navbar_landing_admin.json" if _is_admin_user(user) else "navbar_landing.json"
+	if navbar_config == "navbar_landing.json":
+		return "navbar_landing_admin.json" if _is_admin_user(user) else navbar_config
+	return navbar_config
 
 def step_hardware_banner(builder: PageBuilder):
 	builder.add_banner(HARDWARE_BANNER_LINES, banner_type="ticker", interval=4000)
@@ -607,11 +618,7 @@ def build_readme_page(user: dict | None) -> str:
 
 def build_profile_page(user: dict | None) -> str:
 	user_name = f"{user['first_name']} {user['last_name']}"
-	navbar_config = "navbar_landing.json"
-	is_admin = False
-	if interface.is_admin(user.get("id")):
-		navbar_config = "navbar_landing_admin.json"
-		is_admin = True
+	is_admin = _is_admin_user(user)
 	admin_since = None
 	if is_admin:
 		try:
@@ -625,7 +632,7 @@ def build_profile_page(user: dict | None) -> str:
 				admin_since = rows[0].get("created_at")
 		except Exception:
 			admin_since = None
-	builder = PageBuilder(navbar_config=navbar_config, user=user)
+	builder = PageBuilder(user=user)
 	builder._b.stylesheets.add("/static/css/profile.css")
 	builder._b.scripts.add("/static/js/copy_tooltip.js")
 	builder._b.scripts.add("/static/js/profile_integrations.js")
@@ -1415,16 +1422,14 @@ def build_psql_interface_page(user: dict | None) -> str:
 			),
 		))
 
-	navbar_config = "navbar_landing.json"
-	if interface.is_admin(user.get("id")):
-		navbar_config = "navbar_landing_admin.json"
-	builder = PageBuilder(navbar_config=navbar_config, user=user)
+	builder = PageBuilder(user=user)
 	builder._b.scripts.add("/static/js/form_submit.js")
 	builder._b.scripts.add("/static/js/db_interface_resize.js")
 	builder._b.scripts.add("/static/js/db_interface_actions.js")
 	builder._b.scripts.add("/static/js/db_interface_userid.js")
 	builder._b.stylesheets.add("/static/css/forms.css")
 	builder._b.stylesheets.add("/static/css/db_interface.css")
+	builder._b.set_page_title("Database Admin")
 	builder.add_html(html_fragments.db_admin_open())
 	builder.add_html(html_fragments.heading("Database Admin", 1))
 	builder.add_html(html_fragments.db_admin_message())
@@ -1628,7 +1633,7 @@ def build_admin_email_debug_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(navbar_config="navbar_landing_admin.json", user=user)
+	builder = PageBuilder(user=user)
 	builder._b.scripts.add("/static/js/form_submit.js")
 	builder._b.stylesheets.add("/static/css/forms.css")
 	builder._b.stylesheets.add("/static/css/centering.css")
@@ -1660,7 +1665,7 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(navbar_config="navbar_landing_admin.json", user=user)
+	builder = PageBuilder(user=user)
 	builder._b.stylesheets.add("/static/css/admin_dashboard.css")
 	builder._b.set_page_title("Admin Dashboard")
 
@@ -1713,6 +1718,12 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Review Minecraft whitelist requests.",
 		)
 		+ html_fragments.admin_card(
+			"/admin/users",
+			html_fragments.admin_card_meta("Accounts"),
+			"User Management",
+			"View users, roles, and integrations.",
+		)
+		+ html_fragments.admin_card(
 			"/admin/email-debug",
 			html_fragments.admin_card_meta("Tools"),
 			"Debug Email",
@@ -1720,6 +1731,362 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 		)
 	)
 	builder.add_html(html_fragments.admin_dashboard(cards_html))
+	return builder.render()
+
+
+def build_admin_users_page(user: dict | None) -> str:
+	if not user:
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("User Management"),
+				step_error_header(401, "Login required."),
+				add_return_home,
+			),
+		))
+
+	if not interface.is_admin(user.get("id")):
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("User Management"),
+				step_error_header(403, "Admin access required."),
+				add_return_home,
+			),
+		))
+
+	builder = PageBuilder(user=user)
+	builder._b.stylesheets.add("/static/css/profile.css")
+	builder._b.stylesheets.add("/static/css/admin_users.css")
+	builder._b.scripts.add("/static/js/admin_users.js")
+	builder._b.scripts.add("/static/js/copy_tooltip.js")
+	builder._b.set_page_title("User Management")
+
+	user_rows = interface.client.execute_query(
+		"SELECT id, first_name, last_name, email, created_at, is_active, is_anonymous "
+		"FROM users u "
+		"WHERE COALESCE(u.is_active, TRUE) = TRUE "
+		"AND ("
+		"COALESCE(u.is_anonymous, FALSE) = FALSE "
+		"OR EXISTS (SELECT 1 FROM discord_webhooks w WHERE w.user_id = u.id AND COALESCE(w.is_active, TRUE) = TRUE) "
+		"OR EXISTS (SELECT 1 FROM minecraft_whitelist m WHERE m.user_id = u.id AND COALESCE(m.is_active, TRUE) = TRUE) "
+		"OR EXISTS (SELECT 1 FROM audiobookshelf_registrations a WHERE a.user_id = u.id "
+		"AND a.status = 'approved' AND COALESCE(a.is_active, TRUE) = TRUE)"
+		") "
+		"ORDER BY created_at DESC LIMIT 200;"
+	) or []
+	cards_html = []
+
+	for row in user_rows:
+		user_id = str(row.get("id") or "")
+		first = row.get("first_name") or ""
+		last = row.get("last_name") or ""
+		email = row.get("email") or ""
+		created = row.get("created_at")
+		created_str = ""
+		if created:
+			try:
+				created_str = created.strftime("%d %B %Y")
+			except Exception:
+				created_str = str(created)
+		is_anonymous = bool(row.get("is_anonymous"))
+		is_active = bool(row.get("is_active", True))
+		role_label = "ANONYMOUS" if is_anonymous else ("ADMIN" if interface.is_admin(user_id) else "MEMBER")
+		status_label = "Active" if is_active else "Inactive"
+		meta_html = (
+			html_fragments.admin_user_meta_row("Joined", created_str or "Unknown")
+			+ html_fragments.admin_user_meta_row("Status", status_label)
+			+ html_fragments.admin_user_meta_row("User ID", user_id)
+		)
+		badge_html = html_fragments.admin_user_badge(role_label)
+		actions = []
+		if not is_anonymous:
+			if role_label == "ADMIN":
+				actions.append(html_fragments.admin_user_action_button("demote", user_id, "Demote to member", True))
+			else:
+				actions.append(html_fragments.admin_user_action_button("promote", user_id, "Promote to admin"))
+			actions.append(html_fragments.admin_user_action_button("delete", user_id, "Delete user", True))
+		actions_html = html_fragments.admin_user_actions("".join(actions))
+
+		integration_cards: list[tuple[int, str]] = []
+		try:
+			webhooks, _ = interface.client.get_rows_with_filters(
+				"discord_webhooks",
+				equalities={"user_id": user_id},
+				page_limit=50,
+				page_num=0,
+			)
+			for wh in webhooks or []:
+				subscriptions_html = ""
+				try:
+					sub_rows = interface.client.execute_query(
+						"SELECT s.id, s.event_key, s.is_active, s.created_at, "
+						"ek.permission, ek.description "
+						"FROM discord_webhook_subscriptions s "
+						"LEFT JOIN discord_event_keys ek ON ek.event_key = s.event_key "
+						"WHERE s.webhook_id = %s "
+						"ORDER BY "
+						"CASE COALESCE(ek.permission, '') "
+						"WHEN 'admins' THEN 1 "
+						"WHEN 'users' THEN 2 "
+						"WHEN 'all' THEN 3 "
+						"ELSE 4 END, "
+						"s.created_at DESC;",
+						(wh.get("id"),),
+					) or []
+					if sub_rows:
+						sub_cards = []
+						for sub in sub_rows:
+							perm = (sub.get("permission") or "unknown").upper()
+							desc = sub.get("description") or ""
+							created_at = sub.get("created_at")
+							date_str = ""
+							if created_at:
+								try:
+									date_str = created_at.strftime("%d %B %Y")
+								except Exception:
+									date_str = str(created_at)
+							is_sub_active = bool(sub.get("is_active", True))
+							status_label = "Active" if is_sub_active else "Inactive"
+							sub_cards.append(
+								html_fragments.subscription_card(
+									sub.get("event_key") or "",
+									perm,
+									desc,
+									date_str,
+									status_label,
+									is_sub_active,
+									"",
+									"",
+								)
+							)
+						subscriptions_html = html_fragments.integration_subscriptions(
+							"Subscriptions",
+							"".join(sub_cards),
+						)
+					else:
+						subscriptions_html = html_fragments.integration_subscriptions_empty("Subscriptions")
+				except Exception:
+					subscriptions_html = ""
+
+				status = "Active" if wh.get("is_active", True) else "Suspended"
+				delete_button = ""
+				badge = html_fragments.integration_badge(status)
+				if status == "Active":
+					delete_button = html_fragments.integration_delete_action(
+						"discord_webhook",
+						str(wh.get("id")),
+						"Discord Webhook",
+						True,
+						user_id=user_id,
+						submit_route="/api/admin/users/integration/disable",
+						active_label="Active",
+					)
+				else:
+					delete_button = (
+						html_fragments.integration_enable_action(
+							"discord_webhook",
+							str(wh.get("id")),
+							"Discord Webhook",
+							"Active",
+							user_id=user_id,
+							submit_route="/api/admin/users/integration/enable",
+						)
+						+ html_fragments.integration_delete_action(
+							"discord_webhook",
+							str(wh.get("id")),
+							"Discord Webhook",
+							False,
+							user_id=user_id,
+							submit_route="/api/admin/users/integration/disable",
+							hidden=True,
+						)
+					)
+				integration_cards.append((
+					0 if status == "Active" else 1,
+					html_fragments.integration_card(
+						"discord_webhook",
+						str(wh.get("id")),
+						"Discord Webhook",
+						html.escape(wh.get("name") or "Webhook"),
+						html_fragments.secret_field(wh.get("webhook_url") or "", label="Webhook URL"),
+						badge + delete_button,
+						subscriptions_html,
+					)
+				))
+		except Exception:
+			pass
+
+		try:
+			whitelist_rows, _ = interface.client.get_rows_with_filters(
+				"minecraft_whitelist",
+				equalities={"user_id": user_id},
+				page_limit=5,
+				page_num=0,
+			)
+			for wl in whitelist_rows or []:
+				joined = ""
+				if wl.get("whitelisted_at"):
+					try:
+						joined = wl["whitelisted_at"].strftime("%d %B %Y")
+					except Exception:
+						joined = str(wl["whitelisted_at"])
+				status = "Whitelisted" if wl.get("is_active", True) else "Suspended"
+				delete_button = ""
+				badge = html_fragments.integration_badge(status)
+				if status == "Whitelisted":
+					delete_button = html_fragments.integration_delete_action(
+						"minecraft",
+						str(wl.get("id")),
+						"Minecraft",
+						True,
+						user_id=user_id,
+						submit_route="/api/admin/users/integration/disable",
+						active_label="Whitelisted",
+					)
+				else:
+					delete_button = (
+						html_fragments.integration_enable_action(
+							"minecraft",
+							str(wl.get("id")),
+							"Minecraft",
+							"Whitelisted",
+							user_id=user_id,
+							submit_route="/api/admin/users/integration/enable",
+						)
+						+ html_fragments.integration_delete_action(
+							"minecraft",
+							str(wl.get("id")),
+							"Minecraft",
+							False,
+							user_id=user_id,
+							submit_route="/api/admin/users/integration/disable",
+							hidden=True,
+						)
+					)
+				integration_cards.append((
+					0 if status == "Whitelisted" else 1,
+					html_fragments.integration_card(
+						"minecraft",
+						str(wl.get("id")),
+						"Minecraft",
+						f"Username: {html.escape(wl.get('mc_username') or '')}",
+						f"Whitelisted {html.escape(joined) if joined else ''}",
+						badge + delete_button,
+					)
+				))
+		except Exception:
+			pass
+
+		try:
+			abs_rows, _ = interface.client.get_rows_with_filters(
+				"audiobookshelf_registrations",
+				equalities={"user_id": user_id, "status": "approved"},
+				page_limit=1,
+				page_num=0,
+			)
+			if abs_rows:
+				abs_row = abs_rows[0]
+				approved_at = ""
+				if abs_row.get("reviewed_at"):
+					try:
+						approved_at = abs_row["reviewed_at"].strftime("%d %B %Y")
+					except Exception:
+						approved_at = str(abs_row["reviewed_at"])
+				status = "Approved" if abs_row.get("is_active", True) else "Suspended"
+				delete_button = ""
+				badge = html_fragments.integration_badge(status)
+				if status == "Approved":
+					delete_button = html_fragments.integration_delete_action(
+						"audiobookshelf",
+						str(abs_row.get("id")),
+						"Audiobookshelf",
+						True,
+						user_id=user_id,
+						submit_route="/api/admin/users/integration/disable",
+						active_label="Approved",
+					)
+				else:
+					delete_button = (
+						html_fragments.integration_enable_action(
+							"audiobookshelf",
+							str(abs_row.get("id")),
+							"Audiobookshelf",
+							"Approved",
+							user_id=user_id,
+							submit_route="/api/admin/users/integration/enable",
+						)
+						+ html_fragments.integration_delete_action(
+							"audiobookshelf",
+							str(abs_row.get("id")),
+							"Audiobookshelf",
+							False,
+							user_id=user_id,
+							submit_route="/api/admin/users/integration/disable",
+							hidden=True,
+						)
+					)
+				integration_cards.append((
+					0 if status == "Approved" else 1,
+					html_fragments.integration_card(
+						"audiobookshelf",
+						str(abs_row.get("id")),
+						"Audiobookshelf",
+						html.escape(abs_row.get("email") or email),
+						f"Approved {html.escape(approved_at) if approved_at else ''}",
+						badge + delete_button,
+					)
+				))
+		except Exception:
+			pass
+
+		if not integration_cards:
+			display_name = (first + " " + last).strip() or "This user"
+			integration_cards.append((
+				0,
+				html_fragments.integration_card_empty(
+					f"{display_name} has not connected any services yet."
+				),
+			))
+		integration_cards.sort(key=lambda item: item[0])
+		integrations_html = html_fragments.admin_user_integrations(
+			"".join(card for _, card in integration_cards)
+		)
+
+		cards_html.append(
+			html_fragments.admin_user_card(
+				user_id=user_id,
+				name=(first + " " + last).strip() or "Unknown",
+				email=email or "Unknown",
+				meta_html=meta_html,
+				badge_html=badge_html,
+				actions_html=actions_html,
+				integrations_html=integrations_html,
+			)
+		)
+
+	builder.add_html(html_fragments.admin_users_shell("".join(cards_html)))
+	builder.add_html(html_fragments.integration_delete_modal(
+		html_fragments.integration_delete_reason_select(
+			[
+				("", "Select a reason"),
+				("admin", "Admin action"),
+				("policy", "Policy violation"),
+				("security", "Security concern"),
+				("other", "Other"),
+			]
+		)
+	))
+	builder.add_html(html_fragments.admin_user_delete_modal(
+		html_fragments.admin_user_delete_reason_select(
+			[
+				("", "Select a reason"),
+				("requested", "User requested removal"),
+				("policy", "Policy violation"),
+				("security", "Security concern"),
+				("duplicate", "Duplicate account"),
+				("other", "Other"),
+			]
+		)
+	))
 	return builder.render()
 
 def _get_user_status_label(user_id: str | None, user_cache: dict[str, dict]) -> tuple[str, dict]:
@@ -1761,12 +2128,12 @@ def build_admin_audiobookshelf_approvals_page(user: dict | None) -> str:
 			),
 		))
 
-	navbar_config = "navbar_landing_admin.json"
-	builder = PageBuilder(navbar_config=navbar_config, user=user)
+	builder = PageBuilder(user=user)
 	builder._b.scripts.add("/static/js/form_submit.js")
 	builder._b.scripts.add("/static/js/admin_approvals.js")
 	builder._b.stylesheets.add("/static/css/forms.css")
 	builder._b.stylesheets.add("/static/css/centering.css")
+	builder._b.set_page_title("Audiobookshelf Approvals")
 	builder.add_html(html_fragments.heading("Audiobookshelf Approvals", 1))
 
 	rows, _ = interface.client.get_rows_with_filters(
@@ -1829,12 +2196,12 @@ def build_admin_discord_webhook_approvals_page(user: dict | None) -> str:
 			),
 		))
 
-	navbar_config = "navbar_landing_admin.json"
-	builder = PageBuilder(navbar_config=navbar_config, user=user)
+	builder = PageBuilder(user=user)
 	builder._b.scripts.add("/static/js/form_submit.js")
 	builder._b.scripts.add("/static/js/admin_approvals.js")
 	builder._b.stylesheets.add("/static/css/forms.css")
 	builder._b.stylesheets.add("/static/css/centering.css")
+	builder._b.set_page_title("Discord Webhook Approvals")
 	builder.add_html(html_fragments.heading("Discord Webhook Approvals", 1))
 
 	rows, _ = interface.client.get_rows_with_filters(
@@ -1919,10 +2286,11 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(navbar_config="navbar_landing_admin.json", user=user)
+	builder = PageBuilder(user=user)
 	builder._b.scripts.add("/static/js/admin_approvals.js")
 	builder._b.stylesheets.add("/static/css/forms.css")
 	builder._b.stylesheets.add("/static/css/centering.css")
+	builder._b.set_page_title("Minecraft Approvals")
 	builder.add_html(html_fragments.heading("Minecraft Approvals", 1))
 
 	rows, _ = interface.client.get_rows_with_filters(
@@ -1970,6 +2338,48 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 			)
 		)
 
+	return builder.render()
+
+
+def build_integration_remove_page(user: dict | None, token: str) -> str:
+	builder = PageBuilder(user=user)
+	builder._b.stylesheets.add("/static/css/forms.css")
+	builder._b.stylesheets.add("/static/css/centering.css")
+	builder._b.scripts.add("/static/js/form_submit.js")
+	builder._b.set_page_title("Remove Integration")
+
+	form_html = (
+		"<form class=\"form\" id=\"integration-remove-form\">"
+		f"<input type=\"hidden\" name=\"token\" value=\"{html.escape(token or '')}\">"
+		"<div class=\"form-group\">"
+		"<p>This integration was created without a linked account. Confirm removal below.</p>"
+		"</div>"
+		"<button type=\"submit\" class=\"form-submit danger\" "
+		"data-submit-route=\"/api/integration/remove\" data-submit-method=\"POST\" "
+		"data-submit-fields=\"token\" data-success-redirect=\"/integration/removed\">"
+		"Remove integration</button>"
+		"</form>"
+	)
+
+	builder.add_html(
+		html_fragments.center_column(
+			html_fragments.heading("Remove Integration", 2) + form_html
+		)
+	)
+	return builder.render()
+
+
+def build_integration_removed_page(user: dict | None) -> str:
+	builder = PageBuilder(user=user)
+	builder._b.stylesheets.add("/static/css/centering.css")
+	builder._b.set_page_title("Integration Removed")
+	builder.add_html(
+		html_fragments.center_column(
+			html_fragments.heading("Integration Removed", 2)
+			+ html_fragments.paragraph("Your integration has been removed successfully.")
+			+ html_fragments.return_home()
+		)
+	)
 	return builder.render()
 
 def build_error_page(user: dict | None, e) -> str:

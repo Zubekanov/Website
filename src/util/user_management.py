@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timezone
 
 from sql.psql_interface import PSQLInterface
 from util.integrations.email.email_interface import render_template, send_email
@@ -73,11 +74,44 @@ class UserManagement:
         token = message
         base_url = _get_base_url().rstrip("/")
         verify_url = f"{base_url}/verify-email/{token}"
+        expiry_text = "This link may be invalid due to a server error."
+        try:
+            token_hash = interface._hash_verification_token(token)
+            rows, _ = interface.client.get_rows_with_filters(
+                "pending_users",
+                equalities={"verification_token_hash": token_hash},
+                page_limit=1,
+                page_num=0,
+            )
+            if rows:
+                expires_at = rows[0].get("token_expires_at")
+                if expires_at:
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    remaining = max(0, int((expires_at - now).total_seconds()))
+                    if remaining <= 0:
+                        expiry_text = "This link has expired."
+                    elif remaining < 3600:
+                        minutes = (remaining + 59) // 60
+                        unit = "minute" if minutes == 1 else "minutes"
+                        expiry_text = f"This link will expire in {minutes} {unit}."
+                    else:
+                        hours = (remaining + 3599) // 3600
+                        unit = "hour" if hours == 1 else "hours"
+                        expiry_text = f"This link will expire in {hours} {unit}."
+        except Exception:
+            pass
 
-        body_html = render_template("verify_email.html", {"verify_url": verify_url})
+        body_html = render_template("verify_email.html", {
+            "verify_url": verify_url,
+            "expiry_text": expiry_text,
+        })
         body_text = (
-            "Thanks for creating an account.\n\n"
-            f"Verify your email: {verify_url}\n\n"
+            "Someone has created an account with this email address. If this was you, "
+            "click the button below to verify your email address.\n\n"
+            f"Verification button: {verify_url}\n\n"
+            f"{expiry_text}\n\n"
             "If you did not create this account, you can ignore this email.\n"
         )
 

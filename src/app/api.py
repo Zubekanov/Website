@@ -1,6 +1,9 @@
 import logging
 import os
 import flask
+import html
+import base64
+import json
 from util.webpage_builder.metrics_builder import *
 from util.webpage_builder.metrics_builder import get_metrics_bucketed
 from util.integrations.discord.webhook_interface import DiscordWebhookEmitter
@@ -446,6 +449,15 @@ def api_profile_integration_delete():
 				"integration_type": "discord_webhook",
 				"integration_key": None,
 			})
+			_send_notification_email(
+				to_email=user.get("email"),
+				subject="Discord webhook disabled",
+				title="Discord webhook disabled",
+				intro="Your Discord webhook integration has been disabled.",
+				details=[
+					f"Reason: {reason}",
+				],
+			)
 			_notify_moderators(
 				"integration_disabled",
 				title="Integration disabled by user",
@@ -497,6 +509,16 @@ def api_profile_integration_delete():
 				"integration_type": "minecraft",
 				"integration_key": mc_username,
 			})
+			_send_notification_email(
+				to_email=user.get("email"),
+				subject="Minecraft integration disabled",
+				title="Minecraft integration disabled",
+				intro="Your Minecraft whitelist integration has been disabled.",
+				details=[
+					f"Username: {mc_username}" if mc_username else "",
+					f"Reason: {reason}",
+				],
+			)
 			_notify_moderators(
 				"integration_disabled",
 				title="Integration disabled by user",
@@ -538,6 +560,15 @@ def api_profile_integration_delete():
 				"integration_type": "audiobookshelf",
 				"integration_key": None,
 			})
+			_send_notification_email(
+				to_email=user.get("email"),
+				subject="Audiobookshelf integration disabled",
+				title="Audiobookshelf integration disabled",
+				intro="Your Audiobookshelf integration has been disabled.",
+				details=[
+					f"Reason: {reason}",
+				],
+			)
 			_notify_moderators(
 				"integration_disabled",
 				title="Integration disabled by user",
@@ -897,6 +928,475 @@ def _require_admin():
 	return user, None
 
 
+@api.route("/api/admin/users/promote", methods=["POST"])
+def api_admin_users_promote():
+	user, err = _require_admin()
+	if err:
+		return err
+	data = flask.request.json or {}
+	user_id = (data.get("user_id") or "").strip()
+	if not user_id:
+		return flask.jsonify({"ok": False, "message": "Missing user id."}), 400
+	rows, _ = interface.client.get_rows_with_filters(
+		"users",
+		equalities={"id": user_id},
+		page_limit=1,
+		page_num=0,
+	)
+	if not rows:
+		return flask.jsonify({"ok": False, "message": "User not found."}), 404
+	ok, message = interface.promote_user_to_admin(user_id)
+	if not ok:
+		return flask.jsonify({"ok": False, "message": message}), 400
+	target_email = _get_user_email(user_id)
+	_send_notification_email(
+		to_email=target_email,
+		subject="Role updated: Admin access granted",
+		title="Admin access granted",
+		intro="Your account has been granted admin access.",
+	)
+	_notify_moderators(
+		"role_granted",
+		title="Admin role granted",
+		actor=user.get("email") or user.get("id"),
+		subject=user_id,
+		details=[
+			f"User ID: {user_id}",
+		],
+		context={
+			"action": "role_granted",
+			"role": "admin",
+			"user_id": user_id,
+			"reviewer_user_id": user.get("id"),
+		},
+	)
+	return flask.jsonify({"ok": True, "message": message})
+
+
+@api.route("/api/admin/users/demote", methods=["POST"])
+def api_admin_users_demote():
+	user, err = _require_admin()
+	if err:
+		return err
+	data = flask.request.json or {}
+	user_id = (data.get("user_id") or "").strip()
+	if not user_id:
+		return flask.jsonify({"ok": False, "message": "Missing user id."}), 400
+	rows, _ = interface.client.get_rows_with_filters(
+		"users",
+		equalities={"id": user_id},
+		page_limit=1,
+		page_num=0,
+	)
+	if not rows:
+		return flask.jsonify({"ok": False, "message": "User not found."}), 404
+	ok, message = interface.demote_user_from_admin(user_id)
+	if not ok:
+		return flask.jsonify({"ok": False, "message": message}), 400
+	target_email = _get_user_email(user_id)
+	_send_notification_email(
+		to_email=target_email,
+		subject="Role updated: Admin access revoked",
+		title="Admin access revoked",
+		intro="Your account has been reverted to a standard member role.",
+	)
+	_notify_moderators(
+		"role_revoked",
+		title="Admin role revoked",
+		actor=user.get("email") or user.get("id"),
+		subject=user_id,
+		details=[
+			f"User ID: {user_id}",
+		],
+		context={
+			"action": "role_revoked",
+			"role": "admin",
+			"user_id": user_id,
+			"reviewer_user_id": user.get("id"),
+		},
+	)
+	return flask.jsonify({"ok": True, "message": message})
+
+
+@api.route("/api/admin/users/integration/disable", methods=["POST"])
+def api_admin_users_integration_disable():
+	admin_user, err = _require_admin()
+	if err:
+		return err
+	data = flask.request.json or {}
+	integration_type = (data.get("integration_type") or "").strip().lower()
+	integration_id = (data.get("integration_id") or "").strip()
+	target_user_id = (data.get("user_id") or "").strip()
+	reason = (data.get("reason") or "").strip()
+	confirmed = bool(data.get("confirm"))
+	if not integration_type or not integration_id or not target_user_id:
+		return flask.jsonify({"ok": False, "message": "Missing integration details."}), 400
+	if not confirmed:
+		return flask.jsonify({"ok": False, "message": "Please confirm deletion."}), 400
+	if not reason:
+		return flask.jsonify({"ok": False, "message": "Please select a reason."}), 400
+
+	try:
+		if integration_type == "discord_webhook":
+			rows = interface.client.execute_query(
+				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, target_user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
+			interface.client.update_rows_with_filters(
+				"discord_webhooks",
+				{"is_active": False},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			target_email = _get_user_email(target_user_id)
+			_send_notification_email(
+				to_email=target_email,
+				subject="Discord webhook disabled by admin",
+				title="Discord webhook disabled",
+				intro="An administrator has disabled your Discord webhook integration.",
+				details=[
+					f"Reason: {reason}",
+				],
+			)
+			_notify_moderators(
+				"integration_disabled",
+				title="Integration disabled by admin",
+				actor=admin_user.get("email") or admin_user.get("id"),
+				subject="Discord Webhook",
+				details=[
+					f"Integration ID: {integration_id}",
+					f"Target user: {target_user_id}",
+					f"Reason: {reason}",
+				],
+				context={
+					"action": "integration_disabled",
+					"integration_type": "discord_webhook",
+					"integration_id": integration_id,
+					"user_id": target_user_id,
+					"reason": reason,
+					"admin_user_id": admin_user.get("id"),
+				},
+			)
+			return flask.jsonify({"ok": True, "message": "Webhook disabled."})
+		if integration_type == "minecraft":
+			rows = interface.client.execute_query(
+				"SELECT id, ban_reason FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, target_user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
+			mc_rows = interface.client.execute_query(
+				"SELECT mc_username FROM minecraft_whitelist WHERE id = %s LIMIT 1;",
+				(integration_id,),
+			) or []
+			mc_username = mc_rows[0].get("mc_username") if mc_rows else None
+			existing_reason = (rows[0].get("ban_reason") or "").strip()
+			note = f"Disabled by admin: {reason}"
+			combined_reason = existing_reason
+			if note not in existing_reason:
+				combined_reason = (existing_reason + "\n" + note).strip() if existing_reason else note
+			interface.client.update_rows_with_filters(
+				"minecraft_whitelist",
+				{"is_active": False, "ban_reason": combined_reason},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			target_email = _get_user_email(target_user_id)
+			_send_notification_email(
+				to_email=target_email,
+				subject="Minecraft integration disabled by admin",
+				title="Minecraft integration disabled",
+				intro="An administrator has disabled your Minecraft whitelist integration.",
+				details=[
+					f"Username: {mc_username}" if mc_username else "",
+					f"Reason: {reason}",
+				],
+			)
+			_notify_moderators(
+				"integration_disabled",
+				title="Integration disabled by admin",
+				actor=admin_user.get("email") or admin_user.get("id"),
+				subject="Minecraft",
+				details=[
+					f"Integration ID: {integration_id}",
+					f"Target user: {target_user_id}",
+					f"Reason: {reason}",
+				],
+				context={
+					"action": "integration_disabled",
+					"integration_type": "minecraft",
+					"integration_id": integration_id,
+					"user_id": target_user_id,
+					"reason": reason,
+					"admin_user_id": admin_user.get("id"),
+				},
+			)
+			return flask.jsonify({"ok": True, "message": "Minecraft integration disabled."})
+		if integration_type == "audiobookshelf":
+			rows = interface.client.execute_query(
+				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, target_user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Audiobookshelf integration not found."}), 404
+			interface.client.update_rows_with_filters(
+				"audiobookshelf_registrations",
+				{"is_active": False},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			target_email = _get_user_email(target_user_id)
+			_send_notification_email(
+				to_email=target_email,
+				subject="Audiobookshelf integration disabled by admin",
+				title="Audiobookshelf integration disabled",
+				intro="An administrator has disabled your Audiobookshelf integration.",
+				details=[
+					f"Reason: {reason}",
+				],
+			)
+			_notify_moderators(
+				"integration_disabled",
+				title="Integration disabled by admin",
+				actor=admin_user.get("email") or admin_user.get("id"),
+				subject="Audiobookshelf",
+				details=[
+					f"Integration ID: {integration_id}",
+					f"Target user: {target_user_id}",
+					f"Reason: {reason}",
+				],
+				context={
+					"action": "integration_disabled",
+					"integration_type": "audiobookshelf",
+					"integration_id": integration_id,
+					"user_id": target_user_id,
+					"reason": reason,
+					"admin_user_id": admin_user.get("id"),
+				},
+			)
+			return flask.jsonify({"ok": True, "message": "Audiobookshelf integration disabled."})
+	except Exception as e:
+		return flask.jsonify({"ok": False, "message": f"Failed to disable integration: {e}"}), 400
+
+	return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
+
+
+@api.route("/api/admin/users/integration/enable", methods=["POST"])
+def api_admin_users_integration_enable():
+	admin_user, err = _require_admin()
+	if err:
+		return err
+	data = flask.request.json or {}
+	integration_type = (data.get("integration_type") or "").strip().lower()
+	integration_id = (data.get("integration_id") or "").strip()
+	target_user_id = (data.get("user_id") or "").strip()
+	if not integration_type or not integration_id or not target_user_id:
+		return flask.jsonify({"ok": False, "message": "Missing integration details."}), 400
+
+	try:
+		if integration_type == "discord_webhook":
+			rows = interface.client.execute_query(
+				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, target_user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
+			interface.client.update_rows_with_filters(
+				"discord_webhooks",
+				{"is_active": True},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			interface.client.delete_rows_with_filters(
+				"application_exemptions",
+				raw_conditions=["user_id = %s", "integration_type = 'discord_webhook'"],
+				raw_params=[target_user_id],
+			)
+			_notify_moderators(
+				"integration_enabled",
+				title="Integration enabled by admin",
+				actor=admin_user.get("email") or admin_user.get("id"),
+				subject="Discord Webhook",
+				details=[
+					f"Integration ID: {integration_id}",
+					f"Target user: {target_user_id}",
+				],
+				context={
+					"action": "integration_enabled",
+					"integration_type": "discord_webhook",
+					"integration_id": integration_id,
+					"user_id": target_user_id,
+					"admin_user_id": admin_user.get("id"),
+				},
+			)
+			return flask.jsonify({"ok": True, "message": "Webhook enabled."})
+		if integration_type == "minecraft":
+			rows = interface.client.execute_query(
+				"SELECT id, mc_username FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, target_user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
+			mc_username = rows[0].get("mc_username")
+			interface.client.update_rows_with_filters(
+				"minecraft_whitelist",
+				{"is_active": True, "ban_reason": None},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			if mc_username:
+				interface.client.delete_rows_with_filters(
+					"application_exemptions",
+					raw_conditions=["user_id = %s", "integration_type = 'minecraft'", "integration_key = %s"],
+					raw_params=[target_user_id, mc_username],
+				)
+			_notify_moderators(
+				"integration_enabled",
+				title="Integration enabled by admin",
+				actor=admin_user.get("email") or admin_user.get("id"),
+				subject="Minecraft",
+				details=[
+					f"Integration ID: {integration_id}",
+					f"Target user: {target_user_id}",
+				],
+				context={
+					"action": "integration_enabled",
+					"integration_type": "minecraft",
+					"integration_id": integration_id,
+					"user_id": target_user_id,
+					"admin_user_id": admin_user.get("id"),
+				},
+			)
+			return flask.jsonify({"ok": True, "message": "Minecraft integration enabled."})
+		if integration_type == "audiobookshelf":
+			rows = interface.client.execute_query(
+				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, target_user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Audiobookshelf integration not found."}), 404
+			interface.client.update_rows_with_filters(
+				"audiobookshelf_registrations",
+				{"is_active": True, "status": "approved"},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			interface.client.delete_rows_with_filters(
+				"application_exemptions",
+				raw_conditions=["user_id = %s", "integration_type = 'audiobookshelf'"],
+				raw_params=[target_user_id],
+			)
+			_notify_moderators(
+				"integration_enabled",
+				title="Integration enabled by admin",
+				actor=admin_user.get("email") or admin_user.get("id"),
+				subject="Audiobookshelf",
+				details=[
+					f"Integration ID: {integration_id}",
+					f"Target user: {target_user_id}",
+				],
+				context={
+					"action": "integration_enabled",
+					"integration_type": "audiobookshelf",
+					"integration_id": integration_id,
+					"user_id": target_user_id,
+					"admin_user_id": admin_user.get("id"),
+				},
+			)
+			return flask.jsonify({"ok": True, "message": "Audiobookshelf integration enabled."})
+	except Exception as e:
+		return flask.jsonify({"ok": False, "message": f"Failed to enable integration: {e}"}), 400
+
+	return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
+
+
+@api.route("/api/admin/users/delete", methods=["POST"])
+def api_admin_users_delete():
+	admin_user, err = _require_admin()
+	if err:
+		return err
+	data = flask.request.json or {}
+	target_user_id = (data.get("user_id") or "").strip()
+	reason = (data.get("reason") or "").strip()
+	confirmed = bool(data.get("confirm"))
+	if not target_user_id:
+		return flask.jsonify({"ok": False, "message": "Missing user id."}), 400
+	if not confirmed:
+		return flask.jsonify({"ok": False, "message": "Please confirm deletion."}), 400
+	if not reason:
+		return flask.jsonify({"ok": False, "message": "Please select a reason."}), 400
+
+	try:
+		user_rows, _ = interface.client.get_rows_with_filters(
+			"users",
+			equalities={"id": target_user_id},
+			page_limit=1,
+			page_num=0,
+		)
+		if not user_rows:
+			return flask.jsonify({"ok": False, "message": "User not found."}), 404
+		target_user = user_rows[0]
+
+		interface.client.update_rows_with_filters(
+			"users",
+			{"is_active": False},
+			raw_conditions=["id = %s"],
+			raw_params=[target_user_id],
+		)
+		interface.client.update_rows_with_filters(
+			"user_sessions",
+			{"revoked_at": datetime.now(timezone.utc)},
+			raw_conditions=["user_id = %s", "revoked_at IS NULL"],
+			raw_params=[target_user_id],
+		)
+		interface.client.delete_rows_with_filters(
+			"discord_webhooks",
+			raw_conditions=["user_id = %s"],
+			raw_params=[target_user_id],
+		)
+		interface.client.delete_rows_with_filters(
+			"minecraft_whitelist",
+			raw_conditions=["user_id = %s"],
+			raw_params=[target_user_id],
+		)
+		interface.client.delete_rows_with_filters(
+			"audiobookshelf_registrations",
+			raw_conditions=["user_id = %s"],
+			raw_params=[target_user_id],
+		)
+		_send_notification_email(
+			to_email=target_user.get("email"),
+			subject="Account deleted by admin",
+			title="Account deleted",
+			intro="An administrator has deleted your account and revoked access.",
+			details=[
+				f"Reason: {reason}",
+			],
+		)
+		_notify_moderators(
+			"account_deleted",
+			title="Account disabled by admin",
+			actor=admin_user.get("email") or admin_user.get("id"),
+			subject=target_user.get("email") or target_user_id,
+			details=[
+				f"User ID: {target_user_id}",
+				f"Reason: {reason}",
+			],
+			context={
+				"action": "account_deleted",
+				"user_id": target_user_id,
+				"reason": reason,
+				"admin_user_id": admin_user.get("id"),
+			},
+		)
+	except Exception as e:
+		return flask.jsonify({"ok": False, "message": f"Failed to delete account: {e}"}), 400
+
+	return flask.jsonify({"ok": True, "message": "Account deleted."})
+
+
 def _parse_db_value(value):
 	if isinstance(value, str):
 		val = value.strip()
@@ -954,11 +1454,44 @@ def api_admin_send_debug_email():
 			if not base_url:
 				base_url = "http://localhost:5000"
 			verify_url = f"{base_url.rstrip('/')}/verify-email/{dummy_code}"
+			expiry_text = "This link may be invalid due to a server error."
+			try:
+				token_hash = interface._hash_verification_token(dummy_code)
+				rows, _ = interface.client.get_rows_with_filters(
+					"pending_users",
+					equalities={"verification_token_hash": token_hash},
+					page_limit=1,
+					page_num=0,
+				)
+				if rows:
+					expires_at = rows[0].get("token_expires_at")
+					if expires_at:
+						if expires_at.tzinfo is None:
+							expires_at = expires_at.replace(tzinfo=timezone.utc)
+						now = datetime.now(timezone.utc)
+						remaining = max(0, int((expires_at - now).total_seconds()))
+						if remaining <= 0:
+							expiry_text = "This link has expired."
+						elif remaining < 3600:
+							minutes = (remaining + 59) // 60
+							unit = "minute" if minutes == 1 else "minutes"
+							expiry_text = f"This link will expire in {minutes} {unit}."
+						else:
+							hours = (remaining + 3599) // 3600
+							unit = "hour" if hours == 1 else "hours"
+							expiry_text = f"This link will expire in {hours} {unit}."
+			except Exception:
+				pass
 
-			html_payload = render_template("verify_email.html", {"verify_url": verify_url})
+			html_payload = render_template("verify_email.html", {
+				"verify_url": verify_url,
+				"expiry_text": expiry_text,
+			})
 			text_payload = (
-				"Thanks for creating an account.\n\n"
-				f"Verify your email: {verify_url}\n\n"
+				"Someone has created an account with this email address. If this was you, "
+				"click the button below to verify your email address.\n\n"
+				f"Verification button: {verify_url}\n\n"
+				f"{expiry_text}\n\n"
 				"If you did not create this account, you can ignore this email.\n"
 			)
 
@@ -1003,10 +1536,142 @@ def api_admin_send_debug_email():
 
 	if not result.ok:
 		return flask.jsonify({"ok": False, "message": f"Send failed: {result.error}"}), 502
+	return flask.jsonify({"ok": True, "message": "Email sent."}), 200
 
-	return flask.jsonify({"ok": True, "message": "Debug email sent."}), 200
 
-	return flask.jsonify({"ok": False, "message": "Unhandled email debug state."}), 500
+def _get_user_email(user_id: str | None) -> str | None:
+	if not user_id:
+		return None
+	try:
+		rows, _ = interface.client.get_rows_with_filters(
+			"users",
+			equalities={"id": user_id},
+			page_limit=1,
+			page_num=0,
+		)
+		if rows:
+			return (rows[0].get("email") or "").strip() or None
+	except Exception:
+		pass
+	return None
+
+
+def _is_anonymous_user(user_id: str | None) -> bool:
+	if not user_id:
+		return False
+	try:
+		rows, _ = interface.client.get_rows_with_filters(
+			"users",
+			equalities={"id": user_id},
+			page_limit=1,
+			page_num=0,
+		)
+		if rows:
+			return bool(rows[0].get("is_anonymous"))
+	except Exception:
+		pass
+	return False
+
+
+def _get_public_base_url() -> str:
+	env_url = (os.environ.get("WEBSITE_BASE_URL") or os.environ.get("PUBLIC_BASE_URL") or "").strip()
+	if env_url:
+		return env_url
+	try:
+		conf = fcr.find("secrets.conf")
+		if isinstance(conf, dict):
+			for key in ("WEBSITE_BASE_URL", "PUBLIC_BASE_URL", "BASE_URL"):
+				val = (conf.get(key) or "").strip()
+				if val:
+					return val
+	except Exception:
+		pass
+	return "http://localhost:5000"
+
+
+def _build_integration_removal_token(*, integration_type: str, integration_id: str, user_id: str, ttl_hours: int = 72) -> str:
+	expires_at = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
+	payload = {
+		"type": integration_type,
+		"id": integration_id,
+		"user": user_id,
+		"exp": int(expires_at.timestamp()),
+	}
+	raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+	sig = hmac.new(interface._token_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+	b64 = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
+	return f"{b64}.{sig}"
+
+
+def _parse_integration_removal_token(token: str) -> dict | None:
+	if not token or "." not in token:
+		return None
+	b64, sig = token.split(".", 1)
+	try:
+		padded = b64 + "=" * (-len(b64) % 4)
+		raw = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
+		expected = hmac.new(interface._token_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+		if not hmac.compare_digest(expected, sig):
+			return None
+		payload = json.loads(raw)
+		if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
+			return None
+		return payload
+	except Exception:
+		return None
+
+
+def _send_notification_email(
+	*,
+	to_email: str | None,
+	subject: str,
+	title: str,
+	intro: str,
+	details: list[str] | None = None,
+	cta_label: str | None = None,
+	cta_url: str | None = None,
+) -> None:
+	if not to_email or "@" not in to_email:
+		return
+	detail_items = ""
+	if details:
+		for line in details:
+			if line:
+				detail_items += f"<li>{html.escape(line)}</li>"
+	details_html = f"<ul class=\"detail-list\">{detail_items}</ul>" if detail_items else ""
+	cta_html = ""
+	if cta_label and cta_url:
+		cta_html = (
+			"<p>"
+			f"<a class=\"button\" href=\"{html.escape(cta_url)}\">{html.escape(cta_label)}</a>"
+			"</p>"
+		)
+	page_css = (
+		".detail-list{margin:0.75rem 0 0;padding-left:1.2rem;color:#2b2f36;}"
+		".detail-list li{margin:0.25rem 0;}"
+	)
+	html_payload = render_template("notification.html", {
+		"title": html.escape(title),
+		"intro": html.escape(intro),
+		"details_html": details_html,
+		"cta_html": cta_html,
+		"page_css": page_css,
+	})
+	text_details = "\n".join(f"- {line}" for line in (details or []) if line)
+	text_payload = intro
+	if text_details:
+		text_payload += "\n\nDetails:\n" + text_details
+	if cta_label and cta_url:
+		text_payload += f"\n\n{cta_label}: {cta_url}"
+	try:
+		send_email(
+			to_addrs=[to_email],
+			subject=subject,
+			body_text=text_payload,
+			body_html=html_payload,
+		)
+	except Exception:
+		logger.exception("Failed to send notification email to %s", to_email)
 
 
 @api.route("/api/admin/db/update-row", methods=["POST"])
@@ -1236,6 +1901,12 @@ def api_delete_account():
 			"audiobookshelf_registrations",
 			raw_conditions=["user_id = %s"],
 			raw_params=[user.get("id")],
+		)
+		_send_notification_email(
+			to_email=user.get("email"),
+			subject="Account deleted",
+			title="Account deleted",
+			intro="Your account has been deleted and access has been revoked.",
 		)
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Failed to delete account: {e}"}), 400
@@ -2153,6 +2824,27 @@ def api_admin_audiobookshelf_approve():
 		return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
 	if updated == 0:
 		return flask.jsonify({"ok": False, "message": "Not found."}), 404
+	anon_user = _is_anonymous_user(reg.get("user_id"))
+	cta_label = None
+	cta_url = None
+	intro = "Your Audiobookshelf registration has been approved."
+	if anon_user:
+		token = _build_integration_removal_token(
+			integration_type="audiobookshelf",
+			integration_id=str(reg_id),
+			user_id=str(reg.get("user_id")),
+		)
+		intro += " This integration was created without a linked account on zubekanov.com."
+		cta_label = "Remove integration"
+		cta_url = f"{_get_public_base_url().rstrip('/')}/integration/remove?token={token}"
+	_send_notification_email(
+		to_email=reg.get("email"),
+		subject="Audiobookshelf access approved",
+		title="Audiobookshelf approved",
+		intro=intro,
+		cta_label=cta_label,
+		cta_url=cta_url,
+	)
 	_notify_moderators(
 		"audiobookshelf_request_approved",
 		title="Audiobookshelf request approved",
@@ -2180,6 +2872,13 @@ def api_admin_audiobookshelf_approve_link():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
+		reg_rows = interface.client.execute_query(
+			"SELECT first_name, last_name, email FROM audiobookshelf_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+		if not reg_rows:
+			return flask.jsonify({"ok": False, "message": "Not found."}), 404
+		reg = reg_rows[0]
 		interface.client.update_rows_with_filters(
 			"audiobookshelf_registrations",
 			{
@@ -2190,6 +2889,27 @@ def api_admin_audiobookshelf_approve_link():
 			},
 			raw_conditions=["id = %s"],
 			raw_params=[reg_id],
+		)
+		anon_user = _is_anonymous_user(reg.get("user_id"))
+		cta_label = None
+		cta_url = None
+		intro = "Your Audiobookshelf registration has been approved."
+		if anon_user:
+			token = _build_integration_removal_token(
+				integration_type="audiobookshelf",
+				integration_id=str(reg_id),
+				user_id=str(reg.get("user_id")),
+			)
+			intro += " This integration was created without a linked account on zubekanov.com."
+			cta_label = "Remove integration"
+			cta_url = f"{_get_public_base_url().rstrip('/')}/integration/remove?token={token}"
+		_send_notification_email(
+			to_email=reg.get("email"),
+			subject="Audiobookshelf access approved",
+			title="Audiobookshelf approved",
+			intro=intro,
+			cta_label=cta_label,
+			cta_url=cta_url,
 		)
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
@@ -2282,7 +3002,8 @@ def api_admin_discord_webhook_approve():
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
 		rows = interface.client.execute_query(
-			"SELECT name, event_key, webhook_url FROM discord_webhook_registrations WHERE id = %s;",
+			"SELECT name, event_key, webhook_url, submitted_by_user_id, submitted_by_email "
+			"FROM discord_webhook_registrations WHERE id = %s;",
 			(reg_id,),
 		) or []
 		if not rows:
@@ -2298,6 +3019,38 @@ def api_admin_discord_webhook_approve():
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
 
+	target_email = _get_user_email(reg.get("submitted_by_user_id")) or reg.get("submitted_by_email")
+	anon_user = _is_anonymous_user(reg.get("submitted_by_user_id"))
+	cta_label = None
+	cta_url = None
+	intro = "Your Discord webhook subscription has been approved and activated."
+	if anon_user:
+		intro += " This integration was created without a linked account on zubekanov.com."
+		webhook_rows = interface.client.execute_query(
+			"SELECT id FROM discord_webhooks WHERE webhook_url = %s AND user_id = %s LIMIT 1;",
+			(reg.get("webhook_url"), reg.get("submitted_by_user_id")),
+		) or []
+		if webhook_rows:
+			webhook_id = str(webhook_rows[0].get("id"))
+			token = _build_integration_removal_token(
+				integration_type="discord_webhook",
+				integration_id=webhook_id,
+				user_id=str(reg.get("submitted_by_user_id")),
+			)
+			cta_label = "Remove integration"
+			cta_url = f"{_get_public_base_url().rstrip('/')}/integration/remove?token={token}"
+	_send_notification_email(
+		to_email=target_email,
+		subject="Webhook subscription approved",
+		title="Webhook subscription approved",
+		intro=intro,
+		details=[
+			f"Webhook: {reg.get('name') or reg.get('webhook_url')}",
+			f"Event key: {reg.get('event_key')}",
+		],
+		cta_label=cta_label,
+		cta_url=cta_url,
+	)
 	_notify_moderators(
 		"discord_webhook_request_approved",
 		title="Discord webhook request approved",
@@ -2327,6 +3080,14 @@ def api_admin_discord_webhook_approve_link():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
+		rows = interface.client.execute_query(
+			"SELECT name, event_key, webhook_url, submitted_by_user_id, submitted_by_email "
+			"FROM discord_webhook_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+		if not rows:
+			return flask.jsonify({"ok": False, "message": "Not found."}), 404
+		reg = rows[0]
 		emitter = DiscordWebhookEmitter(interface)
 		ok, msg = emitter.approve_registration(
 			registration_id=reg_id,
@@ -2334,6 +3095,38 @@ def api_admin_discord_webhook_approve_link():
 		)
 		if not ok:
 			return flask.jsonify({"ok": False, "message": msg}), 400
+		target_email = _get_user_email(reg.get("submitted_by_user_id")) or reg.get("submitted_by_email")
+		anon_user = _is_anonymous_user(reg.get("submitted_by_user_id"))
+		cta_label = None
+		cta_url = None
+		intro = "Your Discord webhook subscription has been approved and activated."
+		if anon_user:
+			intro += " This integration was created without a linked account on zubekanov.com."
+			webhook_rows = interface.client.execute_query(
+				"SELECT id FROM discord_webhooks WHERE webhook_url = %s AND user_id = %s LIMIT 1;",
+				(reg.get("webhook_url"), reg.get("submitted_by_user_id")),
+			) or []
+			if webhook_rows:
+				webhook_id = str(webhook_rows[0].get("id"))
+				token = _build_integration_removal_token(
+					integration_type="discord_webhook",
+					integration_id=webhook_id,
+					user_id=str(reg.get("submitted_by_user_id")),
+				)
+				cta_label = "Remove integration"
+				cta_url = f"{_get_public_base_url().rstrip('/')}/integration/remove?token={token}"
+		_send_notification_email(
+			to_email=target_email,
+			subject="Webhook subscription approved",
+			title="Webhook subscription approved",
+			intro=intro,
+			details=[
+				f"Webhook: {reg.get('name') or reg.get('webhook_url')}",
+				f"Event key: {reg.get('event_key')}",
+			],
+			cta_label=cta_label,
+			cta_url=cta_url,
+		)
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
 	return flask.redirect("/admin/discord-webhook-approvals")
@@ -2493,6 +3286,36 @@ def api_admin_minecraft_approve():
 		)
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+	anon_user = _is_anonymous_user(reg.get("user_id"))
+	cta_label = None
+	cta_url = None
+	intro = "Your Minecraft whitelist request has been approved."
+	if anon_user:
+		intro += " This integration was created without a linked account on zubekanov.com."
+		whitelist_rows = interface.client.execute_query(
+			"SELECT id FROM minecraft_whitelist WHERE user_id = %s AND LOWER(mc_username) = LOWER(%s) LIMIT 1;",
+			(reg.get("user_id"), reg.get("mc_username")),
+		) or []
+		if whitelist_rows:
+			whitelist_id = str(whitelist_rows[0].get("id"))
+			token = _build_integration_removal_token(
+				integration_type="minecraft",
+				integration_id=whitelist_id,
+				user_id=str(reg.get("user_id")),
+			)
+			cta_label = "Remove integration"
+			cta_url = f"{_get_public_base_url().rstrip('/')}/integration/remove?token={token}"
+	_send_notification_email(
+		to_email=reg.get("email"),
+		subject="Minecraft whitelist approved",
+		title="Minecraft request approved",
+		intro=intro,
+		details=[
+			f"Username: {reg.get('mc_username')}",
+		],
+		cta_label=cta_label,
+		cta_url=cta_url,
+	)
 	_notify_moderators(
 		"minecraft_request_approved",
 		title="Minecraft whitelist request approved",
@@ -2559,6 +3382,36 @@ def api_admin_minecraft_approve_link():
 			},
 			raw_conditions=["id = %s"],
 			raw_params=[reg_id],
+		)
+		anon_user = _is_anonymous_user(reg.get("user_id"))
+		cta_label = None
+		cta_url = None
+		intro = "Your Minecraft whitelist request has been approved."
+		if anon_user:
+			intro += " This integration was created without a linked account on zubekanov.com."
+			whitelist_rows = interface.client.execute_query(
+				"SELECT id FROM minecraft_whitelist WHERE user_id = %s AND LOWER(mc_username) = LOWER(%s) LIMIT 1;",
+				(reg.get("user_id"), reg.get("mc_username")),
+			) or []
+			if whitelist_rows:
+				whitelist_id = str(whitelist_rows[0].get("id"))
+				token = _build_integration_removal_token(
+					integration_type="minecraft",
+					integration_id=whitelist_id,
+					user_id=str(reg.get("user_id")),
+				)
+				cta_label = "Remove integration"
+				cta_url = f"{_get_public_base_url().rstrip('/')}/integration/remove?token={token}"
+		_send_notification_email(
+			to_email=reg.get("email"),
+			subject="Minecraft whitelist approved",
+			title="Minecraft request approved",
+			intro=intro,
+			details=[
+				f"Username: {reg.get('mc_username')}",
+			],
+			cta_label=cta_label,
+			cta_url=cta_url,
 		)
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
@@ -2637,6 +3490,138 @@ def api_admin_minecraft_deny_link():
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
 	return flask.redirect("/admin/minecraft-approvals")
+
+
+@api.route("/api/integration/remove", methods=["POST"])
+def api_integration_remove():
+	data = flask.request.json or {}
+	token = (data.get("token") or "").strip()
+	if not token:
+		return flask.jsonify({"ok": False, "message": "Missing token."}), 400
+	payload = _parse_integration_removal_token(token)
+	if not payload:
+		return flask.jsonify({"ok": False, "message": "Invalid or expired token."}), 400
+
+	integration_type = str(payload.get("type") or "").strip()
+	integration_id = str(payload.get("id") or "").strip()
+	user_id = str(payload.get("user") or "").strip()
+	if not integration_type or not integration_id or not user_id:
+		return flask.jsonify({"ok": False, "message": "Invalid token payload."}), 400
+	is_anon = _is_anonymous_user(user_id)
+
+	try:
+		if integration_type == "discord_webhook":
+			rows = interface.client.execute_query(
+				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
+			interface.client.update_rows_with_filters(
+				"discord_webhooks",
+				{"is_active": False},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			if is_anon:
+				_notify_moderators(
+					"integration_removed",
+					title="Anonymous integration removed",
+					actor="Anonymous",
+					subject="Discord Webhook",
+					details=[
+						f"Integration ID: {integration_id}",
+						f"User ID: {user_id}",
+					],
+					context={
+						"action": "integration_removed",
+						"integration_type": "discord_webhook",
+						"integration_id": integration_id,
+						"user_id": user_id,
+						"source": "email_removal",
+					},
+				)
+			return flask.jsonify({
+				"ok": True,
+				"message": "Webhook removed.",
+				"redirect": "/integration/removed",
+			})
+		if integration_type == "minecraft":
+			rows = interface.client.execute_query(
+				"SELECT id FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
+			interface.client.update_rows_with_filters(
+				"minecraft_whitelist",
+				{"is_active": False},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			if is_anon:
+				_notify_moderators(
+					"integration_removed",
+					title="Anonymous integration removed",
+					actor="Anonymous",
+					subject="Minecraft",
+					details=[
+						f"Integration ID: {integration_id}",
+						f"User ID: {user_id}",
+					],
+					context={
+						"action": "integration_removed",
+						"integration_type": "minecraft",
+						"integration_id": integration_id,
+						"user_id": user_id,
+						"source": "email_removal",
+					},
+				)
+			return flask.jsonify({
+				"ok": True,
+				"message": "Minecraft integration removed.",
+				"redirect": "/integration/removed",
+			})
+		if integration_type == "audiobookshelf":
+			rows = interface.client.execute_query(
+				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
+				(integration_id, user_id),
+			) or []
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Audiobookshelf registration not found."}), 404
+			interface.client.update_rows_with_filters(
+				"audiobookshelf_registrations",
+				{"is_active": False},
+				raw_conditions=["id = %s"],
+				raw_params=[integration_id],
+			)
+			if is_anon:
+				_notify_moderators(
+					"integration_removed",
+					title="Anonymous integration removed",
+					actor="Anonymous",
+					subject="Audiobookshelf",
+					details=[
+						f"Integration ID: {integration_id}",
+						f"User ID: {user_id}",
+					],
+					context={
+						"action": "integration_removed",
+						"integration_type": "audiobookshelf",
+						"integration_id": integration_id,
+						"user_id": user_id,
+						"source": "email_removal",
+					},
+				)
+			return flask.jsonify({
+				"ok": True,
+				"message": "Audiobookshelf integration removed.",
+				"redirect": "/integration/removed",
+			})
+	except Exception as e:
+		return flask.jsonify({"ok": False, "message": f"Removal failed: {e}"}), 400
+
+	return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
 
 
 @api.route("/api/discord/interactions", methods=["POST"])

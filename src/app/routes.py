@@ -170,6 +170,20 @@ def admin_minecraft_approvals_page():
 def admin_email_debug_page():
 	return build_admin_email_debug_page(g.user)
 
+@main.route("/integration/remove")
+def integration_remove_page():
+	token = flask.request.args.get("token") or ""
+	return build_integration_remove_page(g.user, token)
+
+@main.route("/integration/removed")
+def integration_removed_page():
+	return build_integration_removed_page(g.user)
+
+
+@main.route("/admin/users")
+def admin_users_page():
+	return build_admin_users_page(g.user)
+
 @main.app_errorhandler(Exception)
 def handle_all_errors(e):
 	user = _ensure_user_loaded_for_error()

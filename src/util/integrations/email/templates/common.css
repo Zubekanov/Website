@@ -1,0 +1,148 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f3f3f3;
+  color: #1f1f1f;
+  font-family: Consolas, Menlo, "Liberation Mono", "Courier New", monospace;
+}
+
+.wrap {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 0;
+  border: 1px solid #ededed;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+}
+
+.card-body {
+  padding: 24px 28px 28px;
+}
+
+.email-header {
+  padding: 18px 28px;
+  border-bottom: 1px solid #ededed;
+  background: linear-gradient(135deg, rgba(86, 156, 214, 0.18), rgba(78, 201, 162, 0.12));
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1f1f1f;
+}
+
+.email-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1 {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+}
+
+h2 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+}
+
+p {
+  margin: 0 0 14px 0;
+  line-height: 1.55;
+  font-size: 15px;
+}
+
+.button {
+  display: inline-block;
+  padding: 12px 18px;
+  background: #569cd6;
+  color: #ffffff !important;
+  text-decoration: none;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 8px 18px rgba(86, 156, 214, 0.25);
+}
+
+.link {
+  word-break: break-all;
+  color: #569cd6;
+}
+
+.link-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #ededed;
+  background: #f7f8fa;
+  font-size: 13px;
+}
+
+.link-box .link {
+  color: inherit;
+}
+
+.muted {
+  color: #4d4d4d;
+  font-size: 13px;
+}
+
+.meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 18px;
+}
+
+.body {
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.footer {
+  margin-top: 18px;
+  font-size: 12px;
+  color: #4d4d4d;
+  border-top: 1px solid #ededed;
+  padding-top: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #181818;
+    color: #cccccc;
+  }
+  .card {
+    background: #1f1f1f;
+    border-color: #333333;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  }
+  .email-header {
+    border-bottom-color: #333333;
+    color: #cccccc;
+    background: linear-gradient(135deg, rgba(86, 156, 214, 0.22), rgba(78, 201, 162, 0.16));
+  }
+  .button {
+    background: #4ec9a2;
+    color: #0f172a;
+    box-shadow: 0 8px 18px rgba(78, 201, 162, 0.2);
+  }
+  .link {
+    color: #68cdfe;
+  }
+  .muted,
+  .footer,
+  .meta {
+    color: #989898;
+  }
+  .footer {
+    border-top-color: #333333;
+  }
+}

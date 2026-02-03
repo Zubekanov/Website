@@ -212,15 +212,21 @@ button[data-submit-route][data-submit-method][data-busy="true"] {
 }
 
 button.primary[data-submit-route][data-submit-method] {
-    border-color: var(--form_text);
-    background: var(--form_text);
-    color: var(--form_body);
+    border-color: var(--dark_blue);
+    background: var(--dark_blue);
+    color: #ffffff;
 }
 
 button.danger[data-submit-route][data-submit-method] {
     background: rgba(var(--danger, 180, 40, 40), 1);
     color: var(--form_body);
     border-color: rgba(var(--danger, 180, 40, 40), 0.35);
+}
+
+html[data-theme="dark"] button.primary[data-submit-route][data-submit-method] {
+    border-color: var(--form_text);
+    background: var(--form_text);
+    color: var(--form_body);
 }
 
 .form-group textarea {

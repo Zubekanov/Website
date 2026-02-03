@@ -125,7 +125,7 @@
 
 .navbar__logo:hover, .nav-link:hover, .nav-account:hover {
 	color: var(--dark_blue);
-	background: rgba(var(--default), 0.1);
+	background: color-mix(in srgb, var(--dark_blue) 14%, transparent);
 	transform: translateY(-1px);
 	box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
 }

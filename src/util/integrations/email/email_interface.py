@@ -211,6 +211,18 @@ def render_template(name: str, context: dict[str, str]) -> str:
 	path = os.path.join(_TEMPLATE_DIR, name)
 	with open(path, "r", encoding="utf-8") as handle:
 		content = handle.read()
+	if "{{common_css}}" in content and "common_css" not in context:
+		common_path = os.path.join(_TEMPLATE_DIR, "common.css")
+		try:
+			with open(common_path, "r", encoding="utf-8") as handle:
+				context = dict(context)
+				context["common_css"] = handle.read()
+		except Exception:
+			context = dict(context)
+			context["common_css"] = ""
+	if "page_css" not in context:
+		context = dict(context)
+		context["page_css"] = ""
 	for key, value in context.items():
 		content = content.replace(f"{{{{{key}}}}}", value)
 	return content

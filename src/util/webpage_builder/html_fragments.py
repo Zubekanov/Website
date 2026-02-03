@@ -147,14 +147,161 @@ def integration_delete_action(
 	integration_id: str,
 	label: str,
 	is_active: bool,
+	*,
+	user_id: str | None = None,
+	submit_route: str | None = None,
+	hidden: bool = False,
+	active_label: str | None = None,
 ) -> str:
 	inactive_attr = " data-integration-inactive=\"1\"" if not is_active else ""
+	user_attr = f" data-user-id=\"{html.escape(user_id)}\"" if user_id else ""
+	route_attr = f" data-submit-route=\"{html.escape(submit_route)}\"" if submit_route else ""
+	hidden_attr = " hidden" if hidden else ""
+	active_attr = f" data-active-label=\"{html.escape(active_label)}\"" if active_label else ""
 	return (
-		f"<button class=\"integration-delete\" data-integration-delete "
+		f"<button class=\"integration-delete\" data-integration-delete{hidden_attr} "
 		f"data-integration-type=\"{html.escape(integration_type)}\" "
 		f"data-integration-id=\"{html.escape(integration_id)}\" "
 		f"data-integration-name=\"{html.escape(label)}\" "
-		f"{inactive_attr}>Disable</button>"
+		f"data-integration-label=\"{html.escape(label)}\"{inactive_attr}{user_attr}{route_attr}{active_attr}>Disable</button>"
+	)
+
+
+def integration_enable_action(
+	integration_type: str,
+	integration_id: str,
+	label: str,
+	active_label: str,
+	*,
+	user_id: str | None = None,
+	submit_route: str | None = None,
+) -> str:
+	user_attr = f" data-user-id=\"{html.escape(user_id)}\"" if user_id else ""
+	route_attr = f" data-submit-route=\"{html.escape(submit_route)}\"" if submit_route else ""
+	return (
+		f"<button class=\"integration-enable\" data-integration-enable "
+		f"data-integration-type=\"{html.escape(integration_type)}\" "
+		f"data-integration-id=\"{html.escape(integration_id)}\" "
+		f"data-integration-name=\"{html.escape(label)}\" "
+		f"data-integration-label=\"{html.escape(label)}\" "
+		f"data-active-label=\"{html.escape(active_label)}\"{user_attr}{route_attr}>Enable</button>"
+	)
+
+
+def admin_users_shell(contents: str) -> str:
+	return (
+		"<div class=\"admin-users\">"
+		"<header class=\"admin-users__header\">"
+		"<div>"
+		"<h1>User Management</h1>"
+		"<p>Review accounts, roles, and linked integrations.</p>"
+		"</div>"
+		"</header>"
+		f"<section class=\"admin-users__list\">{contents}</section>"
+		"</div>"
+	)
+
+
+def admin_user_badge(label: str) -> str:
+	label_safe = html.escape(label)
+	cls = " admin-user-badge--admin" if label.upper() == "ADMIN" else ""
+	return f"<span class=\"admin-user-badge{cls}\">{label_safe}</span>"
+
+
+def admin_user_actions(actions_html: str) -> str:
+	return f"<div class=\"admin-user-actions\">{actions_html}</div>"
+
+
+def admin_user_action_button(action: str, user_id: str, label: str, is_danger: bool = False) -> str:
+	action_safe = html.escape(action)
+	user_safe = html.escape(user_id)
+	label_safe = html.escape(label)
+	class_name = "admin-user-action admin-user-action--danger" if is_danger else "admin-user-action"
+	return (
+		f"<button class=\"{class_name}\" data-user-action=\"{action_safe}\" "
+		f"data-user-id=\"{user_safe}\">{label_safe}</button>"
+	)
+
+
+def admin_user_card(
+	user_id: str,
+	name: str,
+	email: str,
+	meta_html: str,
+	badge_html: str,
+	actions_html: str,
+	integrations_html: str,
+) -> str:
+	return (
+		f"<article class=\"admin-user-card\" data-user-card data-user-id=\"{html.escape(user_id)}\">"
+		"<div class=\"admin-user-card__header\">"
+		"<div>"
+		f"<div class=\"admin-user-card__name\">{html.escape(name)}</div>"
+		f"<div class=\"admin-user-card__email\">{html.escape(email)}</div>"
+		f"<div class=\"admin-user-card__meta\">{meta_html}</div>"
+		"</div>"
+		f"{badge_html}"
+		"</div>"
+		f"{actions_html}"
+		"<div class=\"admin-user-card__integrations\">"
+		f"{integrations_html}"
+		"</div>"
+		"</article>"
+	)
+
+
+def admin_user_meta_row(label: str, value: str) -> str:
+	return (
+		"<div class=\"admin-user-meta-row\">"
+		f"<span class=\"admin-user-meta-label\">{html.escape(label)}</span>"
+		f"<span class=\"admin-user-meta-value\">{html.escape(value)}</span>"
+		"</div>"
+	)
+
+
+def admin_user_integrations(cards_html: str) -> str:
+	return f"<div class=\"integration-grid\">{cards_html}</div>"
+
+
+def admin_user_delete_reason_select(options: list[tuple[str, str]], selected: str = "") -> str:
+	option_html = []
+	for value, label in options:
+		selected_attr = " selected" if value == selected else ""
+		option_html.append(f"<option value=\"{html.escape(value)}\"{selected_attr}>{html.escape(label)}</option>")
+	return (
+		"<select id=\"admin-user-delete-reason\" data-admin-user-delete-reason>"
+		f"{''.join(option_html)}"
+		"</select>"
+	)
+
+
+def admin_user_delete_modal(reasons_html: str) -> str:
+	return (
+		"<div class=\"integration-delete-modal\" data-admin-user-delete-modal hidden>"
+		"<div class=\"integration-delete-modal__backdrop\" data-admin-user-delete-close></div>"
+		"<div class=\"integration-delete-modal__card\">"
+		"<div class=\"integration-delete-modal__header\">"
+		"<h3>Delete user account</h3>"
+		"<button class=\"integration-delete-modal__close\" data-admin-user-delete-close>×</button>"
+		"</div>"
+		"<p class=\"integration-delete-modal__text\">"
+		"You're about to disable <span data-admin-user-delete-name></span> and remove their integrations."
+		"</p>"
+		"<div class=\"integration-delete-modal__fields\">"
+		"<label for=\"admin-user-delete-reason\">Reason for deletion</label>"
+		f"{reasons_html}"
+		"<label class=\"integration-delete-modal__confirm\">"
+		"<input type=\"checkbox\" data-admin-user-delete-confirm>"
+		"<span>I understand this disables the account and revokes sessions.</span>"
+		"</label>"
+		"</div>"
+		"<div class=\"integration-delete-modal__actions\">"
+		"<button class=\"integration-delete-modal__cancel\" data-admin-user-delete-close>Cancel</button>"
+		"<button class=\"integration-delete-modal__submit\" data-admin-user-delete-submit>Delete</button>"
+		"</div>"
+		"<div class=\"integration-delete-modal__message\" data-admin-user-delete-message></div>"
+		"</div>"
+		"</div>"
 	)
 
 
@@ -207,11 +354,13 @@ def secret_field(value: str, *, label: str = "Secret", mask: str | None = None) 
 	)
 
 
-def integration_card_empty() -> str:
+def integration_card_empty(message: str | None = None) -> str:
+	title = "No linked integrations"
+	subtext = message or "You have not connected any services yet."
 	return (
 		"<div class=\"integration-card integration-card--empty\">"
-		"<div class=\"integration-title\">No linked integrations</div>"
-		"<div class=\"integration-sub\">You have not connected any services yet.</div>"
+		f"<div class=\"integration-title\">{html.escape(title)}</div>"
+		f"<div class=\"integration-sub\">{html.escape(subtext)}</div>"
 		"</div>"
 	)
 
