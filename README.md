@@ -4,16 +4,16 @@ The website is hosted at [zubekanov.com](https://zubekanov.com), which you may b
 
 ### What the app does
 
-- **[Public site + account flows](https://zubekanov.com/)**: Landing page, login, registration, email verification, password reset (stub), and profile pages.
+- **[Public site + account flows](https://zubekanov.com/)**: Landing page, login, registration, email verification, password reset (stub), and profile pages. ![2026-02-04_08-36-01_Joseph_Wong&#39;s_Profile_http_127_0_0_1_5000_profile](https://github.com/user-attachments/assets/a5722414-2c58-4069-9247-ec4d50f5e42c)
 - **Session-based auth**: Secure session cookies backed by hashed tokens stored in `user_sessions`, with server-side validation and cache.
 - **[Email verification & messaging](https://zubekanov.com/register)**: Registration creates a pending user, emails a verification link, and activates the account on success.
 - **Integrations**
-  - **[Discord webhooks](https://zubekanov.com/discord-webhook-registration)**: Users can register webhooks and subscribe them to event keys; moderation events are emitted to Discord.
+  - **[Discord webhooks](https://zubekanov.com/discord-webhook-registration)**: Users can register webhooks and subscribe them to event keys; moderation events are emitted to Discord. ![2026-02-04_09-22-34_•_Discord_#dev-broadcast_Server_https_discord_com_channels_1459139245942898829_1459139416197959732](https://github.com/user-attachments/assets/bd86f360-fc55-49a1-bff5-b1c98e19f463)
   - **[Audiobookshelf](https://zubekanov.com/audiobookshelf-registration)**: Users can submit access requests that are reviewed by admins.
   - **[Minecraft](https://zubekanov.com/minecraft)**: Users can request whitelist access; approvals manage whitelist entries and audit status.
-- **Admin dashboards & approvals**: Admin-only views for handling Audiobookshelf, Discord webhook, and Minecraft approval queues.
+- **Admin dashboards & approvals**: Admin-only views for handling Audiobookshelf, Discord webhook, and Minecraft approval queues. ![2026-02-04_09-15-03_Audiobookshelf_Requests_http_127_0_0_1_5000_admin_audiobookshelf-approvals](https://github.com/user-attachments/assets/d9ffed71-94c1-4ea4-8482-4b3502ec7ffb)
 - **DB admin interface**: An internal “psql interface” page supports viewing/updating table data via API endpoints.
-- **[Server metrics dashboard](https://zubekanov.com/server-metrics)**: A metrics page renders live graphs (CPU/RAM/Disk/Network) using data from a dedicated metrics DB.
+- **[Server metrics dashboard](https://zubekanov.com/server-metrics)**: A metrics page renders live graphs (CPU/RAM/Disk/Network) using data from a dedicated metrics DB. ![2026-02-04_08-39-52_Server_Metrics_http_127_0_0_1_5000_server-metrics](https://github.com/user-attachments/assets/9b923c04-6898-4360-b506-392f6fa596df)
 - **[Static resources](https://zubekanov.com/Joseph-Wong/resume)**: Includes CSS/JS assets, a resume endpoint, and a light HTML builder for consistent page layouts.
 
 ### Core building blocks
