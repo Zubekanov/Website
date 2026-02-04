@@ -907,6 +907,21 @@ def center_column(content_html: str) -> str:
 		"</div>"
 	)
 
+def integration_remove_form(token: str) -> str:
+	escaped = html.escape(token or "")
+	return (
+		"<form class=\"form\" id=\"integration-remove-form\">"
+		f"<input type=\"hidden\" name=\"token\" value=\"{escaped}\">"
+		"<div class=\"form-group\">"
+		"<p>This integration was created without a linked account. Confirm removal below.</p>"
+		"</div>"
+		"<button type=\"submit\" class=\"form-submit danger\" "
+		"data-submit-route=\"/api/integration/remove\" data-submit-method=\"POST\" "
+		"data-submit-fields=\"token\" data-success-redirect=\"/integration/removed\">"
+		"Remove integration</button>"
+		"</form>"
+	)
+
 
 def email_debug_form() -> str:
 	return (

@@ -53,16 +53,7 @@ def _get_or_create_anonymous_user(*, first_name: str, last_name: str, email: str
 		return False, f"Failed to prepare users schema: {e}"
 
 	try:
-		try:
-			rows = interface.client.execute_query(
-				"SELECT id, first_name, last_name, is_anonymous FROM users WHERE LOWER(email) = LOWER(%s) LIMIT 1;",
-				(email_norm,),
-			) or []
-		except Exception:
-			rows = interface.client.execute_query(
-				"SELECT id, first_name, last_name FROM users WHERE LOWER(email) = LOWER(%s) LIMIT 1;",
-				(email_norm,),
-			) or []
+		rows = interface.get_user_by_email_case_insensitive(email_norm)
 		if rows:
 			row = rows[0]
 			if "is_anonymous" not in row or not row.get("is_anonymous"):
@@ -177,16 +168,10 @@ def _handle_mod_action(kind: str, action: str, reg_id: str) -> tuple[bool, str]:
 	elif kind == "minecraft":
 		if action == "approve":
 			try:
-				rows = interface.client.execute_query(
-					"SELECT * FROM minecraft_registrations WHERE id = %s;",
-					(reg_id,),
-				) or []
+				rows = interface.get_minecraft_registration_by_id(reg_id)
 				if rows:
 					reg = rows[0]
-					existing = interface.client.execute_query(
-						"SELECT id, is_active FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-						(reg.get("mc_username"),),
-					) or []
+					existing = interface.get_minecraft_whitelist_by_username(reg.get("mc_username"))
 					if not existing:
 						interface.client.insert_row("minecraft_whitelist", {
 							"user_id": reg.get("user_id"),
@@ -344,12 +329,7 @@ def api_profile_discord_webhook_unsubscribe():
 		return flask.jsonify({"ok": False, "message": "Missing subscription id."}), 400
 
 	try:
-		rows = interface.client.execute_query(
-			"SELECT s.id FROM discord_webhook_subscriptions s "
-			"JOIN discord_webhooks w ON w.id = s.webhook_id "
-			"WHERE s.id = %s AND w.user_id = %s LIMIT 1;",
-			(sub_id, user.get("id")),
-		) or []
+		rows = interface.get_discord_subscription_for_user(sub_id, user.get("id"))
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Subscription not found."}), 404
 
@@ -380,13 +360,7 @@ def api_profile_discord_webhook_resubscribe():
 		return flask.jsonify({"ok": False, "message": "Missing subscription id."}), 400
 
 	try:
-		rows = interface.client.execute_query(
-			"SELECT s.id, w.is_active AS webhook_active "
-			"FROM discord_webhook_subscriptions s "
-			"JOIN discord_webhooks w ON w.id = s.webhook_id "
-			"WHERE s.id = %s AND w.user_id = %s LIMIT 1;",
-			(sub_id, user.get("id")),
-		) or []
+		rows = interface.get_discord_subscription_with_webhook_active(sub_id, user.get("id"))
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Subscription not found."}), 404
 		if not rows[0].get("webhook_active", True):
@@ -427,10 +401,7 @@ def api_profile_integration_delete():
 
 	try:
 		if integration_type == "discord_webhook":
-			rows = interface.client.execute_query(
-				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, user.get("id")),
-			) or []
+			rows = interface.get_discord_webhook_for_user(integration_id, user.get("id"))
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -477,16 +448,10 @@ def api_profile_integration_delete():
 			)
 			return flask.jsonify({"ok": True, "message": "Webhook disabled."})
 		if integration_type == "minecraft":
-			rows = interface.client.execute_query(
-				"SELECT id, ban_reason FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, user.get("id")),
-			) or []
+			rows = interface.get_minecraft_whitelist_entry_for_user(integration_id, user.get("id"))
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
-			mc_rows = interface.client.execute_query(
-				"SELECT mc_username FROM minecraft_whitelist WHERE id = %s LIMIT 1;",
-				(integration_id,),
-			) or []
+			mc_rows = interface.get_minecraft_whitelist_username_by_id(integration_id)
 			mc_username = mc_rows[0].get("mc_username") if mc_rows else None
 			existing_reason = (rows[0].get("ban_reason") or "").strip()
 			note = "Account whitelisting disabled from user profile; enable by reapplying."
@@ -538,10 +503,7 @@ def api_profile_integration_delete():
 			)
 			return flask.jsonify({"ok": True, "message": "Minecraft integration disabled."})
 		if integration_type == "audiobookshelf":
-			rows = interface.client.execute_query(
-				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, user.get("id")),
-			) or []
+			rows = interface.get_audiobookshelf_registration_for_user(integration_id, user.get("id"))
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Audiobookshelf integration not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -1038,10 +1000,7 @@ def api_admin_users_integration_disable():
 
 	try:
 		if integration_type == "discord_webhook":
-			rows = interface.client.execute_query(
-				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, target_user_id),
-			) or []
+			rows = interface.get_discord_webhook_for_user(integration_id, target_user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -1081,16 +1040,10 @@ def api_admin_users_integration_disable():
 			)
 			return flask.jsonify({"ok": True, "message": "Webhook disabled."})
 		if integration_type == "minecraft":
-			rows = interface.client.execute_query(
-				"SELECT id, ban_reason FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, target_user_id),
-			) or []
+			rows = interface.get_minecraft_whitelist_entry_for_user(integration_id, target_user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
-			mc_rows = interface.client.execute_query(
-				"SELECT mc_username FROM minecraft_whitelist WHERE id = %s LIMIT 1;",
-				(integration_id,),
-			) or []
+			mc_rows = interface.get_minecraft_whitelist_username_by_id(integration_id)
 			mc_username = mc_rows[0].get("mc_username") if mc_rows else None
 			existing_reason = (rows[0].get("ban_reason") or "").strip()
 			note = f"Disabled by admin: {reason}"
@@ -1135,10 +1088,7 @@ def api_admin_users_integration_disable():
 			)
 			return flask.jsonify({"ok": True, "message": "Minecraft integration disabled."})
 		if integration_type == "audiobookshelf":
-			rows = interface.client.execute_query(
-				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, target_user_id),
-			) or []
+			rows = interface.get_audiobookshelf_registration_for_user(integration_id, target_user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Audiobookshelf integration not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -1197,10 +1147,7 @@ def api_admin_users_integration_enable():
 
 	try:
 		if integration_type == "discord_webhook":
-			rows = interface.client.execute_query(
-				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, target_user_id),
-			) or []
+			rows = interface.get_discord_webhook_for_user(integration_id, target_user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -1233,13 +1180,13 @@ def api_admin_users_integration_enable():
 			)
 			return flask.jsonify({"ok": True, "message": "Webhook enabled."})
 		if integration_type == "minecraft":
-			rows = interface.client.execute_query(
-				"SELECT id, mc_username FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, target_user_id),
-			) or []
+			rows = interface.get_minecraft_whitelist_entry_for_user(integration_id, target_user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
-			mc_username = rows[0].get("mc_username")
+			mc_username = None
+			mc_rows = interface.get_minecraft_whitelist_username_by_id(integration_id)
+			if mc_rows:
+				mc_username = mc_rows[0].get("mc_username")
 			interface.client.update_rows_with_filters(
 				"minecraft_whitelist",
 				{"is_active": True, "ban_reason": None},
@@ -1271,10 +1218,7 @@ def api_admin_users_integration_enable():
 			)
 			return flask.jsonify({"ok": True, "message": "Minecraft integration enabled."})
 		if integration_type == "audiobookshelf":
-			rows = interface.client.execute_query(
-				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, target_user_id),
-			) or []
+			rows = interface.get_audiobookshelf_registration_for_user(integration_id, target_user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Audiobookshelf integration not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -2103,15 +2047,12 @@ def api_minecraft_registration():
 	try:
 		exemption = None
 		if user_id:
-			exemption = interface.client.execute_query(
-				"SELECT id FROM application_exemptions "
-				"WHERE user_id = %s AND integration_type = 'minecraft' AND integration_key = %s LIMIT 1;",
-				(user_id, mc_username),
-			) or []
-		existing = interface.client.execute_query(
-			"SELECT 1 FROM minecraft_registrations WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-			(mc_username,),
-		) or []
+			exemption = interface.get_application_exemption_with_key(
+				user_id,
+				"minecraft",
+				mc_username,
+			)
+		existing = interface.get_minecraft_registration_by_username(mc_username)
 		if existing and not exemption:
 			return flask.jsonify({
 				"ok": False,
@@ -2128,10 +2069,7 @@ def api_minecraft_registration():
 				raw_conditions=["LOWER(mc_username) = LOWER(%s)"],
 				raw_params=[mc_username],
 			)
-		whitelisted = interface.client.execute_query(
-			"SELECT 1 FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) AND is_active = TRUE LIMIT 1;",
-			(mc_username,),
-		) or []
+		whitelisted = interface.get_minecraft_whitelist_active_by_username(mc_username)
 		if whitelisted:
 			return flask.jsonify({
 				"ok": False,
@@ -2150,10 +2088,7 @@ def api_minecraft_registration():
 			"reviewed_by_user_id": user_id if is_admin else None,
 		})
 		if is_admin:
-			existing = interface.client.execute_query(
-				"SELECT id, is_active FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-				(mc_username,),
-			) or []
+			existing = interface.get_minecraft_whitelist_by_username(mc_username)
 			if not existing:
 				interface.client.insert_row("minecraft_whitelist", {
 					"user_id": user_id,
@@ -2380,18 +2315,8 @@ def api_discord_webhook_verify():
 	try:
 		exemption = None
 		if user_id:
-			exemption = interface.client.execute_query(
-				"SELECT id FROM application_exemptions "
-				"WHERE user_id = %s AND integration_type = 'discord_webhook' LIMIT 1;",
-				(user_id,),
-			) or []
-		existing_sub = interface.client.execute_query(
-			"SELECT s.id, s.is_active, w.is_active AS webhook_active "
-			"FROM discord_webhook_subscriptions s "
-			"JOIN discord_webhooks w ON w.id = s.webhook_id "
-			"WHERE w.webhook_url = %s AND s.event_key = %s LIMIT 1;",
-			(webhook_url, event_key),
-		) or []
+			exemption = interface.get_application_exemption(user_id, "discord_webhook")
+		existing_sub = interface.get_discord_subscription_by_webhook_url_event_key(webhook_url, event_key)
 		if existing_sub:
 			sub = existing_sub[0]
 			if not bool(sub.get("webhook_active", True)):
@@ -2428,10 +2353,7 @@ def api_discord_webhook_verify():
 					"message": "That webhook is already subscribed to this event key.",
 				}), 400
 
-		existing_webhooks = interface.client.execute_query(
-			"SELECT id, is_active FROM discord_webhooks WHERE webhook_url = %s LIMIT 1;",
-			(webhook_url,),
-		) or []
+		existing_webhooks = interface.get_discord_webhook_by_url(webhook_url)
 		if existing_webhooks:
 			active = bool(existing_webhooks[0].get("is_active", True))
 			if not active:
@@ -2445,10 +2367,7 @@ def api_discord_webhook_verify():
 			"message": f"Failed to validate existing webhook: {e}",
 		}), 400
 	try:
-		existing = interface.client.execute_query(
-			"SELECT 1 FROM discord_webhook_registrations WHERE webhook_url = %s AND event_key = %s LIMIT 1;",
-			(webhook_url, event_key),
-		) or []
+		existing = interface.get_discord_webhook_registration_by_url_event_key(webhook_url, event_key)
 		if existing and not exemption:
 			return flask.jsonify({
 				"ok": False,
@@ -2648,11 +2567,7 @@ def api_discord_webhook_verify_submit():
 	try:
 		exemption = None
 		if user_id:
-			exemption = interface.client.execute_query(
-				"SELECT id FROM application_exemptions "
-				"WHERE user_id = %s AND integration_type = 'discord_webhook' LIMIT 1;",
-				(user_id,),
-			) or []
+			exemption = interface.get_application_exemption(user_id, "discord_webhook")
 			if exemption:
 				interface.client.delete_rows_with_filters(
 					"application_exemptions",
@@ -2664,13 +2579,10 @@ def api_discord_webhook_verify_submit():
 					raw_conditions=["webhook_url = %s", "event_key = %s"],
 					raw_params=[ver["webhook_url"], ver["event_key"]],
 				)
-		existing_sub = interface.client.execute_query(
-			"SELECT s.id, s.is_active, w.is_active AS webhook_active "
-			"FROM discord_webhook_subscriptions s "
-			"JOIN discord_webhooks w ON w.id = s.webhook_id "
-			"WHERE w.webhook_url = %s AND s.event_key = %s LIMIT 1;",
-			(ver["webhook_url"], ver["event_key"]),
-		) or []
+		existing_sub = interface.get_discord_subscription_by_webhook_url_event_key(
+			ver["webhook_url"],
+			ver["event_key"],
+		)
 		if existing_sub:
 			sub = existing_sub[0]
 			if not bool(sub.get("webhook_active", True)):
@@ -2701,20 +2613,17 @@ def api_discord_webhook_verify_submit():
 					"message": "That webhook is already subscribed to this event key.",
 				}), 400
 
-		existing_webhooks = interface.client.execute_query(
-			"SELECT id, is_active FROM discord_webhooks WHERE webhook_url = %s LIMIT 1;",
-			(ver["webhook_url"],),
-		) or []
+		existing_webhooks = interface.get_discord_webhook_by_url(ver["webhook_url"])
 		if existing_webhooks and not bool(existing_webhooks[0].get("is_active", True)):
 			return flask.jsonify({
 				"ok": False,
 				"message": "That webhook is inactive and cannot be re-verified. Contact an admin.",
 			}), 403
 
-		existing = interface.client.execute_query(
-			"SELECT 1 FROM discord_webhook_registrations WHERE webhook_url = %s AND event_key = %s LIMIT 1;",
-			(ver["webhook_url"], ver["event_key"]),
-		) or []
+		existing = interface.get_discord_webhook_registration_by_url_event_key(
+			ver["webhook_url"],
+			ver["event_key"],
+		)
 		if existing and not exemption:
 			return flask.jsonify({
 				"ok": False,
@@ -2802,10 +2711,7 @@ def api_admin_audiobookshelf_approve():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT first_name, last_name, email FROM audiobookshelf_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_audiobookshelf_registration_contact_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
@@ -2872,10 +2778,7 @@ def api_admin_audiobookshelf_approve_link():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		reg_rows = interface.client.execute_query(
-			"SELECT first_name, last_name, email FROM audiobookshelf_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		reg_rows = interface.get_audiobookshelf_registration_contact_by_id(reg_id)
 		if not reg_rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = reg_rows[0]
@@ -2926,10 +2829,7 @@ def api_admin_audiobookshelf_deny():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT first_name, last_name, email FROM audiobookshelf_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_audiobookshelf_registration_contact_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
@@ -3001,11 +2901,7 @@ def api_admin_discord_webhook_approve():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT name, event_key, webhook_url, submitted_by_user_id, submitted_by_email "
-			"FROM discord_webhook_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_discord_webhook_registration_contact_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
@@ -3026,10 +2922,10 @@ def api_admin_discord_webhook_approve():
 	intro = "Your Discord webhook subscription has been approved and activated."
 	if anon_user:
 		intro += " This integration was created without a linked account on zubekanov.com."
-		webhook_rows = interface.client.execute_query(
-			"SELECT id FROM discord_webhooks WHERE webhook_url = %s AND user_id = %s LIMIT 1;",
-			(reg.get("webhook_url"), reg.get("submitted_by_user_id")),
-		) or []
+		webhook_rows = interface.get_discord_webhook_id_by_url_and_user(
+			reg.get("webhook_url"),
+			reg.get("submitted_by_user_id"),
+		)
 		if webhook_rows:
 			webhook_id = str(webhook_rows[0].get("id"))
 			token = _build_integration_removal_token(
@@ -3080,11 +2976,7 @@ def api_admin_discord_webhook_approve_link():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT name, event_key, webhook_url, submitted_by_user_id, submitted_by_email "
-			"FROM discord_webhook_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_discord_webhook_registration_contact_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
@@ -3102,10 +2994,10 @@ def api_admin_discord_webhook_approve_link():
 		intro = "Your Discord webhook subscription has been approved and activated."
 		if anon_user:
 			intro += " This integration was created without a linked account on zubekanov.com."
-			webhook_rows = interface.client.execute_query(
-				"SELECT id FROM discord_webhooks WHERE webhook_url = %s AND user_id = %s LIMIT 1;",
-				(reg.get("webhook_url"), reg.get("submitted_by_user_id")),
-			) or []
+			webhook_rows = interface.get_discord_webhook_id_by_url_and_user(
+				reg.get("webhook_url"),
+				reg.get("submitted_by_user_id"),
+			)
 			if webhook_rows:
 				webhook_id = str(webhook_rows[0].get("id"))
 				token = _build_integration_removal_token(
@@ -3142,10 +3034,7 @@ def api_admin_discord_webhook_deny():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT name, event_key, webhook_url FROM discord_webhook_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_discord_webhook_registration_basic_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
@@ -3213,10 +3102,9 @@ def api_admin_audiobookshelf_pending_count():
 	if err:
 		return err
 	try:
-		count_rows = interface.client.execute_query(
-			"SELECT COUNT(*) AS cnt FROM audiobookshelf_registrations WHERE status = 'pending';"
-		) or []
-		count = int(count_rows[0]["cnt"]) if count_rows else 0
+		count = interface.count_pending_audiobookshelf_registrations()
+		if count is None:
+			raise RuntimeError("Count unavailable")
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
 	return flask.jsonify({"count": count})
@@ -3228,10 +3116,9 @@ def api_admin_discord_webhook_pending_count():
 	if err:
 		return err
 	try:
-		count_rows = interface.client.execute_query(
-			"SELECT COUNT(*) AS cnt FROM discord_webhook_registrations WHERE status = 'pending';"
-		) or []
-		count = int(count_rows[0]["cnt"]) if count_rows else 0
+		count = interface.count_pending_discord_webhook_registrations()
+		if count is None:
+			raise RuntimeError("Count unavailable")
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
 	return flask.jsonify({"count": count})
@@ -3247,17 +3134,11 @@ def api_admin_minecraft_approve():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT * FROM minecraft_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_minecraft_registration_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
-		existing = interface.client.execute_query(
-			"SELECT id FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-			(reg.get("mc_username"),),
-		) or []
+		existing = interface.get_minecraft_whitelist_by_username(reg.get("mc_username"))
 		if not existing:
 			interface.client.insert_row("minecraft_whitelist", {
 				"user_id": reg.get("user_id"),
@@ -3292,10 +3173,10 @@ def api_admin_minecraft_approve():
 	intro = "Your Minecraft whitelist request has been approved."
 	if anon_user:
 		intro += " This integration was created without a linked account on zubekanov.com."
-		whitelist_rows = interface.client.execute_query(
-			"SELECT id FROM minecraft_whitelist WHERE user_id = %s AND LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-			(reg.get("user_id"), reg.get("mc_username")),
-		) or []
+		whitelist_rows = interface.get_minecraft_whitelist_by_user_and_username(
+			reg.get("user_id"),
+			reg.get("mc_username"),
+		)
 		if whitelist_rows:
 			whitelist_id = str(whitelist_rows[0].get("id"))
 			token = _build_integration_removal_token(
@@ -3346,17 +3227,11 @@ def api_admin_minecraft_approve_link():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT * FROM minecraft_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_minecraft_registration_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
-		existing = interface.client.execute_query(
-			"SELECT id FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-			(reg.get("mc_username"),),
-		) or []
+		existing = interface.get_minecraft_whitelist_by_username(reg.get("mc_username"))
 		if not existing:
 			interface.client.insert_row("minecraft_whitelist", {
 				"user_id": reg.get("user_id"),
@@ -3389,10 +3264,10 @@ def api_admin_minecraft_approve_link():
 		intro = "Your Minecraft whitelist request has been approved."
 		if anon_user:
 			intro += " This integration was created without a linked account on zubekanov.com."
-			whitelist_rows = interface.client.execute_query(
-				"SELECT id FROM minecraft_whitelist WHERE user_id = %s AND LOWER(mc_username) = LOWER(%s) LIMIT 1;",
-				(reg.get("user_id"), reg.get("mc_username")),
-			) or []
+			whitelist_rows = interface.get_minecraft_whitelist_by_user_and_username(
+				reg.get("user_id"),
+				reg.get("mc_username"),
+			)
 			if whitelist_rows:
 				whitelist_id = str(whitelist_rows[0].get("id"))
 				token = _build_integration_removal_token(
@@ -3428,10 +3303,7 @@ def api_admin_minecraft_deny():
 	if not reg_id:
 		return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 	try:
-		rows = interface.client.execute_query(
-			"SELECT * FROM minecraft_registrations WHERE id = %s;",
-			(reg_id,),
-		) or []
+		rows = interface.get_minecraft_registration_by_id(reg_id)
 		if not rows:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		reg = rows[0]
@@ -3511,10 +3383,7 @@ def api_integration_remove():
 
 	try:
 		if integration_type == "discord_webhook":
-			rows = interface.client.execute_query(
-				"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, user_id),
-			) or []
+			rows = interface.get_discord_webhook_for_user(integration_id, user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Webhook not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -3547,10 +3416,7 @@ def api_integration_remove():
 				"redirect": "/integration/removed",
 			})
 		if integration_type == "minecraft":
-			rows = interface.client.execute_query(
-				"SELECT id FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, user_id),
-			) or []
+			rows = interface.get_minecraft_whitelist_entry_for_user(integration_id, user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Minecraft whitelist entry not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -3583,10 +3449,7 @@ def api_integration_remove():
 				"redirect": "/integration/removed",
 			})
 		if integration_type == "audiobookshelf":
-			rows = interface.client.execute_query(
-				"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
-				(integration_id, user_id),
-			) or []
+			rows = interface.get_audiobookshelf_registration_for_user(integration_id, user_id)
 			if not rows:
 				return flask.jsonify({"ok": False, "message": "Audiobookshelf registration not found."}), 404
 			interface.client.update_rows_with_filters(
@@ -3657,10 +3520,9 @@ def api_admin_minecraft_pending_count():
 	if err:
 		return err
 	try:
-		count_rows = interface.client.execute_query(
-			"SELECT COUNT(*) AS cnt FROM minecraft_registrations WHERE status = 'pending';"
-		) or []
-		count = int(count_rows[0]["cnt"]) if count_rows else 0
+		count = interface.count_pending_minecraft_registrations()
+		if count is None:
+			raise RuntimeError("Count unavailable")
 	except Exception as e:
 		return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
 	return flask.jsonify({"count": count})

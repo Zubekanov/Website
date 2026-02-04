@@ -165,6 +165,7 @@ def step_text_block(html: str) -> Step:
 
 
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 _MD_CODE_RE = re.compile(r"`([^`]+)`")
 _MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 _MD_ITALIC_RE = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
@@ -173,6 +174,13 @@ _MD_LIST_ITEM_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>(?:[-*+])|(?:\d+\.
 
 def _md_inline(text: str) -> str:
 	escaped = html.escape(text)
+	escaped = _MD_IMAGE_RE.sub(
+		lambda m: (
+			f'<img src="{html.escape(m.group(2), quote=True)}" '
+			f'alt="{m.group(1)}" loading="eager" fetchpriority="high">'
+		),
+		escaped,
+	)
 	escaped = _MD_LINK_RE.sub(lambda m: f'<a href="{html.escape(m.group(2), quote=True)}">{m.group(1)}</a>', escaped)
 	escaped = _MD_CODE_RE.sub(lambda m: f"<code>{m.group(1)}</code>", escaped)
 	escaped = _MD_BOLD_RE.sub(lambda m: f"<strong>{m.group(1)}</strong>", escaped)
@@ -338,6 +346,19 @@ def step_markdown_block(md_text: str, *, class_name: str = "markdown-block") -> 
 		builder.add_html(f'<div class="{class_name}">{render_markdown(md_text)}</div>')
 	return _step
 
+def step_profile_content(
+	profile_card_html: str,
+	integrations_html: str,
+	modal_html: str,
+) -> Step:
+	def _step(builder: PageBuilder):
+		builder.add_html(
+			html_fragments.profile_page_shell(
+				profile_card_html + integrations_html + modal_html
+			)
+		)
+	return _step
+
 def step_text_paragraph(text: str) -> Step:
 	def _step(builder: PageBuilder):
 		builder.add_html(html_fragments.paragraph(text))
@@ -359,6 +380,74 @@ def step_link_paragraph(text: str, href: str) -> Step:
 def step_set_page_title(title: str) -> Step:
 	def _step(builder: PageBuilder):
 		builder._b.set_page_title(title)
+	return _step
+
+def step_add_stylesheets(*paths: str) -> Step:
+	def _step(builder: PageBuilder):
+		for path in paths:
+			if path:
+				builder._b.stylesheets.add(path)
+	return _step
+
+def step_add_scripts(*paths: str) -> Step:
+	def _step(builder: PageBuilder):
+		for path in paths:
+			if path:
+				builder._b.scripts.add(path)
+	return _step
+
+def step_metrics_dashboard(kpi_html: str) -> Step:
+	def _step(builder: PageBuilder):
+		builder.add_html(html_fragments.metrics_dashboard_open())
+		builder.add_html(kpi_html)
+		builder.add_html(html_fragments.metrics_dashboard_between_sections())
+	return _step
+
+def step_admin_users_content(cards_html: str) -> Step:
+	def _step(builder: PageBuilder):
+		builder.add_html(html_fragments.admin_users_shell(cards_html))
+		builder.add_html(html_fragments.integration_delete_modal(
+			html_fragments.integration_delete_reason_select(
+				[
+					("", "Select a reason"),
+					("admin", "Admin action"),
+					("policy", "Policy violation"),
+					("security", "Security concern"),
+					("other", "Other"),
+				]
+			)
+		))
+		builder.add_html(html_fragments.admin_user_delete_modal(
+			html_fragments.admin_user_delete_reason_select(
+				[
+					("", "Select a reason"),
+					("requested", "User requested removal"),
+					("policy", "Policy violation"),
+					("security", "Security concern"),
+					("duplicate", "Duplicate account"),
+					("other", "Other"),
+				]
+			)
+		))
+	return _step
+
+def step_admin_dashboard_content(cards_html: str) -> Step:
+	def _step(builder: PageBuilder):
+		builder.add_html(html_fragments.admin_dashboard(cards_html))
+	return _step
+
+def step_admin_approvals_content(
+	title: str,
+	cards_html: str,
+	*,
+	empty_message: str = "No pending requests.",
+) -> Step:
+	def _step(builder: PageBuilder):
+		builder.add_html(html_fragments.heading(title, 1))
+		if cards_html:
+			builder.add_html(cards_html)
+		else:
+			builder.add_html(html_fragments.paragraph(empty_message))
 	return _step
 
 def step_form(
@@ -607,12 +696,123 @@ def build_readme_page(user: dict | None) -> str:
 
 	return build_page(user, PageSpec(
 		steps=(
-			step_set_page_title("README"),
-			step_heading("README", 1),
+			step_set_page_title("README.md"),
 			step_centering(
 				max_width="900px",
-				contents=(step_markdown_block(readme_text),),
+				contents=(
+					step_heading("README.md", 1),
+					step_markdown_block(readme_text),
+					),
 			),
+		),
+	))
+
+def build_empty_landing_page(user: dict | None) -> str:
+	nav_config = fcr.find("navbar_landing.json")
+	items = nav_config.get("items", [])
+	section_cards: list[str] = []
+
+	def _landing_nav_hero(title: str, lead: str) -> str:
+		return (
+			"<div class=\"landing-nav__hero\">"
+			f"<h2>{html.escape(title)}</h2>"
+			f"<p class=\"landing-nav__lead\">{html.escape(lead)}</p>"
+			"</div>"
+		)
+
+	def _landing_nav_shell(hero_html: str, cards_html: str) -> str:
+		return (
+			"<section class=\"landing-nav\">"
+			f"{hero_html}"
+			"<div class=\"landing-nav__grid\">"
+			f"{cards_html}"
+			"</div>"
+			"</section>"
+		)
+
+	def _card(title: str, links_html: str, *, class_name: str = "") -> str:
+		card_class = "landing-nav__card"
+		if class_name:
+			card_class = f"{card_class} {class_name}"
+		return (
+			f"<div class=\"{card_class}\">"
+			f"<h3>{html.escape(title)}</h3>"
+			f"<div class=\"landing-nav__links\">{links_html}</div>"
+			"</div>"
+		)
+
+	def _link(label: str, desc: str, href: str) -> str:
+		escaped_desc = html.escape(desc)
+		escaped_desc = escaped_desc.replace("&lt;br&gt;", "\n").replace("&lt;br/&gt;", "\n").replace("&lt;br /&gt;", "\n")
+		return (
+			f"<a class=\"landing-nav__link\" href=\"{html.escape(href)}\">"
+			f"<span class=\"landing-nav__label\">{html.escape(label)}</span>"
+			f"<span class=\"landing-nav__desc\">{escaped_desc}</span>"
+			"</a>"
+		)
+
+	quick_links: list[str] = [
+		_link("Login", "Sign in to your account.", "/login"),
+		_link("Register", "Create an account to access more features.", "/register"),
+	]
+	for item in items:
+		item_type = item.get("type")
+		if item_type == "link":
+			quick_links.append(_link(item.get("label", ""), item.get("desc", ""), item.get("href", "#")))
+			continue
+		if item_type != "mega":
+			continue
+		for section in item.get("sections", []):
+			section_type = section.get("type")
+			if section_type == "github_repos":
+				username = section.get("username", "")
+				limit = int(section.get("limit", 6) or 6)
+				repos, total = parent_builder.fetch_github_repos(username, limit=limit) if username else ([], 0)
+				links = [
+					_link(
+						r.get("label", ""),
+						r.get("desc", ""),
+						r.get("href", "#"),
+					)
+					for r in repos
+				]
+				more_count = max(total - len(repos), 0)
+				if more_count:
+					links.append(_link(
+						f"{more_count} more repos publicly available",
+						"View all repositories on GitHub.",
+						f"https://github.com/{username}?tab=repositories",
+					))
+				section_cards.append(_card(
+					section.get("label", "GitHub Repositories"),
+					"".join(links),
+					class_name="landing-nav__card--github",
+				))
+				continue
+			links = [
+				_link(
+					entry.get("label", ""),
+					entry.get("desc", ""),
+					entry.get("href", "#"),
+				)
+				for entry in section.get("items", [])
+			]
+			section_cards.append(_card(section.get("label", item.get("label", "Explore")), "".join(links)))
+
+	if quick_links:
+		section_cards.insert(0, _card("Quick Links", "".join(quick_links)))
+
+	hero_html = _landing_nav_hero(
+		"This is the collection of features implemented on the website.",
+		"Thank you for visiting!",
+	)
+	page_html = _landing_nav_shell(hero_html, "".join(section_cards))
+
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Home"),
+			step_add_stylesheets("/static/css/landing_nav.css"),
+			step_text_block(page_html),
 		),
 	))
 
@@ -632,10 +832,6 @@ def build_profile_page(user: dict | None) -> str:
 				admin_since = rows[0].get("created_at")
 		except Exception:
 			admin_since = None
-	builder = PageBuilder(user=user)
-	builder._b.stylesheets.add("/static/css/profile.css")
-	builder._b.scripts.add("/static/js/copy_tooltip.js")
-	builder._b.scripts.add("/static/js/profile_integrations.js")
 	admin_line = ""
 	if admin_since:
 		admin_line = html_fragments.profile_admin_line(admin_since.strftime("%d %B %Y"))
@@ -650,21 +846,7 @@ def build_profile_page(user: dict | None) -> str:
 		for wh in webhooks or []:
 			subscriptions_html = ""
 			try:
-				sub_rows = interface.client.execute_query(
-					"SELECT s.id, s.event_key, s.is_active, s.created_at, "
-					"ek.permission, ek.description "
-					"FROM discord_webhook_subscriptions s "
-					"LEFT JOIN discord_event_keys ek ON ek.event_key = s.event_key "
-					"WHERE s.webhook_id = %s "
-					"ORDER BY "
-					"CASE COALESCE(ek.permission, '') "
-					"WHEN 'admins' THEN 1 "
-					"WHEN 'users' THEN 2 "
-					"WHEN 'all' THEN 3 "
-					"ELSE 4 END, "
-					"s.created_at DESC;",
-					(wh.get("id"),),
-				) or []
+				sub_rows = interface.get_discord_webhook_subscriptions(wh.get("id"))
 				if sub_rows:
 					sub_cards = []
 					for sub in sub_rows:
@@ -853,13 +1035,14 @@ def build_profile_page(user: dict | None) -> str:
 			]
 		)
 	)
-	builder.add_html(
-		html_fragments.profile_page_shell(
-			profile_card_html + integrations_html + modal_html
-		)
-	)
-	builder._b.set_page_title(user_name + "'s Profile")
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title(user_name + "'s Profile"),
+			step_add_stylesheets("/static/css/profile.css"),
+			step_add_scripts("/static/js/copy_tooltip.js", "/static/js/profile_integrations.js"),
+			step_profile_content(profile_card_html, integrations_html, modal_html),
+		),
+	))
 
 
 def build_login_page(user: dict | None) -> str:
@@ -1246,21 +1429,19 @@ def build_verify_email_token_page(user: dict | None, token: str) -> str:
 	))
 
 def build_server_metrics_page(user: dict | None) -> str:
-	builder = PageBuilder(user=user)
-	builder._b.stylesheets.add("/static/css/metrics_dashboard.css")
-
-	builder.add_html(html_fragments.metrics_dashboard_open())
-
-	for key, label in METRICS_NAMES.items():
-		builder.add_html(html_fragments.metrics_kpi_card(key, label))
-
-	builder.add_html(html_fragments.metrics_dashboard_between_sections())
-
-	builder.add_metric_graph_grid(list(METRICS_NAMES.keys()))
-
-	builder.add_html(html_fragments.metrics_dashboard_close())
-	builder._b.set_page_title("Server Metrics")
-	return builder.render()
+	kpi_html = "".join(
+		html_fragments.metrics_kpi_card(key, label)
+		for key, label in METRICS_NAMES.items()
+	)
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Server Metrics"),
+			step_add_stylesheets("/static/css/metrics_dashboard.css"),
+			step_metrics_dashboard(kpi_html),
+			step_metrics_grid,
+			step_text_block(html_fragments.metrics_dashboard_close()),
+		),
+	))
 
 def build_reset_password_page(user: dict | None) -> str:
 	return build_page(user, PageSpec(
@@ -1336,10 +1517,7 @@ def build_minecraft_page(user: dict | None) -> str:
 			step_text_block(HTMLHelper.hidden_input("email", user.get("email", ""))),
 		)
 		try:
-			rows = interface.client.execute_query(
-				"SELECT mc_username FROM minecraft_whitelist WHERE user_id = %s AND is_active = TRUE;",
-				(user.get("id"),),
-			) or []
+			rows = interface.get_active_minecraft_whitelist_usernames(user.get("id"))
 			if rows:
 				is_whitelisted = True
 				whitelist_username = rows[0].get("mc_username") or ""
@@ -1422,18 +1600,6 @@ def build_psql_interface_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.scripts.add("/static/js/form_submit.js")
-	builder._b.scripts.add("/static/js/db_interface_resize.js")
-	builder._b.scripts.add("/static/js/db_interface_actions.js")
-	builder._b.scripts.add("/static/js/db_interface_userid.js")
-	builder._b.stylesheets.add("/static/css/forms.css")
-	builder._b.stylesheets.add("/static/css/db_interface.css")
-	builder._b.set_page_title("Database Admin")
-	builder.add_html(html_fragments.db_admin_open())
-	builder.add_html(html_fragments.heading("Database Admin", 1))
-	builder.add_html(html_fragments.db_admin_message())
-
 	schema = "public"
 	user_lookup = {}
 	user_options = []
@@ -1459,7 +1625,17 @@ def build_psql_interface_page(user: dict | None) -> str:
 	if user_options:
 		options_json = json.dumps(user_options)
 		options_b64 = base64.b64encode(options_json.encode("utf-8")).decode("ascii")
-		builder.add_html(html_fragments.db_user_id_options_script(options_b64))
+		user_options_script = html_fragments.db_user_id_options_script(options_b64)
+	else:
+		user_options_script = ""
+
+	html_parts = [
+		html_fragments.db_admin_open(),
+		html_fragments.heading("Database Admin", 1),
+		html_fragments.db_admin_message(),
+	]
+	if user_options_script:
+		html_parts.append(user_options_script)
 
 	tables = interface.client.list_tables(schema)
 	enum_map: dict[str, dict[str, list[str]]] = {}
@@ -1500,16 +1676,16 @@ def build_psql_interface_page(user: dict | None) -> str:
 			page_num=0,
 		)
 
-		builder.add_html(html_fragments.db_section_open(table))
+		html_parts.append(html_fragments.db_section_open(table))
 
 		if not pk_cols:
-			builder.add_html(html_fragments.db_section_no_pk())
+			html_parts.append(html_fragments.db_section_no_pk())
 			continue
 
 		grid_cols = " ".join(["minmax(0, 1fr)"] * len(columns) + ["160px"])
 		col_types = ",".join([(col_info.get(c, {}).get("data_type") or "") for c in columns])
 		pk_cols_attr = ",".join(pk_cols)
-		builder.add_html(html_fragments.db_grid_open(
+		html_parts.append(html_fragments.db_grid_open(
 			grid_cols=grid_cols,
 			col_count=len(columns),
 			columns=columns,
@@ -1518,10 +1694,10 @@ def build_psql_interface_page(user: dict | None) -> str:
 		))
 
 		# Header
-		builder.add_html(html_fragments.db_grid_head_row(columns))
+		html_parts.append(html_fragments.db_grid_head_row(columns))
 
 		if not rows:
-			builder.add_html(html_fragments.db_grid_empty_row())
+			html_parts.append(html_fragments.db_grid_empty_row())
 		else:
 			for row in rows:
 				field_names = ["table", "schema"]
@@ -1529,13 +1705,13 @@ def build_psql_interface_page(user: dict | None) -> str:
 				field_names.extend([f"col__{col}" for col in columns])
 				fields_attr = html.escape(", ".join(field_names))
 
-				builder.add_html(html_fragments.db_row_form_open())
-				builder.add_html(HTMLHelper.hidden_input("table", html.escape(table)))
-				builder.add_html(HTMLHelper.hidden_input("schema", html.escape(schema)))
+				html_parts.append(html_fragments.db_row_form_open())
+				html_parts.append(HTMLHelper.hidden_input("table", html.escape(table)))
+				html_parts.append(HTMLHelper.hidden_input("schema", html.escape(schema)))
 
 				for pk in pk_cols:
 					pk_val = row.get(pk)
-					builder.add_html(HTMLHelper.hidden_input(
+					html_parts.append(HTMLHelper.hidden_input(
 						f"pk__{html.escape(pk)}",
 						html.escape(str(pk_val) if pk_val is not None else ""),
 					))
@@ -1548,9 +1724,9 @@ def build_psql_interface_page(user: dict | None) -> str:
 					enum_vals = table_enums.get(col)
 					if enum_vals:
 						options_html = html_fragments.db_enum_options(enum_vals, selected=val_str, include_blank=True)
-						builder.add_html(html_fragments.db_cell_enum(i, col, options_html))
+						html_parts.append(html_fragments.db_cell_enum(i, col, options_html))
 					elif col_type == "boolean":
-						builder.add_html(html_fragments.db_cell_checkbox(i, col, bool(val)))
+						html_parts.append(html_fragments.db_cell_checkbox(i, col, bool(val)))
 					else:
 						tooltip_attr = ""
 						tooltip_class = ""
@@ -1563,7 +1739,7 @@ def build_psql_interface_page(user: dict | None) -> str:
 								]
 								tooltip_attr = f' data-tooltip="{html.escape(" | ".join([b for b in title_bits if b]))}"'
 								tooltip_class = " db-cell--tooltip"
-						builder.add_html(html_fragments.db_cell_text(
+						html_parts.append(html_fragments.db_cell_text(
 							i=i,
 							col=col,
 							val_str=val_str,
@@ -1573,17 +1749,17 @@ def build_psql_interface_page(user: dict | None) -> str:
 							tooltip_class=tooltip_class,
 						))
 
-				builder.add_html(html_fragments.db_actions_cell(fields_attr))
-				builder.add_html(html_fragments.db_row_form_close())
+				html_parts.append(html_fragments.db_actions_cell(fields_attr))
+				html_parts.append(html_fragments.db_row_form_close())
 
 		# Insert form
-		builder.add_html(html_fragments.db_add_row_head())
+		html_parts.append(html_fragments.db_add_row_head())
 		insert_fields = ["table", "schema"]
 		insert_fields.extend([f"col__{col}" for col in columns])
 		insert_fields_attr = html.escape(", ".join(insert_fields))
-		builder.add_html(html_fragments.db_row_add_open())
-		builder.add_html(HTMLHelper.hidden_input("table", html.escape(table)))
-		builder.add_html(HTMLHelper.hidden_input("schema", html.escape(schema)))
+		html_parts.append(html_fragments.db_row_add_open())
+		html_parts.append(HTMLHelper.hidden_input("table", html.escape(table)))
+		html_parts.append(HTMLHelper.hidden_input("schema", html.escape(schema)))
 
 		for i, col in enumerate(columns):
 			max_len = col_info.get(col, {}).get("character_maximum_length")
@@ -1591,11 +1767,11 @@ def build_psql_interface_page(user: dict | None) -> str:
 			enum_vals = table_enums.get(col)
 			if enum_vals:
 				options_html = html_fragments.db_enum_options(enum_vals, include_blank=True)
-				builder.add_html(html_fragments.db_cell_enum(i, col, options_html))
+				html_parts.append(html_fragments.db_cell_enum(i, col, options_html))
 			elif col_type == "boolean":
-				builder.add_html(html_fragments.db_cell_checkbox(i, col, False))
+				html_parts.append(html_fragments.db_cell_checkbox(i, col, False))
 			else:
-				builder.add_html(html_fragments.db_cell_text(
+				html_parts.append(html_fragments.db_cell_text(
 					i=i,
 					col=col,
 					val_str="",
@@ -1605,14 +1781,27 @@ def build_psql_interface_page(user: dict | None) -> str:
 					tooltip_class="",
 				))
 
-		builder.add_html(html_fragments.db_add_actions_cell(insert_fields_attr))
-		builder.add_html(html_fragments.db_row_add_close())
+		html_parts.append(html_fragments.db_add_actions_cell(insert_fields_attr))
+		html_parts.append(html_fragments.db_row_add_close())
 
-		builder.add_html(html_fragments.db_grid_close())
-		builder.add_html(html_fragments.db_section_close())
+		html_parts.append(html_fragments.db_grid_close())
+		html_parts.append(html_fragments.db_section_close())
 
-	builder.add_html(html_fragments.db_admin_close())
-	return builder.render()
+	html_parts.append(html_fragments.db_admin_close())
+	page_html = "".join(html_parts)
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Database Admin"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/db_interface.css"),
+			step_add_scripts(
+				"/static/js/form_submit.js",
+				"/static/js/db_interface_resize.js",
+				"/static/js/db_interface_actions.js",
+				"/static/js/db_interface_userid.js",
+			),
+			step_text_block(page_html),
+		),
+	))
 
 def build_admin_email_debug_page(user: dict | None) -> str:
 	if not user:
@@ -1633,18 +1822,17 @@ def build_admin_email_debug_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.scripts.add("/static/js/form_submit.js")
-	builder._b.stylesheets.add("/static/css/forms.css")
-	builder._b.stylesheets.add("/static/css/centering.css")
-	builder._b.set_page_title("Debug Email")
-
-	builder.add_html(
-		html_fragments.center_column(
-			html_fragments.email_debug_form() + html_fragments.email_debug_script()
-		)
+	page_html = html_fragments.center_column(
+		html_fragments.email_debug_form() + html_fragments.email_debug_script()
 	)
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Debug Email"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+			step_add_scripts("/static/js/form_submit.js"),
+			step_text_block(page_html),
+		),
+	))
 
 def build_admin_dashboard_page(user: dict | None) -> str:
 	if not user:
@@ -1665,23 +1853,9 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.stylesheets.add("/static/css/admin_dashboard.css")
-	builder._b.set_page_title("Admin Dashboard")
-
-	def _pending_count(table: str) -> int | None:
-		try:
-			rows = interface.client.execute_query(
-				f"SELECT COUNT(*) AS cnt FROM {table} WHERE status = %s;",
-				("pending",),
-			) or []
-			return int(rows[0]["cnt"]) if rows else 0
-		except Exception:
-			return None
-
-	count_audiobookshelf = _pending_count("audiobookshelf_registrations")
-	count_webhook = _pending_count("discord_webhook_registrations")
-	count_minecraft = _pending_count("minecraft_registrations")
+	count_audiobookshelf = interface.count_pending_audiobookshelf_registrations()
+	count_webhook = interface.count_pending_discord_webhook_registrations()
+	count_minecraft = interface.count_pending_minecraft_registrations()
 
 	cards_html = (
 		html_fragments.admin_card(
@@ -1730,8 +1904,13 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Send a test email from the system.",
 		)
 	)
-	builder.add_html(html_fragments.admin_dashboard(cards_html))
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Admin Dashboard"),
+			step_add_stylesheets("/static/css/admin_dashboard.css"),
+			step_admin_dashboard_content(cards_html),
+		),
+	))
 
 
 def build_admin_users_page(user: dict | None) -> str:
@@ -1753,26 +1932,7 @@ def build_admin_users_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.stylesheets.add("/static/css/profile.css")
-	builder._b.stylesheets.add("/static/css/admin_users.css")
-	builder._b.scripts.add("/static/js/admin_users.js")
-	builder._b.scripts.add("/static/js/copy_tooltip.js")
-	builder._b.set_page_title("User Management")
-
-	user_rows = interface.client.execute_query(
-		"SELECT id, first_name, last_name, email, created_at, is_active, is_anonymous "
-		"FROM users u "
-		"WHERE COALESCE(u.is_active, TRUE) = TRUE "
-		"AND ("
-		"COALESCE(u.is_anonymous, FALSE) = FALSE "
-		"OR EXISTS (SELECT 1 FROM discord_webhooks w WHERE w.user_id = u.id AND COALESCE(w.is_active, TRUE) = TRUE) "
-		"OR EXISTS (SELECT 1 FROM minecraft_whitelist m WHERE m.user_id = u.id AND COALESCE(m.is_active, TRUE) = TRUE) "
-		"OR EXISTS (SELECT 1 FROM audiobookshelf_registrations a WHERE a.user_id = u.id "
-		"AND a.status = 'approved' AND COALESCE(a.is_active, TRUE) = TRUE)"
-		") "
-		"ORDER BY created_at DESC LIMIT 200;"
-	) or []
+	user_rows = interface.get_admin_user_management_rows()
 	cards_html = []
 
 	for row in user_rows:
@@ -1817,21 +1977,7 @@ def build_admin_users_page(user: dict | None) -> str:
 			for wh in webhooks or []:
 				subscriptions_html = ""
 				try:
-					sub_rows = interface.client.execute_query(
-						"SELECT s.id, s.event_key, s.is_active, s.created_at, "
-						"ek.permission, ek.description "
-						"FROM discord_webhook_subscriptions s "
-						"LEFT JOIN discord_event_keys ek ON ek.event_key = s.event_key "
-						"WHERE s.webhook_id = %s "
-						"ORDER BY "
-						"CASE COALESCE(ek.permission, '') "
-						"WHEN 'admins' THEN 1 "
-						"WHEN 'users' THEN 2 "
-						"WHEN 'all' THEN 3 "
-						"ELSE 4 END, "
-						"s.created_at DESC;",
-						(wh.get("id"),),
-					) or []
+					sub_rows = interface.get_discord_webhook_subscriptions(wh.get("id"))
 					if sub_rows:
 						sub_cards = []
 						for sub in sub_rows:
@@ -2063,31 +2209,14 @@ def build_admin_users_page(user: dict | None) -> str:
 			)
 		)
 
-	builder.add_html(html_fragments.admin_users_shell("".join(cards_html)))
-	builder.add_html(html_fragments.integration_delete_modal(
-		html_fragments.integration_delete_reason_select(
-			[
-				("", "Select a reason"),
-				("admin", "Admin action"),
-				("policy", "Policy violation"),
-				("security", "Security concern"),
-				("other", "Other"),
-			]
-		)
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("User Management"),
+			step_add_stylesheets("/static/css/profile.css", "/static/css/admin_users.css"),
+			step_add_scripts("/static/js/admin_users.js", "/static/js/copy_tooltip.js"),
+			step_admin_users_content("".join(cards_html)),
+		),
 	))
-	builder.add_html(html_fragments.admin_user_delete_modal(
-		html_fragments.admin_user_delete_reason_select(
-			[
-				("", "Select a reason"),
-				("requested", "User requested removal"),
-				("policy", "Policy violation"),
-				("security", "Security concern"),
-				("duplicate", "Duplicate account"),
-				("other", "Other"),
-			]
-		)
-	))
-	return builder.render()
 
 def _get_user_status_label(user_id: str | None, user_cache: dict[str, dict]) -> tuple[str, dict]:
 	if not user_id:
@@ -2128,14 +2257,6 @@ def build_admin_audiobookshelf_approvals_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.scripts.add("/static/js/form_submit.js")
-	builder._b.scripts.add("/static/js/admin_approvals.js")
-	builder._b.stylesheets.add("/static/css/forms.css")
-	builder._b.stylesheets.add("/static/css/centering.css")
-	builder._b.set_page_title("Audiobookshelf Approvals")
-	builder.add_html(html_fragments.heading("Audiobookshelf Approvals", 1))
-
 	rows, _ = interface.client.get_rows_with_filters(
 		"audiobookshelf_registrations",
 		equalities={"status": "pending"},
@@ -2147,9 +2268,16 @@ def build_admin_audiobookshelf_approvals_page(user: dict | None) -> str:
 	user_cache: dict[str, dict] = {}
 
 	if not rows:
-		builder.add_html(html_fragments.paragraph("No pending requests."))
-		return builder.render()
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("Audiobookshelf Approvals"),
+				step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+				step_add_scripts("/static/js/form_submit.js", "/static/js/admin_approvals.js"),
+				step_admin_approvals_content("Audiobookshelf Approvals", ""),
+			),
+		))
 
+	cards_html: list[str] = []
 	for r in rows:
 		status_label, _ = _get_user_status_label(r.get("user_id"), user_cache)
 		name = f"{r['first_name']} {r['last_name']}".strip()
@@ -2164,7 +2292,7 @@ def build_admin_audiobookshelf_approvals_page(user: dict | None) -> str:
 			"/api/admin/audiobookshelf/deny",
 			str(r["id"]),
 		)
-		builder.add_html(
+		cards_html.append(
 			html_fragments.approval_card(
 				html.escape(name),
 				"Audiobookshelf Request",
@@ -2174,7 +2302,14 @@ def build_admin_audiobookshelf_approvals_page(user: dict | None) -> str:
 			)
 		)
 
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Audiobookshelf Approvals"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+			step_add_scripts("/static/js/form_submit.js", "/static/js/admin_approvals.js"),
+			step_admin_approvals_content("Audiobookshelf Approvals", "".join(cards_html)),
+		),
+	))
 
 
 def build_admin_discord_webhook_approvals_page(user: dict | None) -> str:
@@ -2196,14 +2331,6 @@ def build_admin_discord_webhook_approvals_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.scripts.add("/static/js/form_submit.js")
-	builder._b.scripts.add("/static/js/admin_approvals.js")
-	builder._b.stylesheets.add("/static/css/forms.css")
-	builder._b.stylesheets.add("/static/css/centering.css")
-	builder._b.set_page_title("Discord Webhook Approvals")
-	builder.add_html(html_fragments.heading("Discord Webhook Approvals", 1))
-
 	rows, _ = interface.client.get_rows_with_filters(
 		"discord_webhook_registrations",
 		equalities={"status": "pending"},
@@ -2216,9 +2343,16 @@ def build_admin_discord_webhook_approvals_page(user: dict | None) -> str:
 	user_cache: dict[str, dict] = {}
 
 	if not rows:
-		builder.add_html(html_fragments.paragraph("No pending requests."))
-		return builder.render()
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("Discord Webhook Approvals"),
+				step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+				step_add_scripts("/static/js/form_submit.js", "/static/js/admin_approvals.js"),
+				step_admin_approvals_content("Discord Webhook Approvals", ""),
+			),
+		))
 
+	cards_html: list[str] = []
 	for r in rows:
 		submitted = ""
 		submitted_at = ""
@@ -2254,7 +2388,7 @@ def build_admin_discord_webhook_approvals_page(user: dict | None) -> str:
 			"/api/admin/discord-webhook/deny",
 			str(r["id"]),
 		)
-		builder.add_html(
+		cards_html.append(
 			html_fragments.approval_card(
 				html.escape(r["name"]),
 				f"Event key: {html.escape(r['event_key'])}",
@@ -2264,7 +2398,14 @@ def build_admin_discord_webhook_approvals_page(user: dict | None) -> str:
 			)
 		)
 
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Discord Webhook Approvals"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+			step_add_scripts("/static/js/form_submit.js", "/static/js/admin_approvals.js"),
+			step_admin_approvals_content("Discord Webhook Approvals", "".join(cards_html)),
+		),
+	))
 
 
 def build_admin_minecraft_approvals_page(user: dict | None) -> str:
@@ -2286,13 +2427,6 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 			),
 		))
 
-	builder = PageBuilder(user=user)
-	builder._b.scripts.add("/static/js/admin_approvals.js")
-	builder._b.stylesheets.add("/static/css/forms.css")
-	builder._b.stylesheets.add("/static/css/centering.css")
-	builder._b.set_page_title("Minecraft Approvals")
-	builder.add_html(html_fragments.heading("Minecraft Approvals", 1))
-
 	rows, _ = interface.client.get_rows_with_filters(
 		"minecraft_registrations",
 		equalities={"status": "pending"},
@@ -2304,9 +2438,16 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 	user_cache: dict[str, dict] = {}
 
 	if not rows:
-		builder.add_html(html_fragments.paragraph("No pending requests."))
-		return builder.render()
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("Minecraft Approvals"),
+				step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+				step_add_scripts("/static/js/admin_approvals.js"),
+				step_admin_approvals_content("Minecraft Approvals", ""),
+			),
+		))
 
+	cards_html: list[str] = []
 	for r in rows:
 		submitted_at = ""
 		if r.get("created_at"):
@@ -2328,7 +2469,7 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 			"/api/admin/minecraft/deny",
 			str(r["id"]),
 		)
-		builder.add_html(
+		cards_html.append(
 			html_fragments.approval_card(
 				html.escape(r["mc_username"]),
 				html.escape(r["who_are_you"]),
@@ -2338,49 +2479,62 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 			)
 		)
 
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Minecraft Approvals"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+			step_add_scripts("/static/js/admin_approvals.js"),
+			step_admin_approvals_content("Minecraft Approvals", "".join(cards_html)),
+		),
+	))
 
 
 def build_integration_remove_page(user: dict | None, token: str) -> str:
-	builder = PageBuilder(user=user)
-	builder._b.stylesheets.add("/static/css/forms.css")
-	builder._b.stylesheets.add("/static/css/centering.css")
-	builder._b.scripts.add("/static/js/form_submit.js")
-	builder._b.set_page_title("Remove Integration")
-
-	form_html = (
-		"<form class=\"form\" id=\"integration-remove-form\">"
-		f"<input type=\"hidden\" name=\"token\" value=\"{html.escape(token or '')}\">"
-		"<div class=\"form-group\">"
-		"<p>This integration was created without a linked account. Confirm removal below.</p>"
-		"</div>"
-		"<button type=\"submit\" class=\"form-submit danger\" "
-		"data-submit-route=\"/api/integration/remove\" data-submit-method=\"POST\" "
-		"data-submit-fields=\"token\" data-success-redirect=\"/integration/removed\">"
-		"Remove integration</button>"
-		"</form>"
+	page_html = html_fragments.center_column(
+		html_fragments.heading("Remove Integration", 2)
+		+ html_fragments.integration_remove_form(token)
 	)
-
-	builder.add_html(
-		html_fragments.center_column(
-			html_fragments.heading("Remove Integration", 2) + form_html
-		)
-	)
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Remove Integration"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+			step_add_scripts("/static/js/form_submit.js"),
+			step_text_block(page_html),
+		),
+	))
 
 
 def build_integration_removed_page(user: dict | None) -> str:
-	builder = PageBuilder(user=user)
-	builder._b.stylesheets.add("/static/css/centering.css")
-	builder._b.set_page_title("Integration Removed")
-	builder.add_html(
-		html_fragments.center_column(
-			html_fragments.heading("Integration Removed", 2)
-			+ html_fragments.paragraph("Your integration has been removed successfully.")
-			+ html_fragments.return_home()
-		)
+	page_html = html_fragments.center_column(
+		html_fragments.heading("Integration Removed", 2)
+		+ html_fragments.paragraph("Your integration has been removed successfully.")
+		+ html_fragments.return_home()
 	)
-	return builder.render()
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Integration Removed"),
+			step_add_stylesheets("/static/css/centering.css"),
+			step_text_block(page_html),
+		),
+	))
+
+def build_audiobookshelf_unavailable_page(user: dict | None, status_note: str | None = None) -> str:
+	note = status_note or "The service did not respond."
+	page_html = html_fragments.center_column(
+		html_fragments.heading("Audiobookshelf is offline", 2)
+		+ html_fragments.paragraph(
+			"We could not reach the Audiobookshelf service on this machine."
+		)
+		+ html_fragments.paragraph(f"Status: {html.escape(note)}")
+		+ html_fragments.return_home()
+	)
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Audiobookshelf Offline"),
+			step_add_stylesheets("/static/css/centering.css"),
+			step_text_block(page_html),
+		),
+	))
 
 def build_error_page(user: dict | None, e) -> str:
 	if not hasattr(e, 'code') or not hasattr(e, 'description'):

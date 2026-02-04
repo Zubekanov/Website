@@ -482,6 +482,210 @@ class PSQLInterface:
 	@property
 	def client(self):
 		return self._client
+
+	def execute_query(self, query, params=None):
+		return self._client.execute_query(query, params)
+
+	def get_user_by_email_case_insensitive(self, email: str):
+		try:
+			return self.execute_query(
+				"SELECT id, first_name, last_name, is_anonymous FROM users WHERE LOWER(email) = LOWER(%s) LIMIT 1;",
+				(email,),
+			) or []
+		except Exception:
+			return self.execute_query(
+				"SELECT id, first_name, last_name FROM users WHERE LOWER(email) = LOWER(%s) LIMIT 1;",
+				(email,),
+			) or []
+
+	def get_discord_subscription_for_user(self, subscription_id: str, user_id: str):
+		return self.execute_query(
+			"SELECT s.id FROM discord_webhook_subscriptions s "
+			"JOIN discord_webhooks w ON w.id = s.webhook_id "
+			"WHERE s.id = %s AND w.user_id = %s LIMIT 1;",
+			(subscription_id, user_id),
+		) or []
+
+	def get_discord_subscription_with_webhook_active(self, subscription_id: str, user_id: str):
+		return self.execute_query(
+			"SELECT s.id, w.is_active AS webhook_active "
+			"FROM discord_webhook_subscriptions s "
+			"JOIN discord_webhooks w ON w.id = s.webhook_id "
+			"WHERE s.id = %s AND w.user_id = %s LIMIT 1;",
+			(subscription_id, user_id),
+		) or []
+
+	def get_discord_webhook_for_user(self, webhook_id: str, user_id: str):
+		return self.execute_query(
+			"SELECT id FROM discord_webhooks WHERE id = %s AND user_id = %s LIMIT 1;",
+			(webhook_id, user_id),
+		) or []
+
+	def get_discord_webhook_by_url(self, webhook_url: str):
+		return self.execute_query(
+			"SELECT id, is_active FROM discord_webhooks WHERE webhook_url = %s LIMIT 1;",
+			(webhook_url,),
+		) or []
+
+	def get_discord_webhook_id_by_url_and_user(self, webhook_url: str, user_id: str):
+		return self.execute_query(
+			"SELECT id FROM discord_webhooks WHERE webhook_url = %s AND user_id = %s LIMIT 1;",
+			(webhook_url, user_id),
+		) or []
+
+	def get_discord_subscription_by_webhook_url_event_key(self, webhook_url: str, event_key: str):
+		return self.execute_query(
+			"SELECT s.id, s.is_active, w.is_active AS webhook_active "
+			"FROM discord_webhook_subscriptions s "
+			"JOIN discord_webhooks w ON w.id = s.webhook_id "
+			"WHERE w.webhook_url = %s AND s.event_key = %s LIMIT 1;",
+			(webhook_url, event_key),
+		) or []
+
+	def get_discord_webhook_registration_by_url_event_key(self, webhook_url: str, event_key: str):
+		return self.execute_query(
+			"SELECT 1 FROM discord_webhook_registrations WHERE webhook_url = %s AND event_key = %s LIMIT 1;",
+			(webhook_url, event_key),
+		) or []
+
+	def get_discord_webhook_registration_basic_by_id(self, reg_id: str):
+		return self.execute_query(
+			"SELECT name, event_key, webhook_url FROM discord_webhook_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+
+	def get_application_exemption(self, user_id: str, integration_type: str):
+		return self.execute_query(
+			"SELECT id FROM application_exemptions "
+			"WHERE user_id = %s AND integration_type = %s LIMIT 1;",
+			(user_id, integration_type),
+		) or []
+
+	def get_application_exemption_with_key(self, user_id: str, integration_type: str, integration_key: str):
+		return self.execute_query(
+			"SELECT id FROM application_exemptions "
+			"WHERE user_id = %s AND integration_type = %s AND integration_key = %s LIMIT 1;",
+			(user_id, integration_type, integration_key),
+		) or []
+
+	def get_minecraft_registration_by_id(self, reg_id: str):
+		return self.execute_query(
+			"SELECT * FROM minecraft_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+
+	def get_minecraft_registration_by_username(self, mc_username: str):
+		return self.execute_query(
+			"SELECT 1 FROM minecraft_registrations WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
+			(mc_username,),
+		) or []
+
+	def get_minecraft_whitelist_by_username(self, mc_username: str):
+		return self.execute_query(
+			"SELECT id, is_active FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) LIMIT 1;",
+			(mc_username,),
+		) or []
+
+	def get_minecraft_whitelist_active_by_username(self, mc_username: str):
+		return self.execute_query(
+			"SELECT 1 FROM minecraft_whitelist WHERE LOWER(mc_username) = LOWER(%s) AND is_active = TRUE LIMIT 1;",
+			(mc_username,),
+		) or []
+
+	def get_minecraft_whitelist_by_user_and_username(self, user_id: str, mc_username: str):
+		return self.execute_query(
+			"SELECT id FROM minecraft_whitelist WHERE user_id = %s AND LOWER(mc_username) = LOWER(%s) LIMIT 1;",
+			(user_id, mc_username),
+		) or []
+
+	def get_minecraft_whitelist_entry_for_user(self, whitelist_id: str, user_id: str):
+		return self.execute_query(
+			"SELECT id, ban_reason FROM minecraft_whitelist WHERE id = %s AND user_id = %s LIMIT 1;",
+			(whitelist_id, user_id),
+		) or []
+
+	def get_minecraft_whitelist_username_by_id(self, whitelist_id: str):
+		return self.execute_query(
+			"SELECT mc_username FROM minecraft_whitelist WHERE id = %s LIMIT 1;",
+			(whitelist_id,),
+		) or []
+
+	def get_audiobookshelf_registration_for_user(self, reg_id: str, user_id: str):
+		return self.execute_query(
+			"SELECT id FROM audiobookshelf_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
+			(reg_id, user_id),
+		) or []
+
+	def get_audiobookshelf_registration_contact_by_id(self, reg_id: str):
+		return self.execute_query(
+			"SELECT first_name, last_name, email, user_id FROM audiobookshelf_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+
+	def get_discord_webhook_registration_contact_by_id(self, reg_id: str):
+		return self.execute_query(
+			"SELECT name, event_key, webhook_url, submitted_by_user_id, submitted_by_email "
+			"FROM discord_webhook_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+
+	def get_discord_webhook_subscriptions(self, webhook_id):
+		return self.execute_query(
+			"SELECT s.id, s.event_key, s.is_active, s.created_at, "
+			"ek.permission, ek.description "
+			"FROM discord_webhook_subscriptions s "
+			"LEFT JOIN discord_event_keys ek ON ek.event_key = s.event_key "
+			"WHERE s.webhook_id = %s "
+			"ORDER BY "
+			"CASE COALESCE(ek.permission, '') "
+			"WHEN 'admins' THEN 1 "
+			"WHEN 'users' THEN 2 "
+			"WHEN 'all' THEN 3 "
+			"ELSE 4 END, "
+			"s.created_at DESC;",
+			(webhook_id,),
+		) or []
+
+	def get_active_minecraft_whitelist_usernames(self, user_id):
+		return self.execute_query(
+			"SELECT mc_username FROM minecraft_whitelist WHERE user_id = %s AND is_active = TRUE;",
+			(user_id,),
+		) or []
+
+	def count_pending_audiobookshelf_registrations(self) -> int | None:
+		return self._count_pending_status("audiobookshelf_registrations")
+
+	def count_pending_discord_webhook_registrations(self) -> int | None:
+		return self._count_pending_status("discord_webhook_registrations")
+
+	def count_pending_minecraft_registrations(self) -> int | None:
+		return self._count_pending_status("minecraft_registrations")
+
+	def _count_pending_status(self, table: str) -> int | None:
+		try:
+			rows = self.execute_query(
+				f"SELECT COUNT(*) AS cnt FROM {table} WHERE status = %s;",
+				("pending",),
+			) or []
+			return int(rows[0]["cnt"]) if rows else 0
+		except Exception:
+			return None
+
+	def get_admin_user_management_rows(self, limit: int = 200):
+		return self.execute_query(
+			"SELECT id, first_name, last_name, email, created_at, is_active, is_anonymous "
+			"FROM users u "
+			"WHERE COALESCE(u.is_active, TRUE) = TRUE "
+			"AND ("
+			"COALESCE(u.is_anonymous, FALSE) = FALSE "
+			"OR EXISTS (SELECT 1 FROM discord_webhooks w WHERE w.user_id = u.id AND COALESCE(w.is_active, TRUE) = TRUE) "
+			"OR EXISTS (SELECT 1 FROM minecraft_whitelist m WHERE m.user_id = u.id AND COALESCE(m.is_active, TRUE) = TRUE) "
+			"OR EXISTS (SELECT 1 FROM audiobookshelf_registrations a WHERE a.user_id = u.id "
+			"AND a.status = 'approved' AND COALESCE(a.is_active, TRUE) = TRUE)"
+			") "
+			"ORDER BY created_at DESC LIMIT %s;",
+			(limit,),
+		) or []
 	
 	def verify_tables(self, safe_mode: bool = True) -> None:
 		tables_dir = os.path.join(os.path.dirname(__file__), "tables")
@@ -535,7 +739,7 @@ class PSQLInterface:
 			return
 
 		try:
-			rows = self.client.execute_query(
+			rows = self.execute_query(
 				'SELECT id, first_name, last_name, email, created_at FROM "public"."anonymous_users";'
 			) or []
 		except Exception:
@@ -547,7 +751,7 @@ class PSQLInterface:
 			if not email:
 				continue
 			try:
-				existing = self.client.execute_query(
+				existing = self.execute_query(
 					'SELECT id, is_anonymous FROM "public"."users" WHERE LOWER(email) = LOWER(%s) LIMIT 1;',
 					(email,),
 				) or []
@@ -961,13 +1165,13 @@ class PSQLInterface:
 		Delete rows where the given column is NULL to satisfy NOT NULL constraints.
 		"""
 		try:
-			rows = self.client.execute_query(
+			rows = self.execute_query(
 				f'SELECT COUNT(*) AS cnt FROM "{schema}"."{table}" WHERE "{column}" IS NULL;'
 			) or []
 			cnt = int(rows[0]["cnt"]) if rows else 0
 			if cnt <= 0:
 				return
-			self.client.execute_query(
+			self.execute_query(
 				f'DELETE FROM "{schema}"."{table}" WHERE "{column}" IS NULL;'
 			)
 			logger.warning("Deleted %s rows with NULL %s.%s.%s to satisfy NOT NULL.", cnt, schema, table, column)
