@@ -6,9 +6,61 @@ from flask import render_template_string
 import pandas as pd
 
 from util.webpage_builder.metrics_builder import METRICS_NAMES
+import html
+import json
+import time
+import urllib.request
 
 fcr = FileConfigReader()
 user_navbar_config = fcr.find("user_account.json")
+_GITHUB_REPO_CACHE: dict[str, dict[str, object]] = {}
+
+def _fetch_github_repos(username: str, limit: int = 6) -> tuple[list[dict], int]:
+	cache = _GITHUB_REPO_CACHE.get(username)
+	now = time.time()
+	if cache and now - cache.get("fetched_at", 0) < 1800:
+		repos = cache.get("repos", [])
+		total = int(cache.get("total", len(repos)))
+		return repos[:limit], total
+
+	repos: list[dict] = []
+	total = 0
+	try:
+		url = f"https://api.github.com/users/{username}/repos?per_page=100&sort=updated"
+		req = urllib.request.Request(url, headers={"User-Agent": "Website_Dev"})
+		with urllib.request.urlopen(req, timeout=5) as resp:
+			data = json.load(resp)
+		if isinstance(data, list):
+			for repo in data:
+				if repo.get("fork"):
+					continue
+				repos.append({
+					"label": repo.get("name") or "",
+					"desc": repo.get("description") or "GitHub repository",
+					"href": repo.get("html_url") or "#",
+					"updated_at": repo.get("updated_at") or "",
+				})
+			total = len(repos)
+		if total == 0:
+			user_url = f"https://api.github.com/users/{username}"
+			user_req = urllib.request.Request(user_url, headers={"User-Agent": "Website_Dev"})
+			with urllib.request.urlopen(user_req, timeout=5) as resp:
+				user_data = json.load(resp)
+			total = int(user_data.get("public_repos", 0) or 0)
+		repos.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+	except Exception:
+		if cache:
+			repos = cache.get("repos", [])
+			total = int(cache.get("total", len(repos)))
+		else:
+			repos = []
+			total = 0
+
+	_GITHUB_REPO_CACHE[username] = {"fetched_at": now, "repos": repos, "total": total}
+	return repos[:limit], total
+
+def fetch_github_repos(username: str, limit: int = 6) -> tuple[list[dict], int]:
+	return _fetch_github_repos(username, limit=limit)
 
 BUILD_MS = "__BUILD_MS__"
 
@@ -234,13 +286,43 @@ class WebPageBuilder(ABC):
 			elif item["type"] == "mega":
 				sections_html = []
 				for section in item["sections"]:
+					section_type = section.get("type")
+					if section_type == "github_repos":
+						username = section.get("username", "")
+						limit = int(section.get("limit", 6) or 6)
+						repos, total = _fetch_github_repos(username, limit=limit) if username else ([], 0)
+						more_count = max(total - len(repos), 0)
+						entries = [
+							{
+								"label": html.escape(r.get("label", "")),
+								"desc": html.escape(r.get("desc", "")),
+								"href": html.escape(r.get("href", "#")),
+							}
+							for r in repos
+						]
+						if more_count:
+							entries.append({
+								"label": html.escape(f"{more_count} more repos publicly available"),
+								"desc": html.escape("View all repositories on GitHub."),
+								"href": html.escape(f"https://github.com/{username}?tab=repositories"),
+							})
+					else:
+						entries = [
+							{
+								"label": entry["label"],
+								"desc": entry["desc"],
+								"href": entry["href"],
+							}
+							for entry in section.get("items", [])
+						]
+
 					sec_items = "\n".join(
 						f"""
 						<a href="{entry['href']}" class="mega-item">
 							<span class="mega-item__label">{entry['label']}</span>
 							<span class="mega-item__desc">{entry['desc']}</span>
 						</a>
-						""" for entry in section["items"]
+						""" for entry in entries
 					)
 					sections_html.append(f"""
 					<div class="mega-section">
@@ -700,4 +782,3 @@ class HTMLHelper():
 			f'{"".join(options_html)}\n'
 			f'</select>\n'
 		)
-

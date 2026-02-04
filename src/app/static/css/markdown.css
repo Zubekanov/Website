@@ -110,6 +110,20 @@
 	margin: 1.5rem 0;
 }
 
+.markdown-block img {
+	max-width: 100%;
+	height: auto;
+	display: block;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	background: var(--background);
+	margin: 0.75rem 0 1rem;
+}
+
+html:not([data-theme="dark"]) .markdown-block img {
+	display: none;
+}
+
 .markdown-block table {
 	width: 100%;
 	border-collapse: collapse;
