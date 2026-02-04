@@ -1,6 +1,7 @@
 from http.client import HTTPException
 import logging
 import time
+import requests
 from app.api import _AUTH_TOKEN_NAME_
 import flask
 from flask import g
@@ -62,6 +63,10 @@ def _timing_end(resp):
 def landing_page():
 	if g.user:
 		return flask.redirect("/profile")
+	return build_empty_landing_page(g.user)
+
+@main.route("/readme")
+def readme_page():
 	return build_readme_page(g.user)
 
 @main.route("/server-metrics")
@@ -125,6 +130,18 @@ def verify_email_token_page(token):
 @main.route("/audiobookshelf-registration", methods=["GET"])
 def audiobookshelf_registration_page():
 	return build_audiobookshelf_registration_page(g.user)
+
+@main.route("/audiobookshelf", methods=["GET"])
+def audiobookshelf_redirect_page():
+	target = "https://audiobookshelf.zubekanov.com/"
+	try:
+		resp = requests.get(target, timeout=2.0)
+		if resp.status_code < 500:
+			return flask.redirect(target)
+		status_note = f"HTTP {resp.status_code}"
+	except Exception as exc:
+		status_note = str(exc) or "Connection failed."
+	return build_audiobookshelf_unavailable_page(g.user, status_note)
 
 @main.route("/discord-webhook-registration", methods=["GET"])
 def discord_webhook_registration_page():

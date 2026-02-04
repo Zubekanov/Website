@@ -12,7 +12,7 @@
             "type": "mega",
             "sections": [
                 {
-                    "label": "Graphs",
+                    "label": "Live Views and Stats",
                     "items": [
                         {
                             "label": "Server Metrics",
@@ -22,14 +22,10 @@
                     ]
                 },
                 {
-                    "label": "Subscriptions",
-                    "items": [
-                        {
-                            "label": "Discord Webhook",
-                            "desc": "Subscribe to a specified message emitter via Discord webhook.",
-                            "href": "/discord-webhook-registration"
-                        }
-                    ]
+                    "label": "GitHub Repositories",
+                    "type": "github_repos",
+                    "username": "Zubekanov",
+                    "limit": 6
                 }
             ]
         },
@@ -43,12 +39,17 @@
                         {
                             "label": "Audiobookshelf",
                             "desc": "Self-hosted audiobook and podcast server.",
-                            "href": "https://audiobookshelf.zubekanov.com/"
+                            "href": "/audiobookshelf"
                         },
                         {
                             "label": "Request Audiobookshelf Account",
                             "desc": "Fill out a form to request an account on the Audiobookshelf server.",
                             "href": "/audiobookshelf-registration"
+                        },
+                        {
+                            "label": "Discord Webhook",
+                            "desc": "Subscribe to a specified message emitter via Discord webhook.",
+                            "href": "/discord-webhook-registration"
                         }
                     ]
                 },
