@@ -370,6 +370,11 @@ def _popu_state_payload(row: dict, ctx: ApiContext | None = None) -> dict:
 		"player1_elo": elo_map.get(str(p1_uid)) if p1_uid else None,
 		"winner": row.get("winner"),
 		"ended_reason": row.get("ended_reason"),
+		"ratings_applied": bool(row.get("ratings_applied")),
+		"elo_delta_p0": row.get("elo_delta_p0"),
+		"elo_delta_p1": row.get("elo_delta_p1"),
+		"elo_after_p0": row.get("elo_after_p0"),
+		"elo_after_p1": row.get("elo_after_p1"),
 	}
 
 

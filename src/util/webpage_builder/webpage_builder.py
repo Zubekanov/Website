@@ -1908,6 +1908,33 @@ def build_popugame_page(user: dict | None, *, game_code: str | None = None) -> s
 		</div>
 		""")
 
+	def step_popugame_endgame_modal() -> Step:
+		return step_text_block("""
+		<div class="popugame__backdrop" data-popugame-endgame aria-hidden="true">
+			<div class="popugame__modal popugame__endgame-modal" role="dialog" aria-modal="true" aria-labelledby="popugame-endgame-title">
+				<div class="popugame__modal-header">
+					<h3 id="popugame-endgame-title">Game Over</h3>
+					<button class="popugame__close" type="button" data-popugame-endgame-close aria-label="Close end game popup">×</button>
+				</div>
+				<div class="popugame__modal-body">
+					<p class="popugame__endgame-result" data-popugame-endgame-result>Game over</p>
+					<p class="popugame__endgame-meta" data-popugame-endgame-score>Final score: 0 : 0</p>
+					<p class="popugame__endgame-meta" data-popugame-endgame-reason>Reason: turn limit</p>
+					<div class="popugame__endgame-elo" data-popugame-endgame-elo hidden>
+						<p data-popugame-endgame-elo-p0></p>
+						<p data-popugame-endgame-elo-p1></p>
+					</div>
+					<div class="popugame__dialog-actions">
+						<button class="btn btn--primary" type="button" data-popugame-endgame-playagain>Play Again</button>
+						<button class="btn btn--primary" type="button" data-popugame-endgame-host hidden>Host Multiplayer Game</button>
+						<button class="btn" type="button" data-popugame-endgame-join hidden>Join via Code</button>
+						<button class="btn" type="button" data-popugame-endgame-dismiss>Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		""")
+
 	return build_page(user, PageSpec(
 		steps=(
 			step_set_page_title("PopuGame"),
@@ -1919,6 +1946,7 @@ def build_popugame_page(user: dict | None, *, game_code: str | None = None) -> s
 			step_popugame_controls(),
 			step_popugame_rules_modal(),
 			step_popugame_dialog_modal(),
+			step_popugame_endgame_modal(),
 			step_popugame_shell_close(),
 			add_return_home,
 		),

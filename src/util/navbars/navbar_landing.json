@@ -2,7 +2,7 @@
     "logo": {
         "type": "text",
         "image_src": "",
-        "text": "Joseph Wong",
+        "text": "Joseph Wong Personal Website",
         "href": "/"
     },
 
@@ -34,13 +34,23 @@
             "type": "mega",
             "sections": [
                 {
-                    "label": "Hosted Services",
+                    "label": "Hosted Games",
                     "items": [
                         {
-                            "label": "Audiobookshelf",
-                            "desc": "Self-hosted audiobook and podcast server.",
-                            "href": "/audiobookshelf"
+                            "label": "PopuGame",
+                            "desc": "Play the local PopuGame board on this site.",
+                            "href": "/popugame"
                         },
+                        {
+                            "label": "Minecraft",
+                            "desc": "Request whitelisting or review information about the Minecraft server.",
+                            "href": "/minecraft"
+                        }
+                    ]
+                },
+                {
+                    "label": "Requests",
+                    "items": [
                         {
                             "label": "Request Audiobookshelf Account",
                             "desc": "Fill out a form to request an account on the Audiobookshelf server.",
@@ -54,22 +64,18 @@
                         {
                             "label": "Request API Access",
                             "desc": "Apply for API key access to hosted services.",
-                            "href": "/api-access-application"
+                            "href": "/api-access-application",
+                            "visibility": ["admin"]
                         }
                     ]
                 },
                 {
-                    "label": "Hosted Games",
+                    "label": "Hosted Services",
                     "items": [
                         {
-                            "label": "Minecraft",
-                            "desc": "Request whitelisting or review information about the Minecraft server.",
-                            "href": "/minecraft"
-                        },
-                        {
-                            "label": "PopuGame",
-                            "desc": "Play the local PopuGame board on this site.",
-                            "href": "/popugame"
+                            "label": "Audiobookshelf",
+                            "desc": "Self-hosted audiobook and podcast server.",
+                            "href": "/audiobookshelf"
                         }
                     ]
                 }

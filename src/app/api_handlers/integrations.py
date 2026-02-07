@@ -393,6 +393,13 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 
 	@api.route("/api-access-application", methods=["POST"])
 	def api_api_access_application():
+		user = get_request_user(ctx)
+		if not user or not _is_admin(ctx, user.get("id")):
+			return flask.jsonify({
+				"ok": False,
+				"message": "Admin access required.",
+			}), 403
+
 		data = flask.request.json or {}
 		first_name = (data.get("first_name") or "").strip()
 		last_name = (data.get("last_name") or "").strip()
@@ -402,11 +409,8 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		requested_scopes_raw = (data.get("requested_scopes") or "").strip()
 		use_case = (data.get("use_case") or "").strip()
 
-		user_id = None
-		user = get_request_user(ctx)
-		if user:
-			user_id = user.get("id")
-		is_admin = _is_admin(ctx, user_id)
+		user_id = user.get("id")
+		is_admin = True
 
 		if not first_name or not last_name or not email:
 			if user:
@@ -429,17 +433,6 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			return flask.jsonify({"ok": False, "message": "Invalid principal type."}), 400
 		if principal_type == "service" and not service_name:
 			return flask.jsonify({"ok": False, "message": "Service name is required for service principals."}), 400
-		if not user:
-			ok, anon_id = get_or_create_anonymous_user(
-				ctx,
-				first_name=first_name,
-				last_name=last_name,
-				email=email,
-			)
-			if not ok:
-				return flask.jsonify({"ok": False, "message": anon_id}), 400
-			user_id = anon_id
-
 		requested_scopes = sorted({
 			scope.strip().lower()
 			for scope in requested_scopes_raw.split(",")

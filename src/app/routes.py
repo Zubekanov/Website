@@ -206,6 +206,7 @@ def audiobookshelf_registration_page():
 	return build_audiobookshelf_registration_page(g.user)
 
 @main.route("/api-access-application", methods=["GET"])
+@page_access("admin")
 def api_access_application_page():
 	return build_api_access_application_page(g.user)
 

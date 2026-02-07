@@ -29,6 +29,18 @@
 	const dialogCloseEl = root.querySelector("[data-popugame-dialog-close]");
 	const dialogCancelEl = root.querySelector("[data-popugame-dialog-cancel]");
 	const dialogConfirmEl = root.querySelector("[data-popugame-dialog-confirm]");
+	const endgameEl = root.querySelector("[data-popugame-endgame]");
+	const endgameResultEl = root.querySelector("[data-popugame-endgame-result]");
+	const endgameScoreEl = root.querySelector("[data-popugame-endgame-score]");
+	const endgameReasonEl = root.querySelector("[data-popugame-endgame-reason]");
+	const endgameEloEl = root.querySelector("[data-popugame-endgame-elo]");
+	const endgameEloP0El = root.querySelector("[data-popugame-endgame-elo-p0]");
+	const endgameEloP1El = root.querySelector("[data-popugame-endgame-elo-p1]");
+	const endgameCloseEl = root.querySelector("[data-popugame-endgame-close]");
+	const endgameDismissEl = root.querySelector("[data-popugame-endgame-dismiss]");
+	const endgamePlayAgainEl = root.querySelector("[data-popugame-endgame-playagain]");
+	const endgameHostEl = root.querySelector("[data-popugame-endgame-host]");
+	const endgameJoinEl = root.querySelector("[data-popugame-endgame-join]");
 
 	const noClaim = 0b0000;
 	const p0Token = 0b0001;
@@ -54,6 +66,17 @@
 	let eventSource = null;
 	let moveHistory = [];
 	let windowFocused = typeof document.hasFocus === "function" ? document.hasFocus() : true;
+	let player0Name = "Player 1";
+	let player1Name = "Player 2";
+	let endedReason = null;
+	let ratingsApplied = false;
+	let eloDeltaP0 = null;
+	let eloDeltaP1 = null;
+	let player0Elo = null;
+	let player1Elo = null;
+	let shownEndgameToken = null;
+	let overlayOpenCount = 0;
+	let scrollLockY = 0;
 	let gameCode = (root.dataset.popugameCode || "").trim().toUpperCase();
 	if (!gameCode) {
 		const parts = window.location.pathname.split("/").filter(Boolean);
@@ -88,6 +111,145 @@
 		return `${base} (${elo})`;
 	};
 
+	const basePlayerName = (name, fallback) => (
+		(name || fallback || "").trim() || fallback
+	);
+
+	const humanEndReason = (reason) => {
+		if (reason === "concede") return "concede";
+		if (reason === "turn_limit") return "turn limit";
+		return "completed";
+	};
+
+	const formatDelta = (delta) => {
+		if (delta === null || delta === undefined) return null;
+		const n = Number(delta);
+		if (!Number.isFinite(n)) return null;
+		const rounded = Math.trunc(n);
+		if (!Number.isFinite(rounded)) return null;
+		if (rounded === 0 && delta !== 0 && delta !== "0") return null;
+		return rounded >= 0 ? `+${rounded}` : String(rounded);
+	};
+
+	const escapeHtml = (value) => String(value)
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
+
+	if (name0El) player0Name = basePlayerName(name0El.textContent, "Player 1");
+	if (name1El) player1Name = basePlayerName(name1El.textContent, "Player 2");
+
+	const lockPageScroll = () => {
+		scrollLockY = window.scrollY || window.pageYOffset || 0;
+		document.body.style.position = "fixed";
+		document.body.style.top = `-${scrollLockY}px`;
+		document.body.style.left = "0";
+		document.body.style.right = "0";
+		document.body.style.width = "100%";
+		document.body.style.overflow = "hidden";
+	};
+
+	const unlockPageScroll = () => {
+		document.body.style.position = "";
+		document.body.style.top = "";
+		document.body.style.left = "";
+		document.body.style.right = "";
+		document.body.style.width = "";
+		document.body.style.overflow = "";
+		window.scrollTo(0, scrollLockY);
+	};
+
+	const openOverlay = (el) => {
+		if (!el || el.dataset.overlayOpen === "1") return;
+		el.dataset.overlayOpen = "1";
+		el.classList.add("is-open");
+		el.setAttribute("aria-hidden", "false");
+		overlayOpenCount += 1;
+		if (overlayOpenCount === 1) lockPageScroll();
+	};
+
+	const closeOverlay = (el) => {
+		if (!el || el.dataset.overlayOpen !== "1") return;
+		el.dataset.overlayOpen = "0";
+		el.classList.remove("is-open");
+		el.setAttribute("aria-hidden", "true");
+		overlayOpenCount = Math.max(0, overlayOpenCount - 1);
+		if (overlayOpenCount === 0) unlockPageScroll();
+	};
+
+	const closeEndgameModal = () => {
+		if (!endgameEl) return;
+		closeOverlay(endgameEl);
+	};
+
+	const openEndgameModal = (score0, score1) => {
+		if (!endgameEl || !endgameResultEl || !endgameScoreEl || !endgameReasonEl) return;
+		const p0 = basePlayerName(player0Name, "Player 1");
+		const p1 = basePlayerName(player1Name, "Player 2");
+		let resultText = "Draw";
+		let winnerClass = "";
+		if (winner === 0 || (winner === null && score0 > score1)) {
+			resultText = `${p0} wins`;
+			winnerClass = "is-p0";
+		} else if (winner === 1 || (winner === null && score1 > score0)) {
+			resultText = `${p1} wins`;
+			winnerClass = "is-p1";
+		}
+
+		endgameResultEl.textContent = resultText;
+		endgameResultEl.classList.remove("is-p0", "is-p1");
+		if (winnerClass) endgameResultEl.classList.add(winnerClass);
+		endgameScoreEl.innerHTML = `Final score: <span class="popugame__score--p0">${score0}</span> : <span class="popugame__score--p1">${score1}</span>`;
+		if (endedReason === "concede") {
+			let concederName = "";
+			let concederClass = "";
+			if (winner === 0) {
+				concederName = p1;
+				concederClass = "popugame__name--p1";
+			} else if (winner === 1) {
+				concederName = p0;
+				concederClass = "popugame__name--p0";
+			}
+			if (concederName) {
+				endgameReasonEl.innerHTML = `Reason: <span class="${concederClass}">${escapeHtml(concederName)}</span> conceded`;
+			} else {
+				endgameReasonEl.textContent = "Reason: concede";
+			}
+		} else {
+			endgameReasonEl.textContent = `Reason: ${humanEndReason(endedReason)}`;
+		}
+
+		const delta0 = formatDelta(eloDeltaP0);
+		const delta1 = formatDelta(eloDeltaP1);
+		const nextElo0 = Number.isFinite(Number(player0Elo)) ? Math.trunc(Number(player0Elo)) : null;
+		const nextElo1 = Number.isFinite(Number(player1Elo)) ? Math.trunc(Number(player1Elo)) : null;
+		const showElo = Boolean(
+			isMultiplayer &&
+			ratingsApplied &&
+			delta0 !== null &&
+			delta1 !== null &&
+			nextElo0 !== null &&
+			nextElo1 !== null
+		);
+		if (endgameEloEl && endgameEloP0El && endgameEloP1El) {
+			endgameEloEl.hidden = !showElo;
+			if (showElo) {
+				const delta0Class = delta0.startsWith("+") ? "popugame__delta--positive" : "popugame__delta--negative";
+				const delta1Class = delta1.startsWith("+") ? "popugame__delta--positive" : "popugame__delta--negative";
+				endgameEloP0El.innerHTML = `<span class="popugame__name--p0">${escapeHtml(p0)}</span> ELO: <span class="popugame__elo-value">${nextElo0}</span> (<span class="${delta0Class}">${delta0}</span>)`;
+				endgameEloP1El.innerHTML = `<span class="popugame__name--p1">${escapeHtml(p1)}</span> ELO: <span class="popugame__elo-value">${nextElo1}</span> (<span class="${delta1Class}">${delta1}</span>)`;
+			}
+		}
+
+		if (endgamePlayAgainEl) endgamePlayAgainEl.hidden = isMultiplayer;
+		if (endgameHostEl) endgameHostEl.hidden = !isMultiplayer;
+		if (endgameJoinEl) endgameJoinEl.hidden = !isMultiplayer;
+
+		openOverlay(endgameEl);
+	};
+
 	let dialogResolve = null;
 	const showDialog = ({ title, bodyHtml, confirmText = "OK", cancelText = "Cancel", hideCancel = false }) => {
 		if (!dialogEl || !dialogTitleEl || !dialogBodyEl || !dialogConfirmEl || !dialogCancelEl) {
@@ -98,14 +260,12 @@
 		dialogConfirmEl.textContent = confirmText;
 		dialogCancelEl.textContent = cancelText;
 		dialogCancelEl.style.display = hideCancel ? "none" : "inline-flex";
-		dialogEl.classList.add("is-open");
-		dialogEl.setAttribute("aria-hidden", "false");
+		openOverlay(dialogEl);
 		return new Promise((resolve) => { dialogResolve = resolve; });
 	};
 	const hideDialog = (result) => {
 		if (!dialogEl) return;
-		dialogEl.classList.remove("is-open");
-		dialogEl.setAttribute("aria-hidden", "true");
+		closeOverlay(dialogEl);
 		if (dialogResolve) dialogResolve(result);
 		dialogResolve = null;
 	};
@@ -278,6 +438,8 @@
 		turn = 0;
 		player = 0;
 		gameOver = false;
+		shownEndgameToken = null;
+		closeEndgameModal();
 		legalMoves = [makeGrid(true), makeGrid(true)];
 		saveState();
 		updateUI();
@@ -522,14 +684,18 @@
 		if (gameStatus === "waiting") {
 			statusEl.textContent = "Waiting for opponent…";
 		} else if (gameOver) {
+			const p0 = basePlayerName(player0Name, "Player 1");
+			const p1 = basePlayerName(player1Name, "Player 2");
 			let winnerText = "It's a draw!";
-			if (score0 > score1) winnerText = "Player 1 wins!";
-			if (score1 > score0) winnerText = "Player 2 wins!";
-			if (winner === 0) winnerText = "Player 1 wins!";
-			if (winner === 1) winnerText = "Player 2 wins!";
+			if (score0 > score1) winnerText = `${p0} wins!`;
+			if (score1 > score0) winnerText = `${p1} wins!`;
+			if (winner === 0) winnerText = `${p0} wins!`;
+			if (winner === 1) winnerText = `${p1} wins!`;
 			statusEl.textContent = `Game over: ${winnerText}`;
 		} else {
-			statusEl.textContent = player === 0 ? "Player 1 (X) to move" : "Player 2 (O) to move";
+			const p0 = basePlayerName(player0Name, "Player 1");
+			const p1 = basePlayerName(player1Name, "Player 2");
+			statusEl.textContent = player === 0 ? `${p0} (X) to move` : `${p1} (O) to move`;
 		}
 
 		const cells = boardEl.querySelectorAll(".popugame__cell");
@@ -553,8 +719,11 @@
 			btn.disabled = gameOver || gameStatus === "waiting" || !isTurn || !legalMoves[player][r][c];
 		});
 
-		if (isMultiplayer && concedeBtn) {
-			concedeBtn.hidden = gameOver;
+		if (concedeBtn) {
+			const finished = gameOver || gameStatus === "finished";
+			concedeBtn.hidden = finished;
+			concedeBtn.disabled = finished;
+			concedeBtn.classList.toggle("is-hidden", finished);
 		}
 		if (isMultiplayer && postgameButtons && postgameButtons.length > 0) {
 			postgameButtons.forEach((btn) => {
@@ -563,6 +732,16 @@
 		}
 		if (undoBtn) {
 			undoBtn.disabled = isMultiplayer || moveHistory.length === 0;
+		}
+
+		if (gameOver) {
+			const token = isMultiplayer
+				? `v${stateVersion}`
+				: `t${turn}-w${winner === null ? "d" : winner}-s${score0}-${score1}`;
+			if (shownEndgameToken !== token) {
+				shownEndgameToken = token;
+				openEndgameModal(score0, score1);
+			}
 		}
 	};
 
@@ -668,8 +847,18 @@
 		player = nextActivePlayer;
 		gameStatus = nextStatus;
 		winner = state.winner ?? null;
+		endedReason = state.ended_reason || null;
+		ratingsApplied = Boolean(state.ratings_applied);
+		eloDeltaP0 = state.elo_delta_p0;
+		eloDeltaP1 = state.elo_delta_p1;
+		player0Elo = state.elo_after_p0 ?? state.player0_elo;
+		player1Elo = state.elo_after_p1 ?? state.player1_elo;
 		stateVersion = Number.isFinite(state.state_version) ? state.state_version : stateVersion;
 		gameOver = gameStatus === "finished";
+		if (!gameOver) {
+			shownEndgameToken = null;
+			closeEndgameModal();
+		}
 		if (sharePanelEl) {
 			const bothPlayersConnected = Boolean((state.player0_name || "").trim() && (state.player1_name || "").trim());
 			const opponentConnected = playerIndex === 0
@@ -681,9 +870,11 @@
 			if (!sharePanelEl.hidden) updateShareFields();
 		}
 		if (name0El) {
+			player0Name = basePlayerName(state.player0_name, "Player 1");
 			name0El.textContent = formatPlayerName(state.player0_name, state.player0_elo, "Player 1");
 		}
 		if (name1El) {
+			player1Name = basePlayerName(state.player1_name, "Player 2");
 			name1El.textContent = formatPlayerName(state.player1_name, state.player1_elo, "Player 2");
 		}
 		legalMoves = [makeGrid(true), makeGrid(true)];
@@ -756,21 +947,18 @@ if (undoBtn) {
 }
 if (rulesBtn && modalEl) {
 	rulesBtn.addEventListener("click", () => {
-		modalEl.classList.add("is-open");
-		modalEl.setAttribute("aria-hidden", "false");
+		openOverlay(modalEl);
 	});
 }
 if (closeBtn && modalEl) {
 	closeBtn.addEventListener("click", () => {
-		modalEl.classList.remove("is-open");
-		modalEl.setAttribute("aria-hidden", "true");
+		closeOverlay(modalEl);
 	});
 }
 if (modalEl) {
 	modalEl.addEventListener("click", (event) => {
 		if (event.target !== modalEl) return;
-		modalEl.classList.remove("is-open");
-		modalEl.setAttribute("aria-hidden", "true");
+		closeOverlay(modalEl);
 	});
 }
 if (dialogCloseEl) {
@@ -811,9 +999,7 @@ if (dialogEl) {
 		});
 	}
 });
-if (hostBtn) {
-	hostBtn.addEventListener("click", () => {
-	(async () => {
+	const handleHostGame = async () => {
 		const guestName = getStoredGuestName();
 		const { json } = await apiPost("/api/popugame/create", { guest_name: guestName });
 		if (!json || !json.ok) {
@@ -828,11 +1014,9 @@ if (hostBtn) {
 		window.sessionStorage.setItem(PENDING_GUEST_KEY, guestName);
 		window.sessionStorage.setItem("popugameHosted", json.code);
 		window.location.href = `/popugame/${json.code}`;
-	})();
-});
-}
-if (joinBtn) {
-	joinBtn.addEventListener("click", async () => {
+	};
+
+	const handleJoinByCode = async () => {
 		const ok = await showDialog({
 			title: "Join Game",
 			bodyHtml: `
@@ -858,7 +1042,13 @@ if (joinBtn) {
 			return;
 		}
 		window.location.href = `/popugame/${cleaned}`;
-	});
+	};
+
+if (hostBtn) {
+	hostBtn.addEventListener("click", handleHostGame);
+}
+if (joinBtn) {
+	joinBtn.addEventListener("click", handleJoinByCode);
 }
 if (concedeBtn) {
 	concedeBtn.addEventListener("click", async () => {
@@ -885,6 +1075,36 @@ if (concedeBtn) {
 		setStateFromServer(json.state);
 	});
 }
+if (endgameCloseEl) {
+	endgameCloseEl.addEventListener("click", closeEndgameModal);
+}
+if (endgameDismissEl) {
+	endgameDismissEl.addEventListener("click", closeEndgameModal);
+}
+if (endgamePlayAgainEl) {
+	endgamePlayAgainEl.addEventListener("click", () => {
+		closeEndgameModal();
+		resetGame();
+	});
+}
+if (endgameHostEl) {
+	endgameHostEl.addEventListener("click", async () => {
+		closeEndgameModal();
+		await handleHostGame();
+	});
+}
+if (endgameJoinEl) {
+	endgameJoinEl.addEventListener("click", async () => {
+		closeEndgameModal();
+		await handleJoinByCode();
+	});
+}
+if (endgameEl) {
+	endgameEl.addEventListener("click", (event) => {
+		if (event.target !== endgameEl) return;
+		closeEndgameModal();
+	});
+}
 
 window.addEventListener("focus", () => {
 	windowFocused = true;
@@ -894,6 +1114,10 @@ window.addEventListener("blur", () => {
 });
 document.addEventListener("visibilitychange", () => {
 	windowFocused = document.visibilityState === "visible";
+});
+document.addEventListener("keydown", (event) => {
+	if (event.key !== "Escape") return;
+	closeEndgameModal();
 });
 root.addEventListener("click", primeNotificationPermission, { once: true });
 

@@ -202,10 +202,12 @@
 	justify-content: flex-end;
 	gap: 0.5rem;
 	margin-top: 0.75rem;
+	flex-wrap: wrap;
 }
 
 .popugame__dialog-actions .btn {
 	min-width: 90px;
+	max-width: 100%;
 }
 
 .popugame__dialog-field {
@@ -374,6 +376,10 @@
 	padding-inline: 0.9rem;
 }
 
+.popugame__btn.is-hidden {
+	display: none !important;
+}
+
 .popugame__controls-group .popugame__btn[data-popugame-host],
 .popugame__controls-group .popugame__btn[data-popugame-join] {
 	min-width: 168px;
@@ -416,6 +422,8 @@
 	padding: 1.4rem 1.6rem 1.6rem;
 	display: grid;
 	gap: 0.75rem;
+	box-sizing: border-box;
+	min-width: 0;
 }
 
 .popugame__modal-header {
@@ -443,6 +451,70 @@
 
 .popugame__close:hover {
 	filter: brightness(1.05);
+}
+
+.popugame__endgame-modal {
+	max-width: min(540px, 92vw);
+}
+
+.popugame__endgame-result {
+	font-size: 1.25rem;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.popugame__endgame-result.is-p0 {
+	color: #1a7f45;
+}
+
+.popugame__endgame-result.is-p1 {
+	color: #2b5dd1;
+}
+
+.popugame__endgame-meta {
+	font-size: 0.95rem;
+	color: var(--default);
+}
+
+.popugame__endgame-elo {
+	margin-top: 0.35rem;
+	padding: 0.6rem 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--contents) 88%, var(--background) 12%);
+	display: grid;
+	gap: 0.25rem;
+}
+
+.popugame__endgame-elo p {
+	margin: 0;
+	font-size: 0.9rem;
+}
+
+.popugame__endgame-modal .popugame__dialog-actions {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.5rem;
+}
+
+.popugame__endgame-modal .popugame__dialog-actions .btn {
+	width: 100%;
+	min-width: 0;
+}
+
+.popugame__elo-value {
+	color: #1a7f45;
+	font-weight: 700;
+}
+
+.popugame__delta--positive {
+	color: #1a7f45;
+	font-weight: 700;
+}
+
+.popugame__delta--negative {
+	color: #c23e3e;
+	font-weight: 700;
 }
 
 @media (max-width: 720px) {
@@ -473,5 +545,35 @@
 	.popugame__board {
 		padding: 0;
 		gap: 3px;
+	}
+
+	.popugame__modal {
+		max-width: 96vw;
+		padding: 1rem;
+		border-radius: 12px;
+	}
+
+	.popugame__dialog-actions {
+		justify-content: stretch;
+		gap: 0.42rem;
+	}
+
+	.popugame__dialog-actions .btn {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+
+	.popugame__endgame-modal .popugame__dialog-actions {
+		grid-template-columns: 1fr;
+	}
+
+	.popugame__names {
+		flex-wrap: wrap;
+		justify-content: center;
+	}
+
+	.popugame__status {
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 }
