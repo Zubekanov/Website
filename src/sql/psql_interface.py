@@ -1022,8 +1022,8 @@ class PSQLInterface:
 				not_null_targets.append(name)
 			if "default" in c and c["default"] is not None:
 				mod_bits.append(f"DEFAULT {self._default_sql(c['default'])}")
-			if c.get("primary_key", False):
-				mod_bits.append("PRIMARY KEY")
+			# Never add PRIMARY KEY inline for existing tables; a legacy table may already
+			# have a PK and PostgreSQL rejects a second PK. PKs are reconciled below.
 			col_def = (type_sql + (" " + " ".join(mod_bits) if mod_bits else "")).strip()
 			self.client.add_column(schema, table, name, col_def)
 			logger.info("Added column %s.%s.%s", schema, table, name)
