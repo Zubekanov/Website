@@ -13,6 +13,8 @@
 	background: var(--background);
 	backdrop-filter: blur(16px);
 	border-bottom: 1px solid rgba(var(--border), 0.08);
+	gap: 0.5rem;
+	min-width: 0;
 }
 
 .navbar__left {
@@ -20,6 +22,7 @@
 	align-items: center;
 	flex: 0 0 auto;
 	margin-right: 1.5rem;
+	min-width: 0;
 }
 
 .navbar__center {
@@ -27,12 +30,14 @@
 	align-items: center;
 	justify-content: flex-end;
 	flex: 1 1 auto;
+	min-width: 0;
 }
 
 .navbar__right {
 	display: flex;
 	align-items: center;
 	margin-left: 1.5rem;
+	min-width: 0;
 }
 
 .navbar__right .nav-item--has-menu .nav-mega {
@@ -106,6 +111,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
+	min-width: 0;
 }
 
 .nav-link {
@@ -158,13 +164,35 @@
 }
 
 @media (max-width: 900px) {
+	#site-nav {
+		overflow-x: clip;
+	}
+
+	.nav-item--has-menu {
+		position: static;
+	}
+
+	.nav-item--has-menu .nav-mega,
+	.navbar__right .nav-item--has-menu .nav-mega,
+	.navbar__center .nav-item--has-menu .nav-mega {
+		left: 0;
+		right: 0;
+		width: 100%;
+		max-width: 100%;
+		padding-inline: 0.5rem;
+		box-sizing: border-box;
+		justify-content: center;
+	}
+
     .nav-mega__panel {
 		min-width: 0;
-		max-width: calc(100vw - 2rem);
-		width: 100%;
+		width: min(100%, calc(100vw - 1rem));
+		max-width: calc(100vw - 1rem);
 		grid-template-columns: 1fr;
 		gap: 1rem;
 		padding: 1rem 1.25rem;
+		box-sizing: border-box;
+		overflow-x: hidden;
 	}
 
 	.navbar {
@@ -187,6 +215,78 @@
 		width: 100%;
 		justify-content: flex-start;
 		margin-top: 0.5rem;
+		overflow: hidden;
+	}
+
+	.nav-list {
+		flex-wrap: nowrap;
+		gap: 1.5rem;
+		width: 100%;
+		white-space: nowrap;
+	}
+
+	.mega-section,
+	.mega-section__items,
+	.mega-item,
+	.mega-item__label,
+	.mega-item__desc {
+		max-width: 100%;
+		min-width: 0;
+	}
+
+	.mega-item__label,
+	.mega-item__desc {
+		white-space: normal;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+}
+
+@media (max-width: 560px) {
+	.navbar {
+		padding: 0.65rem 0.75rem;
+	}
+
+	.navbar__left {
+		margin-right: 0.5rem;
+	}
+
+	.navbar__right {
+		margin-left: auto;
+	}
+
+	.navbar__logo {
+		font-size: 1.05rem;
+	}
+}
+
+/* Dynamic compaction for row-2 nav items on mobile only. */
+@media (max-width: 900px) {
+	.navbar.navbar--mobile-compact-1 .navbar__center .nav-list {
+		gap: 0.9rem;
+	}
+
+	.navbar.navbar--mobile-compact-1 .navbar__center .nav-link {
+		font-size: 0.84rem;
+		padding: 0.34rem 0.62rem;
+	}
+
+	.navbar.navbar--mobile-compact-2 .navbar__center .nav-list {
+		gap: 0.55rem;
+	}
+
+	.navbar.navbar--mobile-compact-2 .navbar__center .nav-link {
+		font-size: 0.78rem;
+		padding: 0.28rem 0.52rem;
+	}
+
+	.navbar.navbar--mobile-compact-3 .navbar__center .nav-list {
+		gap: 0.35rem;
+	}
+
+	.navbar.navbar--mobile-compact-3 .navbar__center .nav-link {
+		font-size: 0.72rem;
+		padding: 0.22rem 0.4rem;
 	}
 }
 

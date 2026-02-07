@@ -56,6 +56,9 @@ main {
 	flex: 1 0 auto;
 	background: var(--contents);
 	padding: 20px;
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: hidden;
 }
 
 a {

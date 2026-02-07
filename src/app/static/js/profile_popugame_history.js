@@ -8,6 +8,7 @@
 		tooltipEl = document.createElement("div");
 		tooltipEl.className = "profile-popu-tooltip";
 		tooltipEl.setAttribute("aria-hidden", "true");
+		tooltipEl.style.display = "none";
 		document.body.appendChild(tooltipEl);
 		return tooltipEl;
 	}
@@ -15,26 +16,40 @@
 	function hideTooltip() {
 		if (!tooltipEl) return;
 		tooltipEl.style.opacity = "0";
+		tooltipEl.style.display = "none";
 	}
 
 	function placeTooltip(clientX, clientY) {
 		if (!tooltipEl) return;
 		const pad = 10;
+		const viewportW = (window.visualViewport && window.visualViewport.width) || window.innerWidth;
+		const viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
 		const rect = tooltipEl.getBoundingClientRect();
 		let x = clientX + 12;
 		let y = clientY - rect.height - 10;
-		if (x + rect.width + pad > window.innerWidth) x = window.innerWidth - rect.width - pad;
+		if (x + rect.width + pad > viewportW) x = viewportW - rect.width - pad;
 		if (x < pad) x = pad;
 		if (y < pad) y = clientY + 14;
-		if (y + rect.height + pad > window.innerHeight) y = window.innerHeight - rect.height - pad;
-		tooltipEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+		if (y + rect.height + pad > viewportH) y = viewportH - rect.height - pad;
+		tooltipEl.style.left = `${Math.round(x)}px`;
+		tooltipEl.style.top = `${Math.round(y)}px`;
+		tooltipEl.style.transform = "none";
 	}
 
 	function showTooltip(text, clientX, clientY) {
 		const el = ensureTooltip();
+		const viewportMax = Math.max(160, window.innerWidth - 20);
+		el.style.maxWidth = `${Math.min(420, viewportMax)}px`;
+		el.style.whiteSpace = "normal";
+		el.style.overflowWrap = "anywhere";
+		el.style.wordBreak = "break-word";
 		el.textContent = text || "";
+		el.style.display = "block";
+		el.style.left = "0px";
+		el.style.top = "0px";
 		el.style.opacity = "1";
 		placeTooltip(clientX, clientY);
+		window.requestAnimationFrame(() => placeTooltip(clientX, clientY));
 	}
 
 	function parsePx(v, fallback = 0) {

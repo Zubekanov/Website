@@ -1,6 +1,7 @@
 .popugame-shell {
 	margin: 1.5rem auto 2rem;
 	max-width: min(920px, 96vw);
+	width: 100%;
 	display: grid;
 	gap: 1.25rem;
 	background: var(--contents);
@@ -8,6 +9,12 @@
 	border-radius: 16px;
 	padding: 1.5rem;
 	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+	box-sizing: border-box;
+	overflow-x: clip;
+}
+
+.popugame-shell * {
+	box-sizing: border-box;
 }
 
 .popugame-shell[data-active-player="0"] {
@@ -27,6 +34,7 @@
 	gap: 1rem;
 	text-align: center;
 	font-weight: 600;
+	min-width: 0;
 }
 
 .popugame__scorebox {
@@ -38,6 +46,8 @@
 	border-radius: 12px;
 	background: var(--background);
 	border: 1px solid var(--border);
+	max-width: 100%;
+	min-width: 0;
 }
 
 .popugame__score {
@@ -108,21 +118,23 @@
 }
 
 .popugame__turnbar {
-	width: min(480px, 90vw);
+	width: min(480px, 100%);
 	display: grid;
 	gap: 0.35rem;
 	position: relative;
+	min-width: 0;
 }
 
 .popugame__turnwrap {
 	display: grid;
 	gap: 0.35rem;
-	width: min(520px, 92vw);
+	width: min(520px, 100%);
 	padding: 0.5rem;
 	border-radius: 12px;
 	border: 1px solid var(--border);
 	background: var(--background);
 	justify-items: center;
+	min-width: 0;
 }
 
 .popugame__turnlabel {
@@ -264,6 +276,9 @@
 	background: var(--background);
 	border-radius: 12px;
 	border: 1px solid var(--border);
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 }
 
 .popugame__cell {
@@ -449,7 +464,8 @@
 
 @media (max-width: 480px) {
 	.popugame-shell {
-		margin: 0.35rem -12px 1rem;
+		margin: 0.35rem 0 1rem;
+		max-width: 100%;
 		padding: 0.6rem;
 		border-radius: 14px;
 	}
