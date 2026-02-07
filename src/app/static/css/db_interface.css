@@ -93,6 +93,10 @@
 	font-weight: 600;
 }
 
+.db-cell--span-all {
+	grid-column: 1 / -1;
+}
+
 .db-cell--empty {
 	grid-column: 1 / -1;
 	color: var(--form_text);
@@ -194,24 +198,8 @@
 	align-items: center;
 }
 
-.db-btn {
-	border: 1px solid var(--form_border);
-	background: var(--contents);
-	color: var(--dark_blue);
-	padding: 0.05rem 0.4rem;
-	border-radius: 4px;
-	cursor: pointer;
-	font: inherit;
+.db-actions .btn {
 	min-width: 70px;
-	text-align: center;
-	box-sizing: border-box;
-	height: 1.25rem;
-	line-height: 1;
-}
-
-.db-btn--danger {
-	color: var(--error);
-	border-color: var(--error);
 }
 
 .db-hidden {

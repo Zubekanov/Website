@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from util.webpage_builder.parent_builder import HTMLHelper
 
 
 def box_open(container_class: str, class_name: str) -> str:
@@ -39,6 +40,30 @@ def form_close() -> str:
 
 def form_message_area(class_name: str, attr: str, lines: int) -> str:
 	return f'<div class="{class_name}" {attr} data-lines="{lines}" aria-live="polite"></div>\n'
+
+def api_scope_selector_input(
+	options: list[tuple[str, str]],
+	*,
+	hidden_name: str = "requested_scopes",
+	select_id: str = "requested_scopes_selector",
+) -> str:
+	options_html = "\n".join(
+		f'<option value="{html.escape(value)}">{html.escape(label)}</option>'
+		for value, label in options
+	)
+	return (
+		f'<label for="{html.escape(select_id)}">Requested Scopes</label>'
+		f'<div class="scope-selector" data-scope-selector data-target-input="{html.escape(hidden_name)}">'
+		f'<input type="hidden" id="{html.escape(hidden_name)}" name="{html.escape(hidden_name)}" value="">'
+		'<div class="scope-selector__selected" data-scope-selected>'
+		'<span class="scope-selector__empty" data-scope-empty>No scopes selected yet.</span>'
+		'</div>'
+		f'<select id="{html.escape(select_id)}" class="scope-selector__dropdown" data-scope-dropdown>'
+		'<option value="" selected>Select an option</option>'
+		f"{options_html}"
+		"</select>"
+		"</div>"
+	)
 
 
 def centering_open(
@@ -107,10 +132,15 @@ def subscription_card(
 
 
 def subscription_action(action: str, subscription_id: str, route: str, label: str) -> str:
-	return (
-		f"<button class=\"subscription-action\" data-subscription-action=\"{html.escape(action)}\" "
-		f"data-subscription-id=\"{html.escape(subscription_id)}\" "
-		f"data-submit-route=\"{route}\">{label}</button>"
+	return HTMLHelper.button(
+		label,
+		size="sm",
+		shape="pill",
+		data_attrs={
+			"subscription-action": action,
+			"subscription-id": subscription_id,
+			"submit-route": route,
+		},
 	)
 
 
@@ -153,17 +183,33 @@ def integration_delete_action(
 	hidden: bool = False,
 	active_label: str | None = None,
 ) -> str:
-	inactive_attr = " data-integration-inactive=\"1\"" if not is_active else ""
-	user_attr = f" data-user-id=\"{html.escape(user_id)}\"" if user_id else ""
-	route_attr = f" data-submit-route=\"{html.escape(submit_route)}\"" if submit_route else ""
-	hidden_attr = " hidden" if hidden else ""
-	active_attr = f" data-active-label=\"{html.escape(active_label)}\"" if active_label else ""
-	return (
-		f"<button class=\"integration-delete\" data-integration-delete{hidden_attr} "
-		f"data-integration-type=\"{html.escape(integration_type)}\" "
-		f"data-integration-id=\"{html.escape(integration_id)}\" "
-		f"data-integration-name=\"{html.escape(label)}\" "
-		f"data-integration-label=\"{html.escape(label)}\"{inactive_attr}{user_attr}{route_attr}{active_attr}>Disable</button>"
+	data_attrs = {
+		"integration-delete": "1",
+		"integration-type": integration_type,
+		"integration-id": integration_id,
+		"integration-name": label,
+		"integration-label": label,
+	}
+	if not is_active:
+		data_attrs["integration-inactive"] = "1"
+	if user_id:
+		data_attrs["user-id"] = user_id
+	if submit_route:
+		data_attrs["submit-route"] = submit_route
+	if active_label:
+		data_attrs["active-label"] = active_label
+
+	attrs = {}
+	if hidden:
+		attrs["hidden"] = "hidden"
+
+	return HTMLHelper.button(
+		"Disable",
+		size="sm",
+		shape="pill",
+		class_name="btn--integration-delete",
+		data_attrs=data_attrs,
+		attrs=attrs,
 	)
 
 
@@ -389,7 +435,7 @@ def profile_card(
 		f"{admin_line}"
 		f"<p class=\"profile-email\"><span>Email</span>{html.escape(email)}</p>"
 		"</div>"
-		f"<span class=\"profile-badge{'' if badge_label == 'MEMBER' else ' profile-badge--admin'}\">{badge_label}</span>"
+		f"{profile_badge(badge_label)}"
 		"</div>"
 		"<div class=\"profile-actions\">"
 		"<button class=\"profile-action\" data-password-panel-toggle>Change Password</button>"
@@ -398,6 +444,16 @@ def profile_card(
 		"</div>"
 		f"{panels_html}"
 		"</section>"
+	)
+
+
+def profile_badge(label: str, *, static: bool = False) -> str:
+	is_admin = (label or "").upper() != "MEMBER"
+	static_class = " profile-badge--static" if static else ""
+	return (
+		f"<span class=\"profile-badge{' profile-badge--admin' if is_admin else ''}{static_class}\">"
+		f"{html.escape(label)}"
+		"</span>"
 	)
 
 
@@ -462,6 +518,41 @@ def profile_integrations_header(title: str, subtitle: str, cards_html: str) -> s
 		f"<p>{subtitle}</p>"
 		"</div>"
 		f"<div class=\"integration-grid\">{cards_html}</div>"
+		"</section>"
+	)
+
+def profile_popugame_history_card(
+	*,
+	elo: int,
+	total_wr: float,
+	wins: int,
+	losses: int,
+	draws: int,
+	boxes: list[dict[str, str]],
+) -> str:
+	ordered_boxes = list(reversed(boxes))
+	boxes_html = "".join(
+		f"<span class=\"profile-popu-box profile-popu-box--{html.escape(b.get('outcome', 'draw'))}\" "
+		f"data-played=\"1\" "
+		f"data-outcome=\"{html.escape(b.get('outcome', 'draw'))}\" "
+		f"data-tooltip=\"{html.escape(b.get('tooltip', ''))}\" "
+		f"aria-label=\"{html.escape(b.get('tooltip', ''))}\"></span>"
+		for b in ordered_boxes
+	)
+	return (
+		"<section class=\"profile-popugame\">"
+		"<div class=\"profile-section-header\">"
+		"<h2>PopuGame History</h2>"
+		"<p>Recent games and rating trend.</p>"
+		"</div>"
+		"<div class=\"profile-popugame__stats\">"
+		f"<div class=\"profile-popu-stat\"><span>ELO</span><strong>{elo}</strong></div>"
+		f"<div class=\"profile-popu-stat\"><span>Total WR</span><strong>{total_wr:.1f}%</strong></div>"
+		f"<div class=\"profile-popu-stat\"><span>Record</span><strong>{wins}-{losses}-{draws}</strong></div>"
+		"</div>"
+		"<div class=\"profile-popugame__history-box\">"
+		f"<div class=\"profile-popugame__history\" data-popu-history>{boxes_html}</div>"
+		"</div>"
 		"</section>"
 	)
 
@@ -607,10 +698,15 @@ def webhook_selector_input(
 	placeholder: str,
 	data_kind: str,
 ) -> str:
-	return (
-		f'<label for="{input_id}">{html.escape(label)}</label>\n'
-		f'<input type="text" id="{input_id}" name="{name}" '
-		f'placeholder="{html.escape(placeholder)}" data-webhook-input="{data_kind}" autocomplete="off">\n'
+	return HTMLHelper.text_input(
+		label=html.escape(label),
+		name=name,
+		input_id=input_id,
+		placeholder=html.escape(placeholder),
+		input_attrs={
+			"data-webhook-input": data_kind,
+			"autocomplete": "off",
+		},
 	)
 
 
@@ -722,9 +818,7 @@ def minecraft_whitelist_banner(is_whitelisted: bool, username: str) -> str:
 		"<div class=\"minecraft-whitelist-subtitle\">"
 		f"Whitelisted under <b>{label}</b>."
 		"</div>"
-		"<button class=\"minecraft-whitelist-toggle\" type=\"button\" data-mc-toggle>"
-		"Make a new application"
-		"</button>"
+		f"{HTMLHelper.button('Make a new application', size='sm', shape='pill', variant='accent', data_attrs={'mc-toggle': ''})}"
 		"</div>"
 	)
 
@@ -817,7 +911,7 @@ def db_row_form_close() -> str:
 def db_add_row_head() -> str:
 	return (
 		'<div class="db-grid-row db-add-row-head">'
-		'<div class="db-cell db-cell--section" style="grid-column: 1 / -1;">Add Row</div>'
+		'<div class="db-cell db-cell--section db-cell--span-all">Add Row</div>'
 		"</div>"
 	)
 
@@ -880,10 +974,8 @@ def db_actions_cell(fields_attr: str) -> str:
 	return (
 		'<div class="db-cell db-cell--actions">'
 		"<div class=\"db-actions\">"
-		"<button type=\"submit\" class=\"db-btn\" data-db-action=\"update\" data-submit-route=\"/api/admin/db/update-row\" "
-		f"data-submit-method=\"POST\" data-submit-fields=\"{fields_attr}\">Save</button>"
-		"<button type=\"submit\" class=\"db-btn db-btn--danger\" data-db-action=\"delete\" data-submit-route=\"/api/admin/db/delete-row\" "
-		f"data-submit-method=\"POST\" data-submit-fields=\"{fields_attr}\">Delete</button>"
+		f"{HTMLHelper.button('Save', button_type='submit', size='xs', data_attrs={'db-action':'update','submit-route':'/api/admin/db/update-row','submit-method':'POST','submit-fields':fields_attr})}"
+		f"{HTMLHelper.button('Delete', button_type='submit', size='xs', variant='danger', data_attrs={'db-action':'delete','submit-route':'/api/admin/db/delete-row','submit-method':'POST','submit-fields':fields_attr})}"
 		"</div>"
 		"</div>"
 	)
@@ -892,8 +984,7 @@ def db_actions_cell(fields_attr: str) -> str:
 def db_add_actions_cell(insert_fields_attr: str) -> str:
 	return (
 		'<div class="db-cell db-cell--actions">'
-		f"<button type=\"submit\" class=\"db-btn\" data-db-action=\"add\" data-submit-route=\"/api/admin/db/insert-row\" "
-		f"data-submit-method=\"POST\" data-submit-fields=\"{insert_fields_attr}\">Add</button>"
+		f"{HTMLHelper.button('Add', button_type='submit', size='xs', data_attrs={'db-action':'add','submit-route':'/api/admin/db/insert-row','submit-method':'POST','submit-fields':insert_fields_attr})}"
 		"</div>"
 	)
 

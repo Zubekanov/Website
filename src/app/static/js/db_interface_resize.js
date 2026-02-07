@@ -104,7 +104,7 @@
 
 	window.addEventListener("load", () => {
 		document.querySelectorAll(".db-grid").forEach(initGrid);
-		const buttons = Array.from(document.querySelectorAll(".db-btn"));
+		const buttons = Array.from(document.querySelectorAll("[data-db-action]"));
 		if (buttons.length > 0) {
 			const max = Math.max(...buttons.map((b) => b.getBoundingClientRect().width));
 			buttons.forEach((b) => {

@@ -131,7 +131,7 @@
 
 		const save = document.createElement("button");
 		save.type = "submit";
-		save.className = "db-btn";
+		save.className = "btn btn--xs";
 		save.dataset.dbAction = "update";
 		save.dataset.submitRoute = "/api/admin/db/update-row";
 		save.dataset.submitMethod = "POST";
@@ -140,7 +140,7 @@
 
 		const del = document.createElement("button");
 		del.type = "submit";
-		del.className = "db-btn db-btn--danger";
+		del.className = "btn btn--xs btn--danger";
 		del.dataset.dbAction = "delete";
 		del.dataset.submitRoute = "/api/admin/db/delete-row";
 		del.dataset.submitMethod = "POST";
@@ -188,7 +188,7 @@
 		}
 
 		// Ensure new buttons match width sizing logic.
-		const buttons = Array.from(document.querySelectorAll(".db-btn"));
+		const buttons = Array.from(document.querySelectorAll("[data-db-action]"));
 		if (buttons.length > 0) {
 			const max = Math.max(...buttons.map((b) => b.getBoundingClientRect().width));
 			buttons.forEach((b) => {

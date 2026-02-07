@@ -94,7 +94,9 @@
     "stylesheets_html": {
         "default" : false,
         "automated": false,
-        "name_list": []
+        "name_list": [
+            "/static/css/forms.css"
+        ]
     },
     "scripts_head_html": {
         "default" : false,

@@ -47,9 +47,14 @@
                             "href": "/audiobookshelf-registration"
                         },
                         {
-                            "label": "Discord Webhook",
+                            "label": "Request Discord Webhook Subscription",
                             "desc": "Subscribe to a specified message emitter via Discord webhook.",
                             "href": "/discord-webhook-registration"
+                        },
+                        {
+                            "label": "Request API Access",
+                            "desc": "Apply for API key access to hosted services.",
+                            "href": "/api-access-application"
                         }
                     ]
                 },
@@ -60,10 +65,22 @@
                             "label": "Minecraft",
                             "desc": "Request whitelisting or review information about the Minecraft server.",
                             "href": "/minecraft"
+                        },
+                        {
+                            "label": "PopuGame",
+                            "desc": "Play the local PopuGame board on this site.",
+                            "href": "/popugame"
                         }
                     ]
                 }
             ]
+        },
+        {
+            "label": "Admin",
+            "type": "link",
+            "href": "/admin",
+            "desc": "Open admin dashboard and moderation tools.",
+            "visibility": ["admin"]
         },
         {
             "label": "Website Description",
@@ -73,9 +90,39 @@
         }
     ],
 
-    "account": {
-        "label": "Login / Register",
-        "type": "link",
-        "href": "/login"
-    }
+    "account": [
+        {
+            "label": "Login / Register",
+            "type": "link",
+            "href": "/login",
+            "visibility": ["anonymous"]
+        },
+        {
+            "label": "{{first_name}} {{last_name}}",
+            "type": "mega",
+            "visibility": ["authenticated"],
+            "sections": [
+                {
+                    "items": [
+                        {
+                            "label": "Profile",
+                            "desc": "View and edit your profile.",
+                            "href": "/profile"
+                        },
+                        {
+                            "label": "Admin Dashboard",
+                            "desc": "Open admin dashboard and moderation tools.",
+                            "href": "/admin",
+                            "visibility": ["admin"]
+                        },
+                        {
+                            "label": "Logout",
+                            "desc": "Log out of your account.",
+                            "href": "/logout"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }

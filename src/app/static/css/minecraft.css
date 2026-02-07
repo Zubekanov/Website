@@ -182,19 +182,8 @@ html[data-theme="dark"] .minecraft-host-copy img {
 	color: var(--form_text);
 }
 
-.minecraft-whitelist-toggle {
+.minecraft-whitelist-banner .btn {
 	justify-self: start;
-	border: 1px solid var(--border);
-	background: var(--contents);
-	color: var(--dark_blue);
-	padding: 6px 12px;
-	border-radius: 999px;
-	font-size: 13px;
-	cursor: pointer;
-}
-
-.minecraft-whitelist-toggle:hover {
-	border-color: var(--dark_blue);
 }
 
 @media (max-width: 640px) {

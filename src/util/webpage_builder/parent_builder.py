@@ -2,17 +2,21 @@ from abc import ABC
 import re
 
 from util.fcr.file_config_reader import FileConfigReader
-from flask import render_template_string
+from flask import has_request_context, render_template_string, request
 import pandas as pd
 
 from util.webpage_builder.metrics_builder import METRICS_NAMES
+from util.navbars.visibility import filter_nav_items, nav_entry_visible
 import html
 import json
 import time
 import urllib.request
 
 fcr = FileConfigReader()
-user_navbar_config = fcr.find("user_account.json")
+try:
+	user_navbar_config = fcr.find("user_account.json")
+except FileNotFoundError:
+	user_navbar_config = {}
 _GITHUB_REPO_CACHE: dict[str, dict[str, object]] = {}
 
 def _fetch_github_repos(username: str, limit: int = 6) -> tuple[list[dict], int]:
@@ -65,6 +69,11 @@ def fetch_github_repos(username: str, limit: int = 6) -> tuple[list[dict], int]:
 BUILD_MS = "__BUILD_MS__"
 
 _default_footer_html = fcr.find("default_footer.html")
+DEFAULT_SITE_TITLE = "Joseph Wong"
+DEFAULT_SITE_DESCRIPTION = "Personal website hosting various projects and information."
+DEFAULT_SITE_KEYWORDS = "Joseph Wong, personal website, portfolio"
+DEFAULT_AUTHOR = "Joseph Wong"
+DEFAULT_THEME_COLOR = "#1f1f1f"
 
 class WebPageBuilder(ABC):
 	def __init__(self, template_name: str = "default.html"):
@@ -166,6 +175,68 @@ class WebPageBuilder(ABC):
 				f'<script src="{src}"></script>' for src in sorted(self.scripts)
 			)
 
+		return self._apply_metadata_defaults(values)
+
+	def _first_nonempty(self, *values: str | None) -> str:
+		for value in values:
+			if value is None:
+				continue
+			value_str = str(value).strip()
+			if value_str:
+				return value_str
+		return ""
+
+	def _derive_meta_description(self, values: dict[str, str], max_len: int = 160) -> str:
+		raw_html = values.get("body_html", "")
+		if not raw_html:
+			return ""
+		text = re.sub(r"<script\b[^<]*(?:(?!</script>)<[^<]*)*</script>", " ", raw_html, flags=re.IGNORECASE)
+		text = re.sub(r"<style\b[^<]*(?:(?!</style>)<[^<]*)*</style>", " ", text, flags=re.IGNORECASE)
+		text = re.sub(r"<[^>]+>", " ", text)
+		text = html.unescape(text)
+		text = re.sub(r"\s+", " ", text).strip()
+		if not text:
+			return ""
+		if len(text) <= max_len:
+			return text
+		snippet = text[: max_len - 1].rstrip()
+		return f"{snippet}…"
+
+	def _apply_metadata_defaults(self, values: dict[str, str]) -> dict[str, str]:
+		canonical_from_request = request.url if has_request_context() else ""
+		title = self._first_nonempty(values.get("title"), DEFAULT_SITE_TITLE)
+		description = self._first_nonempty(
+			values.get("meta_description"),
+			self._derive_meta_description(values),
+			DEFAULT_SITE_DESCRIPTION,
+		)
+		canonical_url = self._first_nonempty(values.get("canonical_url"), canonical_from_request)
+		og_image = self._first_nonempty(values.get("og_image"))
+
+		defaults = {
+			"title": title,
+			"meta_description": description,
+			"meta_keywords": self._first_nonempty(values.get("meta_keywords"), DEFAULT_SITE_KEYWORDS),
+			"canonical_url": canonical_url,
+			"robots": self._first_nonempty(values.get("robots"), "index,follow"),
+			"author": self._first_nonempty(values.get("author"), DEFAULT_AUTHOR),
+			"theme_color": self._first_nonempty(values.get("theme_color"), DEFAULT_THEME_COLOR),
+			"og_title": self._first_nonempty(values.get("og_title"), title),
+			"og_description": self._first_nonempty(values.get("og_description"), description),
+			"og_url": self._first_nonempty(values.get("og_url"), canonical_url),
+			"og_type": self._first_nonempty(values.get("og_type"), "website"),
+			"og_image": og_image,
+			"og_image_alt": self._first_nonempty(values.get("og_image_alt"), "No OG image currently set."),
+			"twitter_card": self._first_nonempty(values.get("twitter_card"), "summary_large_image"),
+			"twitter_site": self._first_nonempty(values.get("twitter_site")),
+			"twitter_title": self._first_nonempty(values.get("twitter_title"), title),
+			"twitter_description": self._first_nonempty(values.get("twitter_description"), description),
+			"twitter_image": self._first_nonempty(values.get("twitter_image"), og_image),
+		}
+
+		for key, val in defaults.items():
+			values[key] = val
+
 		return values
 
 	def _apply_values_to_template(self, tpl: str, values: dict[str, str]) -> str:
@@ -179,7 +250,7 @@ class WebPageBuilder(ABC):
 			pat_with_default = re.compile(
 				r"\{\{\s*"
 				+ re.escape(key)
-				+ r"\s*\|\s*default\(\s*(?P<q>['\"]).*?(?P=q)\s*\)"
+				+ r"\s*\|\s*default\(\s*[^)]*?\s*\)"
 				+ r"(?:\s*\|\s*safe)?\s*\}\}",
 				flags=re.IGNORECASE | re.DOTALL,
 			)
@@ -265,11 +336,11 @@ class WebPageBuilder(ABC):
 
 		self.config_values["header_html"] = existing + banner_html
 
-	def _build_nav_html(self, config, user: dict | None = None,) -> str:
+	def _build_nav_html(self, config, user: dict | None = None, is_admin: bool = False) -> str:
 		config = fcr.find(config)
 		logo = config["logo"]
-		items = config["items"]
-		account = config.get("account")
+		items = filter_nav_items(config.get("items", []), user, is_admin)
+		account_cfg = config.get("account")
 
 		self.stylesheets.add("/static/css/navbar.css")
 		self.scripts.add("/static/js/navbar.js")
@@ -352,51 +423,76 @@ class WebPageBuilder(ABC):
 		items_html = "\n".join(nav_items_html)
 
 		account_html = ""
-		if account:
-			if user is None:
-				account_html = f"""
-				<a href="{account['href']}" class="nav-account">{account['label']}</a>
-				"""
-			else:
-				sections_html = []
-				account = user_navbar_config["account"]
-				for section in account.get("sections", []):
-					sec_items = "\n".join(
-						f"""
-						<a href="{entry['href']}" class="mega-item">
-							<span class="mega-item__label">{entry['label']}</span>
-							<span class="mega-item__desc">{entry.get('desc','')}</span>
-						</a>
-						""" for entry in section.get("items", [])
-					)
-					sections_html.append(f"""
-					<div class="mega-section">
-						<h3 class="mega-section__title">{section.get('label','')}</h3>
-						<div class="mega-section__items">
-							{sec_items}
-						</div>
-					</div>
-					""")
+		account_entries: list[dict] = []
+		if isinstance(account_cfg, dict):
+			account_entries = [account_cfg]
+		elif isinstance(account_cfg, list):
+			account_entries = [a for a in account_cfg if isinstance(a, dict)]
+		if user and not account_entries and isinstance(user_navbar_config.get("account"), dict):
+			account_entries = [user_navbar_config["account"]]
 
-				menu_html = "\n".join(sections_html)
-
-				label_tpl = account.get("label", "Account")
-				for key, value in (user or {}).items():
-					label_tpl = label_tpl.replace(f"{{{{{key}}}}}", str(value))
-
-				account_html = f"""
-				<div class="nav-item nav-item--has-menu" data-nav-menu>
-					<button class="nav-link nav-link--trigger" type="button">
-						<span>{label_tpl}</span>
-						<span class="nav-link__chevron" aria-hidden="true">▾</span>
-					</button>
-					<div class="nav-mega" aria-hidden="true">
-						<div class="nav-mega__panel">
-							{menu_html}
-						</div>
+		account_blocks: list[str] = []
+		for account in account_entries:
+			if not nav_entry_visible(account, user, is_admin):
+				continue
+			acc_type = account.get("type", "link")
+			label_tpl = account.get("label", "Account")
+			for key, value in (user or {}).items():
+				label_tpl = label_tpl.replace(f"{{{{{key}}}}}", str(value))
+			label_safe = html.escape(label_tpl)
+			if acc_type == "link":
+				href = html.escape(account.get("href", "#"), quote=True)
+				account_blocks.append(f'<a href="{href}" class="nav-account">{label_safe}</a>')
+				continue
+			if acc_type != "mega":
+				continue
+			sections_html = []
+			for section in account.get("sections", []):
+				if not isinstance(section, dict):
+					continue
+				if not nav_entry_visible(section, user, is_admin):
+					continue
+				visible_entries = [
+					entry for entry in section.get("items", [])
+					if isinstance(entry, dict) and nav_entry_visible(entry, user, is_admin)
+				]
+				if not visible_entries:
+					continue
+				sec_items = "\n".join(
+					f"""
+					<a href="{html.escape(entry.get('href', '#'), quote=True)}" class="mega-item">
+						<span class="mega-item__label">{html.escape(entry.get('label', ''))}</span>
+						<span class="mega-item__desc">{html.escape(entry.get('desc', ''))}</span>
+					</a>
+					""" for entry in visible_entries
+				)
+				section_label = section.get("label")
+				section_heading = f"<h3 class=\"mega-section__title\">{html.escape(section_label)}</h3>" if section_label else ""
+				sections_html.append(f"""
+				<div class="mega-section">
+					{section_heading}
+					<div class="mega-section__items">
+						{sec_items}
 					</div>
 				</div>
-				"""
+				""")
+			if not sections_html:
+				continue
+			menu_html = "\n".join(sections_html)
+			account_blocks.append(f"""
+			<div class="nav-item nav-item--has-menu" data-nav-menu>
+				<button class="nav-link nav-link--trigger" type="button">
+					<span>{label_safe}</span>
+					<span class="nav-link__chevron" aria-hidden="true">▾</span>
+				</button>
+				<div class="nav-mega" aria-hidden="true">
+					<div class="nav-mega__panel">
+						{menu_html}
+					</div>
+				</div>
+			</div>
+			""")
+		account_html = "\n".join(account_blocks)
 
 		self.config_values["nav_html"] = self.config_values.get("nav_html", "") + f"""
 		<header id="site-header" class="site-header">
@@ -582,20 +678,30 @@ class HTMLHelper():
 		value: str = "",
 		class_name: str = "",
 		prefill: str | None = None,
+		input_id: str | None = None,
+		input_attrs: dict[str, str] | None = None,
 	):
 		class_attr = f' class="{class_name}"' if class_name else ""
 		prefill_attr = f' data-prefill="{prefill}"' if prefill is not None else ""
+		field_id = input_id or name
+		attr_str = ""
+		if input_attrs:
+			attr_str = "".join(
+				f' {html.escape(str(k))}="{html.escape(str(v))}"'
+				for k, v in input_attrs.items()
+			)
 
 		return (
-			f'<label for="{name}">{label}</label>\n'
+			f'<label for="{field_id}">{label}</label>\n'
 			f'<input '
 			f'type="text" '
-			f'id="{name}" '
+			f'id="{field_id}" '
 			f'name="{name}" '
 			f'placeholder="{placeholder}" '
 			f'value="{value}"'
 			f'{class_attr}'
 			f'{prefill_attr}'
+			f'{attr_str}'
 			f'>\n'
 		)
 	
@@ -697,6 +803,42 @@ class HTMLHelper():
 			f'{failure_attr}'
 			f'>{text}</button>\n'
 		)
+
+	@staticmethod
+	def button(
+		text: str,
+		*,
+		button_type: str = "button",
+		size: str = "md",
+		variant: str = "default",
+		shape: str | None = None,
+		class_name: str = "",
+		data_attrs: dict[str, str] | None = None,
+		attrs: dict[str, str] | None = None,
+	) -> str:
+		classes = ["btn"]
+		size_map = {"xs": "btn--xs", "sm": "btn--sm", "lg": "btn--lg"}
+		variant_map = {"primary": "btn--primary", "danger": "btn--danger", "ghost": "btn--ghost", "accent": "btn--accent"}
+		if size in size_map:
+			classes.append(size_map[size])
+		if variant in variant_map:
+			classes.append(variant_map[variant])
+		if shape == "pill":
+			classes.append("btn--pill")
+		if class_name:
+			classes.extend(class_name.split())
+
+		class_attr = f' class="{" ".join(classes)}"' if classes else ""
+		data_attr_str = ""
+		if data_attrs:
+			data_parts = [f' data-{k}="{html.escape(str(v))}"' for k, v in data_attrs.items()]
+			data_attr_str = "".join(data_parts)
+		attr_str = ""
+		if attrs:
+			attr_parts = [f' {k}="{html.escape(str(v))}"' for k, v in attrs.items()]
+			attr_str = "".join(attr_parts)
+
+		return f'<button type="{html.escape(button_type)}"{class_attr}{data_attr_str}{attr_str}>{html.escape(text)}</button>'
 
 	@staticmethod
 	def hidden_input(name: str, value: str):

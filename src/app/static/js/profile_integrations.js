@@ -37,7 +37,7 @@
 			const footer = card.querySelector(".subscription-footer");
 			if (footer && !footer.querySelector("[data-subscription-action='resubscribe']")) {
 				const resub = document.createElement("button");
-				resub.className = "subscription-action";
+				resub.className = "btn btn--sm btn--pill";
 				resub.dataset.subscriptionAction = "resubscribe";
 				resub.dataset.subscriptionId = subId;
 				resub.dataset.submitRoute = "/api/profile/discord-webhook/resubscribe";
@@ -57,7 +57,7 @@
 			const footer = card.querySelector(".subscription-footer");
 			if (footer && !footer.querySelector("[data-subscription-action='unsubscribe']")) {
 				const unsub = document.createElement("button");
-				unsub.className = "subscription-action";
+				unsub.className = "btn btn--sm btn--pill";
 				unsub.dataset.subscriptionAction = "unsubscribe";
 				unsub.dataset.subscriptionId = subId;
 				unsub.dataset.submitRoute = "/api/profile/discord-webhook/unsubscribe";

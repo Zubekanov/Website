@@ -18,6 +18,7 @@ from util.webpage_builder import html_fragments
 from util.webpage_builder.metrics_builder import METRICS_NAMES
 from util.integrations.discord.webhook_interface import DiscordWebhookEmitter
 from util.fcr.file_config_reader import FileConfigReader
+from util.navbars.visibility import filter_nav_items
 
 fcr = FileConfigReader()
 interface = PSQLInterface()
@@ -32,8 +33,9 @@ class PageBuilder:
 	):
 		self._b = parent_builder.WebPageBuilder()
 		self._b.load_page_config(page_config)
-		resolved_nav = resolve_navbar_config(user, navbar_config)
-		self._b._build_nav_html(resolved_nav, user=user)
+		is_admin = _is_admin_user(user)
+		resolved_nav = resolve_navbar_config(user, navbar_config, is_admin=is_admin)
+		self._b._build_nav_html(resolved_nav, user=user, is_admin=is_admin)
 
 	def add_banner(
 		self,
@@ -128,11 +130,13 @@ def _is_admin_user(user: dict | None) -> bool:
 		return False
 
 
-def resolve_navbar_config(user: dict | None, navbar_config: str | None) -> str:
+def resolve_navbar_config(user: dict | None, navbar_config: str | None, *, is_admin: bool | None = None) -> str:
+	_ = user
+	_ = is_admin
 	if not navbar_config or navbar_config == "auto":
-		return "navbar_landing_admin.json" if _is_admin_user(user) else "navbar_landing.json"
-	if navbar_config == "navbar_landing.json":
-		return "navbar_landing_admin.json" if _is_admin_user(user) else navbar_config
+		return "navbar_landing.json"
+	if navbar_config == "navbar_landing_admin.json":
+		return "navbar_landing.json"
 	return navbar_config
 
 def step_hardware_banner(builder: PageBuilder):
@@ -709,7 +713,11 @@ def build_readme_page(user: dict | None) -> str:
 
 def build_empty_landing_page(user: dict | None) -> str:
 	nav_config = fcr.find("navbar_landing.json")
-	items = nav_config.get("items", [])
+	items = filter_nav_items(
+		nav_config.get("items", []),
+		user,
+		_is_admin_user(user),
+	)
 	section_cards: list[str] = []
 
 	def _landing_nav_hero(title: str, lead: str) -> str:
@@ -1008,6 +1016,7 @@ def build_profile_page(user: dict | None) -> str:
 		)
 	integration_cards.sort(key=lambda item: item[0])
 	integration_cards_html = "".join(card for _, card in integration_cards)
+	popugame_history_html = _build_profile_popugame_history_html(user)
 	profile_panels = html_fragments.profile_password_panel() + html_fragments.profile_delete_panel()
 	profile_card_html = html_fragments.profile_card(
 		initials=user["first_name"][:1] + user["last_name"][:1],
@@ -1039,10 +1048,99 @@ def build_profile_page(user: dict | None) -> str:
 		steps=(
 			step_set_page_title(user_name + "'s Profile"),
 			step_add_stylesheets("/static/css/profile.css"),
-			step_add_scripts("/static/js/copy_tooltip.js", "/static/js/profile_integrations.js"),
-			step_profile_content(profile_card_html, integrations_html, modal_html),
+			step_add_scripts("/static/js/copy_tooltip.js", "/static/js/profile_integrations.js", "/static/js/profile_popugame_history.js"),
+			step_profile_content(profile_card_html, popugame_history_html + integrations_html, modal_html),
 		),
 	))
+
+
+def _build_profile_popugame_history_html(user: dict) -> str:
+	try:
+		user_id = str(user.get("id"))
+		rating_rows, _ = interface.client.get_rows_with_filters(
+			"popugame_ratings",
+			equalities={"user_id": user_id},
+			page_limit=1,
+			page_num=0,
+		)
+		elo = int(rating_rows[0].get("elo") or 1200) if rating_rows else 1200
+		history_rows = interface.execute_query(
+			"SELECT code, player0_user_id, player1_user_id, player0_name, player1_name, winner, "
+			"elo_before_p0, elo_after_p0, elo_delta_p0, "
+			"elo_before_p1, elo_after_p1, elo_delta_p1, "
+			"COALESCE(last_move_at, updated_at, created_at) AS ts "
+			"FROM popugame_sessions "
+			"WHERE status = 'finished' AND (player0_user_id = %s OR player1_user_id = %s) "
+			"ORDER BY ts DESC LIMIT %s;",
+			(user_id, user_id, 20),
+		) or []
+		wins = 0
+		losses = 0
+		draws = 0
+		boxes: list[dict[str, str]] = []
+
+		def _public_pname(name: object) -> str:
+			n = (name or "").strip() if isinstance(name, str) else ""
+			if not n:
+				return "Unknown"
+			return "Anonymous" if n.startswith("anon:") else n
+
+		for r in history_rows:
+			is_p0 = str(r.get("player0_user_id") or "") == user_id
+			winner = r.get("winner")
+			if winner is None:
+				outcome = "draw"
+				draws += 1
+			elif (is_p0 and int(winner) == 0) or ((not is_p0) and int(winner) == 1):
+				outcome = "win"
+				wins += 1
+			else:
+				outcome = "loss"
+				losses += 1
+			opponent = _public_pname(r.get("player1_name") if is_p0 else r.get("player0_name"))
+			delta_raw = r.get("elo_delta_p0") if is_p0 else r.get("elo_delta_p1")
+			elo_after_raw = r.get("elo_after_p0") if is_p0 else r.get("elo_after_p1")
+			elo_before_raw = r.get("elo_before_p0") if is_p0 else r.get("elo_before_p1")
+			elo_at_match: int | None = None
+			if elo_after_raw is not None:
+				elo_at_match = int(elo_after_raw)
+			elif elo_before_raw is not None and delta_raw is not None:
+				elo_at_match = int(elo_before_raw) + int(delta_raw)
+
+			if delta_raw is None:
+				delta_txt = "Unrated game"
+			else:
+				delta_val = int(delta_raw)
+				sign = "+" if delta_val > 0 else ""
+				delta_txt = f"ELO {sign}{delta_val}"
+
+			if elo_at_match is None:
+				elo_txt = "ELO at match: unavailable"
+			else:
+				elo_txt = f"ELO at match: {elo_at_match}"
+			boxes.append({
+				"outcome": outcome,
+				"tooltip": f"vs {opponent} | {outcome.upper()} | {elo_txt} | {delta_txt}",
+			})
+		decisive = wins + losses
+		total_wr = (wins * 100.0 / decisive) if decisive > 0 else 0.0
+		return html_fragments.profile_popugame_history_card(
+			elo=elo,
+			total_wr=total_wr,
+			wins=wins,
+			losses=losses,
+			draws=draws,
+			boxes=boxes,
+		)
+	except Exception:
+		return html_fragments.profile_popugame_history_card(
+			elo=1200,
+			total_wr=0.0,
+			wins=0,
+			losses=0,
+			draws=0,
+			boxes=[],
+		)
 
 
 def build_login_page(user: dict | None) -> str:
@@ -1168,6 +1266,74 @@ def _build_audiobookshelf_registration_steps(user: dict | None) -> tuple[Step, .
 			step_text_paragraph("You will receive a follow-up email with further instructions if your registration is approved."),
 		)),
 	)
+
+def build_api_access_application_page(user: dict | None) -> str:
+	contact_fields: tuple[Step, ...] = ()
+	hidden_contact: tuple[Step, ...] = ()
+	submission_fields = [
+		"first_name",
+		"last_name",
+		"email",
+		"principal_type",
+		"service_name",
+		"requested_scopes",
+		"use_case",
+	]
+	if user:
+		hidden_contact = (
+			step_text_block(HTMLHelper.hidden_input("first_name", user.get("first_name", ""))),
+			step_text_block(HTMLHelper.hidden_input("last_name", user.get("last_name", ""))),
+			step_text_block(HTMLHelper.hidden_input("email", user.get("email", ""))),
+		)
+	else:
+		contact_fields = (
+			step_text_input_group("First Name", "first_name", placeholder="First Name"),
+			step_text_input_group("Last Name", "last_name", placeholder="Last Name"),
+			step_text_input_group("Email", "email", placeholder="Email"),
+		)
+
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("API Access Application"),
+			step_add_scripts("/static/js/api_scope_selector.js"),
+			step_box(contents=(
+				step_heading("API Access Application", 2),
+				step_form(
+					form_id="api-access-application-form",
+					class_name="form",
+					contents=(
+						*contact_fields,
+						*hidden_contact,
+						step_dropdown_group(
+							label="Principal Type",
+							name="principal_type",
+							options=[
+								("service", "Service / system"),
+								("user", "User principal"),
+							],
+						),
+						step_text_input_group("Service Name", "service_name", placeholder="Service name"),
+						step_form_group(html_fragments.api_scope_selector_input([
+							("metrics.read", "metrics.read"),
+							("webhook.write", "webhook.write"),
+							("webhook.read", "webhook.read"),
+							("admin.api", "admin.api"),
+						])),
+						step_textarea_group("Use Case", "use_case", placeholder="Describe your request."),
+						step_submit_button(
+							"Submit Application",
+							submission_fields=submission_fields,
+							submission_route="/api-access-application",
+							submission_method="POST",
+							success_redirect="/",
+							failure_redirect=None,
+						),
+						step_form_message_area(),
+					),
+				),
+			)),
+		),
+	))
 
 def build_discord_webhook_registration_page(user: dict | None) -> str:
 	return build_page(user, PageSpec(
@@ -1581,6 +1747,195 @@ def build_minecraft_page(user: dict | None) -> str:
 		),
 	))
 
+def build_popugame_page(user: dict | None, *, game_code: str | None = None) -> str:
+	def load_popugame_rules_markdown() -> str:
+		path = Path(__file__).resolve().parents[2] / "app" / "static" / "resources" / "popugame_rules.md"
+		try:
+			return path.read_text(encoding="utf-8", errors="replace")
+		except Exception:
+			return (
+				"# PopuGame Rules\n\n"
+				"- Take turns placing your token on an empty square the opponent has not claimed.\n"
+				"- Make a line of 3+ tokens in any direction to trigger a claim.\n"
+				"- Claimed squares can replace opponent claims, but tokens remain on board.\n"
+				"- After 40 turns, higher score wins."
+			)
+
+	rules_md = load_popugame_rules_markdown()
+
+	def add_popugame_assets(builder: PageBuilder):
+		builder._b.stylesheets.add("/static/css/popugame.css")
+		builder._b.stylesheets.add("/static/css/minecraft.css")
+		builder._b.stylesheets.add("/static/css/markdown.css")
+		builder._b.scripts.add("/static/js/copy_tooltip.js")
+		builder._b.scripts.add("/static/js/popugame.js")
+
+	def step_popugame_shell_open() -> Step:
+		def _step(builder: PageBuilder):
+			code_attr = f' data-popugame-code="{html.escape(game_code)}"' if game_code else ""
+			builder.add_html(f'<div class="popugame-shell" data-popugame data-size="9" data-turn-limit="40"{code_attr}>')
+		return _step
+
+	def step_popugame_shell_close() -> Step:
+		def _step(builder: PageBuilder):
+			builder.add_html("</div>")
+		return _step
+
+	def step_popugame_header() -> Step:
+		return step_text_block("""
+		<div class="popugame__header">
+			<div class="popugame__center">
+				<div class="popugame__turnwrap">
+					<div class="popugame__turnlabel">Turns Left: <span data-popugame-turn>40</span></div>
+					<div class="popugame__turnbar" data-popugame-turnbar>
+						<div class="popugame__turnbar-track" data-popugame-turn-track></div>
+					</div>
+				</div>
+			</div>
+			<div class="popugame__scorebox" aria-label="Score and status">
+				<div class="popugame__statusbox">
+					<div class="popugame__status" data-popugame-status>Player 1 (X) to move</div>
+				</div>
+				<div class="popugame__names">
+					<span class="popugame__name popugame__name--p0" data-popugame-name="0">Player 1</span>
+					<span class="popugame__name-sep">vs</span>
+					<span class="popugame__name popugame__name--p1" data-popugame-name="1">Player 2</span>
+				</div>
+				<div class="popugame__scoreline">
+					<span class="popugame__score popugame__score--p0" data-popugame-score="0">0</span>
+					<span class="popugame__score-sep">:</span>
+					<span class="popugame__score popugame__score--p1" data-popugame-score="1">0</span>
+				</div>
+			</div>
+		</div>
+		""")
+
+	def step_popugame_board() -> Step:
+		return step_text_block('<div class="popugame__board" data-popugame-board aria-label="PopuGame board"></div>')
+
+	def step_popugame_controls() -> Step:
+		if game_code:
+			return step_text_block("""
+			<div class="popugame__controls">
+				<div class="popugame__controls-group popugame__controls-group--play">
+					<button class="btn popugame__btn btn--ghost" type="button" data-popugame-rules>Rules</button>
+					<button class="btn popugame__btn btn--danger" type="button" data-popugame-concede>Concede Game</button>
+				</div>
+				<div class="popugame__controls-group popugame__controls-group--multi">
+					<button class="btn popugame__btn btn--primary" type="button" data-popugame-host data-popugame-postgame hidden>Host Multiplayer Game</button>
+					<button class="btn popugame__btn" type="button" data-popugame-join data-popugame-postgame hidden>Join via Code</button>
+				</div>
+			</div>
+			""")
+		return step_text_block("""
+		<div class="popugame__controls">
+			<div class="popugame__controls-group popugame__controls-group--play">
+				<button class="btn popugame__btn btn--ghost" type="button" data-popugame-rules>Rules</button>
+				<button class="btn popugame__btn btn--accent" type="button" data-popugame-undo disabled>Undo Move</button>
+				<button class="btn popugame__btn" type="button" data-popugame-reset>Reset Board</button>
+			</div>
+			<div class="popugame__controls-group popugame__controls-group--multi">
+				<button class="btn popugame__btn btn--primary" type="button" data-popugame-host>Host Multiplayer Game</button>
+				<button class="btn popugame__btn" type="button" data-popugame-join>Join via Code</button>
+			</div>
+		</div>
+		""")
+
+	def step_popugame_share_panel() -> Step:
+		link = f"/popugame/{game_code}" if game_code else ""
+		link_safe = html.escape(link)
+		code_safe = html.escape(game_code or "")
+		return step_text_block(f"""
+		<div class="popugame__share-panel" data-popugame-share-panel hidden>
+			<div class="popugame__share-title">Waiting for opponent</div>
+			<div class="popugame__share-subtitle">Share this link or code to invite someone.</div>
+			<div class="popugame__share-grid">
+				<div class="popugame__share-field">
+					<label>Game Link</label>
+					<span class="minecraft-host-chip popugame__copy-chip" data-popugame-copy-chip data-popugame-copy-kind="link">
+						<span class="minecraft-host-text" data-popugame-share-link>{link_safe}</span>
+						<button class="minecraft-host-copy" type="button" data-popugame-copy-btn aria-label="Copy game link">
+							<img src="/static/img/copy.png" alt="">
+							<span class="minecraft-host-tooltip" data-popugame-tooltip aria-hidden="true">Copied</span>
+						</button>
+					</span>
+				</div>
+				<div class="popugame__share-field">
+					<label>Game Code</label>
+					<span class="minecraft-host-chip popugame__copy-chip" data-popugame-copy-chip data-popugame-copy-kind="code">
+						<span class="minecraft-host-text" data-popugame-share-code>{code_safe}</span>
+						<button class="minecraft-host-copy" type="button" data-popugame-copy-btn aria-label="Copy game code">
+							<img src="/static/img/copy.png" alt="">
+							<span class="minecraft-host-tooltip" data-popugame-tooltip aria-hidden="true">Copied</span>
+						</button>
+					</span>
+				</div>
+			</div>
+		</div>
+		""")
+
+	def step_popugame_rules_modal() -> Step:
+		return step_text_block("""
+		<div class="popugame__backdrop" data-popugame-modal aria-hidden="true">
+			<div class="popugame__modal" role="dialog" aria-modal="true" aria-labelledby="popugame-rules-title">
+				<div class="popugame__modal-header">
+					<h3 id="popugame-rules-title">PopuGame Rules</h3>
+					<button class="popugame__close" type="button" data-popugame-close aria-label="Close rules">×</button>
+				</div>
+				<div class="popugame__modal-body">
+					""" + f"<div class=\"markdown-block popugame__rules-markdown\">{render_markdown(rules_md)}</div>" + """
+				</div>
+			</div>
+		</div>
+		""")
+
+	def step_popugame_dialog_modal() -> Step:
+		return step_text_block("""
+		<div class="popugame__backdrop" data-popugame-dialog aria-hidden="true">
+			<div class="popugame__modal" role="dialog" aria-modal="true" aria-labelledby="popugame-dialog-title">
+				<div class="popugame__modal-header">
+					<h3 id="popugame-dialog-title" data-popugame-dialog-title>Notice</h3>
+					<button class="popugame__close" type="button" data-popugame-dialog-close aria-label="Close dialog">×</button>
+				</div>
+				<div class="popugame__modal-body">
+					<div data-popugame-dialog-body></div>
+					<div class="popugame__dialog-actions">
+						<button class="btn" type="button" data-popugame-dialog-cancel>Cancel</button>
+						<button class="btn btn--primary" type="button" data-popugame-dialog-confirm>OK</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		""")
+
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("PopuGame"),
+			add_popugame_assets,
+			step_popugame_shell_open(),
+			step_popugame_header(),
+			*( (step_popugame_share_panel(),) if game_code else () ),
+			step_popugame_board(),
+			step_popugame_controls(),
+			step_popugame_rules_modal(),
+			step_popugame_dialog_modal(),
+			step_popugame_shell_close(),
+			add_return_home,
+		),
+	))
+
+
+def build_popugame_invalid_link_page(user: dict | None) -> str:
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Invalid PopuGame Link"),
+			step_heading("Invalid PopuGame Link", 2),
+			step_text_paragraph("This PopuGame link is invalid or no longer available."),
+			step_text_paragraph("Please host a new game or ask the host for a fresh link/code."),
+			add_return_home,
+		),
+	))
+
 def build_psql_interface_page(user: dict | None) -> str:
 	if not user:
 		return build_page(user, PageSpec(
@@ -1856,6 +2211,7 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 	count_audiobookshelf = interface.count_pending_audiobookshelf_registrations()
 	count_webhook = interface.count_pending_discord_webhook_registrations()
 	count_minecraft = interface.count_pending_minecraft_registrations()
+	count_api_access = interface.count_pending_api_access_registrations()
 
 	cards_html = (
 		html_fragments.admin_card(
@@ -1892,6 +2248,15 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Review Minecraft whitelist requests.",
 		)
 		+ html_fragments.admin_card(
+			"/admin/api-access-approvals",
+			html_fragments.admin_card_meta(
+				"Approvals",
+				html_fragments.admin_badge_count(count_api_access),
+			),
+			"API Access Requests",
+			"Review API key access applications.",
+		)
+		+ html_fragments.admin_card(
 			"/admin/users",
 			html_fragments.admin_card_meta("Accounts"),
 			"User Management",
@@ -1903,6 +2268,12 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Debug Email",
 			"Send a test email from the system.",
 		)
+		+ html_fragments.admin_card(
+			"/admin/frontend-test",
+			html_fragments.admin_card_meta("Tools"),
+			"Frontend Test Page",
+			"Preview labeled UI elements and styles.",
+		)
 	)
 	return build_page(user, PageSpec(
 		steps=(
@@ -1911,6 +2282,186 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			step_admin_dashboard_content(cards_html),
 		),
 	))
+
+
+def build_admin_frontend_test_page(user: dict | None) -> str:
+	if not user:
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("Frontend Test"),
+				step_error_header(401, "Login required."),
+				add_return_home,
+			),
+		))
+
+	if not interface.is_admin(user.get("id")):
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("Frontend Test"),
+				step_error_header(403, "Admin access required."),
+				add_return_home,
+			),
+		))
+
+	sections = _frontend_test_sections()
+	sections_html = "".join([
+		"<div class=\"frontend-test-page\">",
+		"<h1>Frontend Test Page</h1>",
+		"<p class=\"frontend-test-intro\">This page previews UI components with labels for visual regression checks.</p>",
+		"".join(_frontend_section_html(section) for section in sections),
+		"</div>",
+	])
+	stylesheets = sorted({
+		"/static/css/frontend_test.css",
+		*{
+			path
+			for section in sections
+			for path in section.stylesheets
+		},
+	})
+
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Frontend Test"),
+			step_add_stylesheets(*stylesheets),
+			step_text_block(sections_html),
+		),
+	))
+
+
+def _frontend_sample(label: str, content_html: str) -> str:
+	return (
+		"<article class=\"frontend-sample\">"
+		f"<div class=\"frontend-sample__label\">{html.escape(label)}</div>"
+		f"<div class=\"frontend-sample__body\">{content_html}</div>"
+		"</article>"
+	)
+
+
+@dataclass(frozen=True)
+class FrontendSectionSpec:
+	title: str
+	stylesheets: tuple[str, ...]
+	samples: tuple[tuple[str, str], ...]
+
+
+def _frontend_section_html(section: FrontendSectionSpec) -> str:
+	return (
+		"<section class=\"frontend-test-section\">"
+		f"<h2>{html.escape(section.title)}</h2>"
+		"<div class=\"frontend-test-grid\">"
+		f"{''.join(_frontend_sample(label, sample_html) for label, sample_html in section.samples)}"
+		"</div>"
+		"</section>"
+	)
+
+
+def _frontend_test_sections() -> tuple[FrontendSectionSpec, ...]:
+	return (
+		FrontendSectionSpec(
+			title="Buttons",
+			stylesheets=("/static/css/forms.css",),
+			samples=(
+				("HTMLHelper.button default", HTMLHelper.button("Default")),
+				("HTMLHelper.button primary", HTMLHelper.button("Primary", variant="primary")),
+				("HTMLHelper.button accent", HTMLHelper.button("Accent", variant="accent")),
+				("HTMLHelper.button danger", HTMLHelper.button("Danger", variant="danger")),
+				("HTMLHelper.button ghost", HTMLHelper.button("Ghost", variant="ghost")),
+				("HTMLHelper.button pill sm", HTMLHelper.button("Pill Small", size="sm", shape="pill")),
+				("HTMLHelper.button xs", HTMLHelper.button("XS", size="xs")),
+				("HTMLHelper.button lg", HTMLHelper.button("Large", size="lg")),
+			),
+		),
+		FrontendSectionSpec(
+			title="Form Controls",
+			stylesheets=("/static/css/forms.css",),
+			samples=(
+				("HTMLHelper.text_input", HTMLHelper.form_group(HTMLHelper.text_input("Email", "fe-email", "name@example.com"))),
+				("HTMLHelper.password_input", HTMLHelper.form_group(HTMLHelper.password_input("Password", "fe-password", "Password"))),
+				("HTMLHelper.select_input", HTMLHelper.form_group(HTMLHelper.select_input("Role", "fe-role", [("member", "Member"), ("admin", "Admin")], "member"))),
+				("HTMLHelper.dropdown", HTMLHelper.form_group(HTMLHelper.dropdown("Reason", "fe-reason", [("requested", "Requested"), ("policy", "Policy")], placeholder="Select reason"))),
+				("HTMLHelper.textarea_input", HTMLHelper.form_group(HTMLHelper.textarea_input("Notes", "fe-notes", "Add notes", rows=4))),
+				("HTMLHelper.checkbox_input", HTMLHelper.form_group(HTMLHelper.checkbox_input("Confirm action", "fe-confirm"))),
+				("html_fragments.form_message_area", html_fragments.form_message_area("form-message", 'data-state="success"', 2)),
+			),
+		),
+		FrontendSectionSpec(
+			title="Admin Dashboard UI",
+			stylesheets=("/static/css/admin_dashboard.css",),
+			samples=(
+				("html_fragments.admin_badge_count", html_fragments.admin_badge_count(12)),
+				("html_fragments.admin_badge_count loading", html_fragments.admin_badge_count(None)),
+				("html_fragments.admin_card", html_fragments.admin_card("#", html_fragments.admin_card_meta("Example", html_fragments.admin_badge_count(3)), "Sample Card", "Card typography and spacing preview.")),
+				("html_fragments.admin_dashboard", html_fragments.admin_dashboard(html_fragments.admin_card("#", html_fragments.admin_card_meta("Tools"), "Nested Card", "Dashboard shell preview."))),
+			),
+		),
+		FrontendSectionSpec(
+			title="Admin Users UI",
+			stylesheets=("/static/css/admin_users.css", "/static/css/forms.css", "/static/css/profile.css"),
+			samples=(
+				("html_fragments.admin_user_badge", html_fragments.admin_user_badge("ADMIN")),
+				("html_fragments.admin_user_action_button", html_fragments.admin_user_action_button("promote", "user-123", "Promote")),
+				("html_fragments.admin_user_actions", html_fragments.admin_user_actions(html_fragments.admin_user_action_button("delete", "user-123", "Delete user", True))),
+				("html_fragments.admin_user_card", html_fragments.admin_user_card("user-123", "Example User", "example@user.com", html_fragments.admin_user_meta_row("Joined", "15 Jan 2026"), html_fragments.admin_user_badge("MEMBER"), html_fragments.admin_user_actions(html_fragments.admin_user_action_button("promote", "user-123", "Promote to admin")), html_fragments.admin_user_integrations(html_fragments.integration_card_empty("No integrations")))),
+				("html_fragments.admin_user_delete_modal", html_fragments.admin_user_delete_modal(html_fragments.admin_user_delete_reason_select([("", "Select a reason"), ("policy", "Policy")]))),
+			),
+		),
+		FrontendSectionSpec(
+			title="Profile and Integrations UI",
+			stylesheets=("/static/css/profile.css", "/static/css/forms.css"),
+			samples=(
+				("html_fragments.profile_badge member", html_fragments.profile_badge("MEMBER", static=True)),
+				("html_fragments.profile_badge admin", html_fragments.profile_badge("ADMIN", static=True)),
+				("html_fragments.profile_password_panel", html_fragments.profile_password_panel()),
+				("html_fragments.profile_delete_panel", html_fragments.profile_delete_panel()),
+				("html_fragments.integration_card", html_fragments.integration_card("discord_webhook", "int-1", "Discord Webhook", "moderator.notifications", "https://discord.com/api/webhooks/...", html_fragments.integration_delete_button("discord_webhook", "int-1", "Discord Webhook", "Active", True))),
+				("html_fragments.integration_subscriptions", html_fragments.integration_subscriptions("Subscriptions", html_fragments.subscription_card("moderator.notifications", "all", "Moderation events", "today", "Active", True, html_fragments.subscription_action("unsubscribe", "sub-1", "/api/profile/discord-webhook/unsubscribe", "Unsubscribe"), ""))),
+				("html_fragments.integration_delete_modal", html_fragments.integration_delete_modal(html_fragments.integration_delete_reason_select([("", "Select a reason"), ("requested", "Requested")]))),
+			),
+		),
+		FrontendSectionSpec(
+			title="Approvals UI",
+			stylesheets=("/static/css/centering.css", "/static/css/forms.css"),
+			samples=(
+				("html_fragments.approval_row", html_fragments.approval_row("Email", "user@example.com")),
+				("html_fragments.approval_actions", html_fragments.approval_actions("/api/admin/audiobookshelf/approve", "/api/admin/audiobookshelf/deny", "req-1")),
+				("html_fragments.approval_card", html_fragments.approval_card("Request", "Example request", "PENDING", html_fragments.approval_row("Email", "user@example.com") + html_fragments.approval_row("Submitted", "Today"), html_fragments.approval_actions("/api/admin/audiobookshelf/approve", "/api/admin/audiobookshelf/deny", "req-1"))),
+			),
+		),
+		FrontendSectionSpec(
+			title="Minecraft UI",
+			stylesheets=("/static/css/minecraft.css", "/static/css/forms.css"),
+			samples=(
+				("html_fragments.minecraft_status_card", html_fragments.minecraft_status_card()),
+				("html_fragments.minecraft_whitelist_banner", html_fragments.minecraft_whitelist_banner(True, "zubekanov")),
+				("html_fragments.minecraft_registration_wrap", html_fragments.minecraft_registration_wrap_open(False) + "<div>Registration form slot</div>" + html_fragments.minecraft_registration_wrap_close()),
+			),
+		),
+		FrontendSectionSpec(
+			title="Metrics UI",
+			stylesheets=("/static/css/metrics_dashboard.css", "/static/css/plotly.css"),
+			samples=(
+				("html_fragments.metrics_dashboard", html_fragments.metrics_dashboard_open() + html_fragments.metrics_kpi_card("cpu", "CPU") + html_fragments.metrics_dashboard_between_sections() + html_fragments.metrics_dashboard_close()),
+			),
+		),
+		FrontendSectionSpec(
+			title="DB Interface UI",
+			stylesheets=("/static/css/db_interface.css", "/static/css/forms.css"),
+			samples=(
+				("html_fragments.db_admin_message", html_fragments.db_admin_open() + html_fragments.db_admin_message() + html_fragments.db_admin_close()),
+				("html_fragments.db_grid_head_row", html_fragments.db_section_open("Users") + html_fragments.db_grid_open("1.2fr 1.4fr 0.8fr 160px", 3, ["id", "email", "is_active"], "text,text,boolean", "id", 160) + html_fragments.db_grid_head_row(["id", "email", "is_active"]) + html_fragments.db_grid_close() + html_fragments.db_section_close()),
+				("html_fragments.db_add_actions_cell", "<table><tbody><tr>" + html_fragments.db_add_actions_cell("table,schema,col__email") + "</tr></tbody></table>"),
+			),
+		),
+		FrontendSectionSpec(
+			title="Webhook Verify UI",
+			stylesheets=("/static/css/forms.css",),
+			samples=(
+				("html_fragments.webhook_selector_input", html_fragments.webhook_selector_input("Webhook URL", "fe-wh", "webhook_url", "https://discord.com/api/webhooks/...", "url")),
+				("html_fragments.webhook_options_data_script", html_fragments.webhook_options_data_script("W10=")),
+			),
+		),
+	)
 
 
 def build_admin_users_page(user: dict | None) -> str:
@@ -2485,6 +3036,93 @@ def build_admin_minecraft_approvals_page(user: dict | None) -> str:
 			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
 			step_add_scripts("/static/js/admin_approvals.js"),
 			step_admin_approvals_content("Minecraft Approvals", "".join(cards_html)),
+		),
+	))
+
+def build_admin_api_access_approvals_page(user: dict | None) -> str:
+	if not user:
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("API Access Approvals"),
+				step_error_header(401, "Login required."),
+				add_return_home,
+			),
+		))
+
+	if not interface.is_admin(user.get("id")):
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("API Access Approvals"),
+				step_error_header(403, "Admin access required."),
+				add_return_home,
+			),
+		))
+
+	rows, _ = interface.client.get_rows_with_filters(
+		"api_access_registrations",
+		equalities={"status": "pending"},
+		page_limit=200,
+		page_num=0,
+		order_by="created_at",
+		order_dir="DESC",
+	)
+	user_cache: dict[str, dict] = {}
+
+	if not rows:
+		return build_page(user, PageSpec(
+			steps=(
+				step_set_page_title("API Access Approvals"),
+				step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+				step_add_scripts("/static/js/admin_approvals.js"),
+				step_admin_approvals_content("API Access Approvals", ""),
+			),
+		))
+
+	cards_html: list[str] = []
+	for r in rows:
+		status_label, _ = _get_user_status_label(r.get("user_id"), user_cache)
+		submitted_at = ""
+		if r.get("created_at"):
+			try:
+				submitted_at = r["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+			except Exception:
+				submitted_at = str(r["created_at"])
+		submitted_at = html.escape(submitted_at) if submitted_at else ""
+		name = f"{r.get('first_name', '')} {r.get('last_name', '')}".strip() or r.get("email", "Unknown")
+		requested_scopes = r.get("requested_scopes") or []
+		if isinstance(requested_scopes, list):
+			scopes_text = ", ".join(str(s) for s in requested_scopes if s)
+		else:
+			scopes_text = str(requested_scopes)
+		rows_html = (
+			html_fragments.approval_row("Email", html.escape(r.get("email") or "—")) +
+			html_fragments.approval_row("Principal", html.escape(r.get("principal_type") or "—")) +
+			html_fragments.approval_row("Service", html.escape(r.get("service_name") or "—")) +
+			html_fragments.approval_row("Submitted at", submitted_at or "—") +
+			html_fragments.approval_row("Scopes", html.escape(scopes_text) if scopes_text else "—", full=True) +
+			html_fragments.approval_row("Use case", html.escape(r.get("use_case") or "—"), full=True)
+		)
+		actions_html = html_fragments.approval_actions(
+			"/api/admin/api-access/approve",
+			"/api/admin/api-access/deny",
+			str(r["id"]),
+		)
+		cards_html.append(
+			html_fragments.approval_card(
+				html.escape(name),
+				"API Access Request",
+				html.escape(status_label),
+				rows_html,
+				actions_html,
+			)
+		)
+
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("API Access Approvals"),
+			step_add_stylesheets("/static/css/forms.css", "/static/css/centering.css"),
+			step_add_scripts("/static/js/admin_approvals.js"),
+			step_admin_approvals_content("API Access Approvals", "".join(cards_html)),
 		),
 	))
 

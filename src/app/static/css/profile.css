@@ -90,6 +90,10 @@
 	background: var(--error);
 }
 
+.profile-badge--static {
+	position: static;
+}
+
 .profile-actions {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -112,11 +116,119 @@
 	color: var(--form_text);
 }
 
+.profile-popugame {
+	margin-top: 1.2rem;
+	display: grid;
+	gap: 0.75rem;
+	background: var(--contents);
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	padding: 0.95rem;
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+}
+
+.profile-popugame__stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 0.65rem;
+}
+
+.profile-popu-stat {
+	background: var(--contents);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 0.55rem 0.7rem;
+	display: grid;
+	gap: 0.1rem;
+}
+
+.profile-popu-stat span {
+	font-size: 0.8rem;
+	color: var(--form_text);
+}
+
+.profile-popu-stat strong {
+	font-size: 1rem;
+	color: var(--objects);
+}
+
+.profile-popugame__history {
+	display: grid;
+	grid-template-columns: repeat(var(--popu-history-cols, 20), var(--popu-box-size));
+	gap: 0.38rem;
+	align-items: center;
+	--popu-box-size: 18px;
+	justify-content: start;
+}
+
+.profile-popugame__history-box {
+	background: var(--background);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 0.5rem;
+	overflow: visible;
+}
+
+.profile-popu-box {
+	width: var(--popu-box-size);
+	height: var(--popu-box-size);
+	box-sizing: border-box;
+	border-radius: 4px;
+	border: 1px solid var(--border);
+	display: inline-block;
+	position: relative;
+	cursor: help;
+}
+
+.profile-popu-box--win {
+	background: #31a874;
+}
+
+.profile-popu-box--loss {
+	background: #d55050;
+}
+
+.profile-popu-box--draw {
+	background: #9b9b9b;
+}
+
+.profile-popu-box--empty {
+	background: transparent;
+	border-style: dashed;
+	opacity: 0.7;
+}
+
+.profile-popu-tooltip {
+	position: fixed;
+	left: 0;
+	top: 0;
+	transform: translate(0, 0);
+	background: var(--contents);
+	color: var(--form_text);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 0.3rem 0.5rem;
+	font-size: 0.75rem;
+	white-space: nowrap;
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+	pointer-events: none;
+	z-index: 2000;
+	opacity: 0;
+}
+
+.profile-popu-empty {
+	color: var(--form_text);
+	font-size: 0.9rem;
+}
+
 .integration-grid {
 	display: grid;
 	grid-template-columns: 1fr;
 	gap: 0.85rem;
 	align-items: stretch;
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 .integration-card {
@@ -130,6 +242,8 @@
 	gap: 0.35rem;
 	width: 100%;
 	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 .integration-card--empty {
@@ -296,7 +410,8 @@ html[data-theme="dark"] .secret-copy img {
 	border: 1px solid rgba(30, 159, 80, 0.3);
 }
 
-.integration-delete {
+.integration-delete,
+.btn--integration-delete {
 	position: absolute;
 	right: 0.75rem;
 	bottom: 0.65rem;
@@ -311,7 +426,8 @@ html[data-theme="dark"] .secret-copy img {
 	transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
-.integration-delete:hover {
+.integration-delete:hover,
+.btn--integration-delete:hover {
 	border-color: var(--dark_blue);
 	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 	transform: translateY(-1px);
@@ -743,24 +859,6 @@ html[data-theme="dark"] .secret-copy img {
 	border-color: rgba(198, 64, 64, 0.3);
 }
 
-.subscription-action {
-	border: 1px solid var(--form_border);
-	background: var(--contents);
-	color: var(--form_text);
-	border-radius: 999px;
-	padding: 0.25rem 0.7rem;
-	font-size: 0.75rem;
-	font-weight: 600;
-	cursor: pointer;
-	transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
-}
-
-.subscription-action:hover {
-	border-color: var(--dark_blue);
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-	transform: translateY(-1px);
-}
-
 .subscription-empty {
 	font-size: 0.8rem;
 	color: var(--form_text);
@@ -803,5 +901,12 @@ html[data-theme="dark"] .secret-copy img {
 
 	.profile-email {
 		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 420px) {
+	.profile-integrations .integration-grid {
+		padding: 0 0.5rem;
+		box-sizing: border-box;
 	}
 }
