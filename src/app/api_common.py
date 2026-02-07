@@ -341,7 +341,7 @@ def get_or_create_anonymous_user(
 		if cols.get("password_hash") and str(cols["password_hash"].get("is_nullable", "")).upper() != "YES":
 			ctx.interface.client.alter_column_nullability("public", "users", "password_hash", nullable=True)
 	except Exception as e:
-		return False, f"Failed to prepare users schema: {e}"
+		return False, "Unable to complete request right now."
 
 	try:
 		rows = ctx.interface.get_user_by_email_case_insensitive(email_norm)
@@ -365,7 +365,7 @@ def get_or_create_anonymous_user(
 		})
 		return True, str(row["id"])
 	except Exception as e:
-		return False, f"Failed to store anonymous user: {e}"
+		return False, "Unable to complete request right now."
 
 
 def _handle_audiobookshelf_mod_action(ctx: ApiContext, action: str, reg_id: str) -> tuple[bool, str]:
@@ -383,7 +383,7 @@ def _handle_audiobookshelf_mod_action(ctx: ApiContext, action: str, reg_id: str)
 			)
 			return True, "Audiobookshelf request approved."
 		except Exception as e:
-			return False, f"Approve failed: {e}"
+			return False, "Request failed. Please try again."
 	if action == "deny":
 		try:
 			ctx.interface.client.update_rows_with_filters(
@@ -398,7 +398,7 @@ def _handle_audiobookshelf_mod_action(ctx: ApiContext, action: str, reg_id: str)
 			)
 			return True, "Audiobookshelf request denied."
 		except Exception as e:
-			return False, f"Deny failed: {e}"
+			return False, "Request failed. Please try again."
 	return False, "Unsupported action."
 
 
@@ -419,7 +419,7 @@ def _handle_discord_webhook_mod_action(ctx: ApiContext, action: str, reg_id: str
 			)
 			return True, "Discord webhook request denied."
 		except Exception as e:
-			return False, f"Deny failed: {e}"
+			return False, "Request failed. Please try again."
 	return False, "Unsupported action."
 
 
@@ -457,7 +457,7 @@ def _handle_minecraft_mod_action(ctx: ApiContext, action: str, reg_id: str) -> t
 			)
 			return True, "Minecraft request approved."
 		except Exception as e:
-			return False, f"Approve failed: {e}"
+			return False, "Request failed. Please try again."
 	if action == "deny":
 		try:
 			ctx.interface.client.update_rows_with_filters(
@@ -471,7 +471,7 @@ def _handle_minecraft_mod_action(ctx: ApiContext, action: str, reg_id: str) -> t
 			)
 			return True, "Minecraft request denied."
 		except Exception as e:
-			return False, f"Deny failed: {e}"
+			return False, "Request failed. Please try again."
 	return False, "Unsupported action."
 
 
@@ -490,7 +490,7 @@ def _handle_api_access_mod_action(ctx: ApiContext, action: str, reg_id: str) -> 
 			)
 			return True, "API access request approved."
 		except Exception as e:
-			return False, f"Approve failed: {e}"
+			return False, "Request failed. Please try again."
 	if action == "deny":
 		try:
 			ctx.interface.client.update_rows_with_filters(
@@ -505,5 +505,5 @@ def _handle_api_access_mod_action(ctx: ApiContext, action: str, reg_id: str) -> 
 			)
 			return True, "API access request denied."
 		except Exception as e:
-			return False, f"Deny failed: {e}"
+			return False, "Request failed. Please try again."
 	return False, "Unsupported action."

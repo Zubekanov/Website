@@ -267,7 +267,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				)
 				return flask.jsonify({"ok": True, "message": "Audiobookshelf integration disabled."})
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to disable integration: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
 
@@ -392,7 +392,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				)
 				return flask.jsonify({"ok": True, "message": "Audiobookshelf integration enabled."})
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to enable integration: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
 
@@ -477,7 +477,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				},
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to delete account: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": True, "message": "Account deleted."})
 
@@ -536,10 +536,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				)
 			except Exception as exc:
 				logger.exception("Failed to send verification debug email for admin user_id=%s", user.get("id"))
-				return flask.jsonify({"ok": False, "message": f"Send failed: {exc}"}), 500
+				return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
 
 			if not result.ok:
-				return flask.jsonify({"ok": False, "message": f"Send failed: {result.error}"}), 502
+				return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 502
 			return flask.jsonify({"ok": True, "message": "Verification email sent."}), 200
 
 		if not subject:
@@ -563,10 +563,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			)
 		except Exception as exc:
 			logger.exception("Failed to send debug email for admin user_id=%s", user.get("id"))
-			return flask.jsonify({"ok": False, "message": f"Send failed: {exc}"}), 500
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
 
 		if not result.ok:
-			return flask.jsonify({"ok": False, "message": f"Send failed: {result.error}"}), 502
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 502
 		return flask.jsonify({"ok": True, "message": "Email sent."}), 200
 
 	@api.route("/api/admin/db/update-row", methods=["POST"])
@@ -584,7 +584,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		try:
 			columns, pk_cols = get_table_meta(ctx, schema, table)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": str(e)}), 400
+			return flask.jsonify({"ok": False, "message": "Invalid request."}), 400
 
 		if not pk_cols:
 			return flask.jsonify({"ok": False, "message": "Table has no primary key."}), 400
@@ -610,7 +610,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		try:
 			updated = ctx.interface.client.update_rows_with_equalities(f"{schema}.{table}", updates, equalities)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Update failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "No rows updated."}), 404
@@ -640,7 +640,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		try:
 			columns, pk_cols = get_table_meta(ctx, schema, table)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": str(e)}), 400
+			return flask.jsonify({"ok": False, "message": "Invalid request."}), 400
 
 		if not pk_cols:
 			return flask.jsonify({"ok": False, "message": "Table has no primary key."}), 400
@@ -655,7 +655,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		try:
 			deleted = ctx.interface.client.delete_rows_with_filters(f"{schema}.{table}", equalities=equalities)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Delete failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		if deleted == 0:
 			return flask.jsonify({"ok": False, "message": "No rows deleted."}), 404
@@ -701,7 +701,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		try:
 			columns, _ = get_table_meta(ctx, schema, table)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": str(e)}), 400
+			return flask.jsonify({"ok": False, "message": "Invalid request."}), 400
 
 		inserts = {}
 		for key, value in data.items():
@@ -721,7 +721,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		try:
 			row = ctx.interface.client.insert_row(f"{schema}.{table}", inserts)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Insert failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		ctx.interface.logger.info(
 			"Admin DB insert by user_id=%s table=%s.%s inserts=%s",
@@ -775,7 +775,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		anon_user = is_anonymous_user(ctx, reg.get("user_id"))
@@ -865,7 +865,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				cta_url=cta_url,
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/audiobookshelf-approvals")
 
 	@api.route("/api/admin/audiobookshelf/deny", methods=["POST"])
@@ -894,7 +894,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		notify_moderators(
@@ -936,7 +936,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/audiobookshelf-approvals")
 
 	@api.route("/api/admin/discord-webhook/approve", methods=["POST"])
@@ -961,7 +961,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if not ok:
 				return flask.jsonify({"ok": False, "message": msg}), 400
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		target_email = get_user_email(ctx, reg.get("submitted_by_user_id")) or reg.get("submitted_by_email")
 		anon_user = is_anonymous_user(ctx, reg.get("submitted_by_user_id"))
@@ -1070,7 +1070,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				cta_url=cta_url,
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/discord-webhook-approvals")
 
 	@api.route("/api/admin/discord-webhook/deny", methods=["POST"])
@@ -1098,7 +1098,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		notify_moderators(
@@ -1141,7 +1141,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/discord-webhook-approvals")
 
 	@api.route("/api/admin/audiobookshelf/pending-count")
@@ -1154,7 +1154,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if count is None:
 				raise RuntimeError("Count unavailable")
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.jsonify({"count": count})
 
 	@api.route("/api/admin/discord-webhook/pending-count")
@@ -1167,7 +1167,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if count is None:
 				raise RuntimeError("Count unavailable")
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.jsonify({"count": count})
 
 	@api.route("/api/admin/api-access/approve", methods=["POST"])
@@ -1196,7 +1196,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		scopes = reg.get("requested_scopes") or []
@@ -1274,7 +1274,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/api-access-approvals")
 
 	@api.route("/api/admin/api-access/deny", methods=["POST"])
@@ -1303,7 +1303,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		send_notification_email(
@@ -1351,7 +1351,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/api-access-approvals")
 
 	@api.route("/api/admin/api-access/pending-count")
@@ -1364,7 +1364,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if count is None:
 				raise RuntimeError("Count unavailable")
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.jsonify({"count": count})
 
 	@api.route("/api/admin/minecraft/approve", methods=["POST"])
@@ -1409,7 +1409,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		anon_user = is_anonymous_user(ctx, reg.get("user_id"))
 		cta_label = None
 		cta_url = None
@@ -1534,7 +1534,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				cta_url=cta_url,
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Approve failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/minecraft-approvals")
 
 	@api.route("/api/admin/minecraft/deny", methods=["POST"])
@@ -1560,7 +1560,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		if updated == 0:
 			return flask.jsonify({"ok": False, "message": "Not found."}), 404
 		notify_moderators(
@@ -1604,7 +1604,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[reg_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Deny failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/minecraft-approvals")
 
 	@api.route("/api/admin/minecraft/pending-count")
@@ -1617,5 +1617,5 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if count is None:
 				raise RuntimeError("Count unavailable")
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to fetch count: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.jsonify({"count": count})

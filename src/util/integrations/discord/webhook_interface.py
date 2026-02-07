@@ -183,7 +183,7 @@ class DiscordWebhookEmitter:
 			ins = self._client.insert_row("discord_webhooks", row)
 			return True, str(ins["id"])
 		except Exception as e:
-			return False, f"Failed to add webhook: {e}"
+			return False, "Unable to save webhook."
 
 	def subscribe_webhook_to_event(
 		self,
@@ -261,7 +261,7 @@ class DiscordWebhookEmitter:
 			ins = self._client.insert_row("discord_webhook_subscriptions", row)
 			return True, str(ins["id"])
 		except Exception as e:
-			return False, f"Failed to subscribe webhook: {e}"
+			return False, "Unable to save subscription."
 		
 	def emit_event(
 		self,

@@ -59,20 +59,33 @@ class PSQLInterface:
 		last_name = (user_data.get("last_name") or "").strip()
 		password = user_data.get("password")
 
-		if force_insert:
-			# Delete any existing pending user with the same email
+		pending_users = self.get_pending_user({"email": email})
+		now = datetime.now(timezone.utc)
+
+		def _to_utc(ts):
+			if ts is None:
+				return None
+			if ts.tzinfo is None:
+				return ts.replace(tzinfo=timezone.utc)
+			return ts.astimezone(timezone.utc)
+
+		has_active_pending = False
+		for pending_user in pending_users:
+			expires_at = _to_utc(pending_user.get("token_expires_at"))
+			if expires_at is not None and expires_at > now:
+				has_active_pending = True
+				break
+
+		if has_active_pending and not force_insert:
+			return False, "A pending user with this email already exists."
+
+		if pending_users:
+			# Clear stale pending rows so unique(email) does not reject re-registration.
 			self._client.delete_rows_with_filters(
 				"pending_users",
-				equalities={"email": email},
+				raw_conditions=["LOWER(email) = LOWER(%s)"],
+				raw_params=[email],
 			)
-
-		invalid = any(
-			pending_user.get("token_expires_at") and pending_user["token_expires_at"].replace(tzinfo=timezone.utc) > datetime.now(timezone.utc)
-			for pending_user in self.get_pending_user({"email": email})
-		)
-
-		if invalid:
-			return False, "A pending user with this email already exists."
 
 		# Password hashing
 		password_hash_bytes = bcrypt.hashpw(
@@ -110,7 +123,7 @@ class PSQLInterface:
 		Inserts a new user into users table.
 		"""
 		id = user_data.get("id")
-		email = user_data.get("email")
+		email = (user_data.get("email") or "").strip().lower()
 		first_name = user_data.get("first_name")
 		last_name = user_data.get("last_name")
 		password_hash = user_data.get("password_hash")

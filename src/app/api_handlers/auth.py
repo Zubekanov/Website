@@ -160,7 +160,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				intro="Your account has been deleted and access has been revoked.",
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to delete account: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		resp = flask.make_response(flask.jsonify({"ok": True, "message": "Account deleted."}))
 		resp.set_cookie(

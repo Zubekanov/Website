@@ -58,7 +58,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				"player0_name": player0_name,
 			})
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to create game: {e}"}), 500
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
 
 		return flask.jsonify({
 			"ok": True,
@@ -137,7 +137,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					else:
 						row = _get_session_by_code(ctx, code) or row
 				except Exception as e:
-					return flask.jsonify({"ok": False, "message": f"Failed to join game: {e}"}), 500
+					return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
 
 		return flask.jsonify({
 			"ok": True,
@@ -220,7 +220,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				(json.dumps(grid), turn, next_player, new_status, winner, ended_reason, code),
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to apply move: {e}"}), 500
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
 
 		row = _get_session_by_code(ctx, code)
 		row = _maybe_apply_elo_for_finished_game(ctx, row)
@@ -291,7 +291,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				("finished", 1 - player, "concede", code),
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to concede: {e}"}), 500
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
 
 		row = _get_session_by_code(ctx, code)
 		row = _maybe_apply_elo_for_finished_game(ctx, row)

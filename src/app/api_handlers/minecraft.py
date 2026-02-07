@@ -22,7 +22,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			except Exception as e:
 				return {
 					"ok": False,
-					"error": f"mcstatus not available: {e}",
+					"error": "Minecraft status service is unavailable.",
 					"host": host,
 					"port": port,
 				}
@@ -56,7 +56,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					"online": False,
 					"host": host,
 					"port": port,
-					"error": str(e),
+					"error": "Minecraft server is currently unreachable.",
 				}
 
 		def refresh_status_async():

@@ -695,8 +695,8 @@ def build_readme_page(user: dict | None) -> str:
 	readme_path = Path(__file__).resolve().parents[3] / "README.md"
 	try:
 		readme_text = readme_path.read_text(encoding="utf-8", errors="replace")
-	except Exception as exc:
-		readme_text = f"Failed to load README.md: {exc}"
+	except Exception:
+		readme_text = "README is currently unavailable."
 
 	return build_page(user, PageSpec(
 		steps=(

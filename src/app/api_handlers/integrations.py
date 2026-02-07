@@ -46,7 +46,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[sub_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to unsubscribe: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": True})
 
@@ -75,7 +75,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[sub_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to resubscribe: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": True})
 
@@ -105,7 +105,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if integration_type == "audiobookshelf":
 				return _disable_audiobookshelf_for_user(ctx, user, integration_id, reason)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to delete integration: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
 
@@ -211,7 +211,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({
 				"ok": False,
-				"message": f"Failed to submit registration: {e}",
+				"message": "Request failed. Please try again.",
 			}), 400
 
 		return flask.jsonify({
@@ -383,7 +383,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({
 				"ok": False,
-				"message": f"Failed to submit registration: {e}",
+				"message": "Request failed. Please try again.",
 			}), 400
 
 		return flask.jsonify({
@@ -516,7 +516,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({
 				"ok": False,
-				"message": f"Failed to submit API access application: {e}",
+				"message": "Request failed. Please try again.",
 			}), 400
 
 		return flask.jsonify({
@@ -623,7 +623,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({
 				"ok": False,
-				"message": f"Failed to validate existing webhook: {e}",
+				"message": "Request failed. Please try again.",
 			}), 400
 		try:
 			existing = ctx.interface.get_discord_webhook_registration_by_url_event_key(webhook_url, event_key)
@@ -635,7 +635,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({
 				"ok": False,
-				"message": f"Failed to validate webhook uniqueness: {e}",
+				"message": "Request failed. Please try again.",
 			}), 400
 
 		if existing_webhooks:
@@ -707,7 +707,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 						},
 					)
 			except Exception as e:
-				return flask.jsonify({"ok": False, "message": f"Failed to submit: {e}"}), 400
+				return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 			return flask.jsonify({
 				"ok": True,
@@ -762,7 +762,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({
 				"ok": False,
-				"message": f"Failed to store verification: {e}",
+				"message": "Request failed. Please try again.",
 			}), 400
 
 		verify_link = f"{flask.request.host_url.rstrip('/')}/token?vid={verify_id}&code={code}"
@@ -945,7 +945,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_params=[verify_id],
 			)
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Failed to submit: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({
 			"ok": True,
@@ -1074,7 +1074,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					"redirect": "/integration/removed",
 				})
 		except Exception as e:
-			return flask.jsonify({"ok": False, "message": f"Removal failed: {e}"}), 400
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
 		return flask.jsonify({"ok": False, "message": "Unknown integration type."}), 400
 
