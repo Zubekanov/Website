@@ -3,6 +3,7 @@ import re
 import sys
 import threading
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 _prefix_re = re.compile(r'^(?P<prefix>.+?\])\s+"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d\.\d"\s+(?P<status>\d{3})\b')
 
@@ -78,6 +79,7 @@ def create_app():
 	from util.integrations.discord.webhook_interface import ensure_event_keys
 
 	app = Flask(__name__)
+	app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 	app.register_blueprint(main)
 	app.register_blueprint(api)
 	app.register_blueprint(resources)

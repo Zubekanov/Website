@@ -1,6 +1,8 @@
 node_modules
 *.pdf
 
+deploy/*
+
 # Remove password and API key containing files.
 *.conf
 *.config
