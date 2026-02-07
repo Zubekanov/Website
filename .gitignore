@@ -1,11 +1,18 @@
-# Temporary ignores while integration is worked out
-popugame.*
+node_modules
+*.pdf
 
 # Remove password and API key containing files.
+*.conf
 *.config
 logs/*
 plots/*
 plots
+
+# Remove content of caches
+cache/*
+
+# Remove build webpage scripts
+webpages/*
 
 # Gmail API credentials
 **/config/*.json
