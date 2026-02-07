@@ -1,0 +1,5 @@
+GMAIL_CLIENT_ID=[Google OAuth client ID for the Gmail API project]
+GMAIL_CLIENT_SECRET=[Google OAuth client secret paired with the Gmail client ID]
+GMAIL_SENDER_EMAIL=[Email address used as the sender for outbound application emails]
+GMAIL_REFRESH_TOKEN=[OAuth refresh token used to obtain new Gmail access tokens]
+GMAIL_ACCESS_TOKEN=[Current short-lived OAuth access token for Gmail API calls]

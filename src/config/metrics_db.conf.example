@@ -1,0 +1,3 @@
+database=[Name of the metrics database/schema to connect to]
+user=[Database username used for metrics read/write operations]
+password=[Password for the metrics database user]

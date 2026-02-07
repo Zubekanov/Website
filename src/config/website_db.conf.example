@@ -1,0 +1,3 @@
+database=[Name of the primary website application database]
+user=[Database username used by the website backend]
+password=[Password for the website database user]
