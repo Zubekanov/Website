@@ -1,0 +1,511 @@
+[
+	{
+		"table_name": "api_access_registrations",
+		"description": "API access applications submitted by users or service operators.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "first_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false
+			},
+			{
+				"name": "last_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false
+			},
+			{
+				"name": "email",
+				"type": "varchar",
+				"length": 255,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "user_id",
+				"type": "uuid",
+				"nullable": true,
+				"index": true,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			},
+			{
+				"name": "principal_type",
+				"type": "varchar",
+				"length": 20,
+				"default": "'service'",
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "service_name",
+				"type": "varchar",
+				"length": 120,
+				"nullable": true
+			},
+			{
+				"name": "requested_scopes",
+				"type": "jsonb",
+				"default": "'[]'::jsonb",
+				"nullable": false
+			},
+			{
+				"name": "use_case",
+				"type": "text",
+				"nullable": true
+			},
+			{
+				"name": "status",
+				"type": "varchar",
+				"length": 20,
+				"default": "'pending'",
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "is_active",
+				"type": "boolean",
+				"default": false,
+				"nullable": false
+			},
+			{
+				"name": "reviewed_at",
+				"type": "timestamptz",
+				"nullable": true
+			},
+			{
+				"name": "reviewed_by_user_id",
+				"type": "uuid",
+				"nullable": true,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			}
+		],
+		"indexes": [
+			{
+				"name": "api_access_registrations_status_idx",
+				"columns": ["status"],
+				"unique": false
+			},
+			{
+				"name": "api_access_registrations_email_idx",
+				"columns": ["email"],
+				"unique": false
+			}
+		]
+	},
+	{
+		"table_name": "api_principals",
+		"description": "Identities allowed to authenticate via API keys (user-owned or service-owned).",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "principal_type",
+				"type": "varchar",
+				"length": 20,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "user_id",
+				"type": "uuid",
+				"nullable": true,
+				"index": true,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "cascade"
+				}
+			},
+			{
+				"name": "service_name",
+				"type": "varchar",
+				"length": 120,
+				"nullable": true,
+				"index": true
+			},
+			{
+				"name": "is_active",
+				"type": "boolean",
+				"default": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			},
+			{
+				"name": "updated_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			}
+		],
+		"indexes": [
+			{
+				"name": "api_principals_user_id_unique_idx",
+				"columns": ["user_id"],
+				"unique": true
+			},
+			{
+				"name": "api_principals_service_name_unique_idx",
+				"columns": ["service_name"],
+				"unique": true
+			}
+		]
+	},
+	{
+		"table_name": "api_credentials",
+		"description": "API credentials bound to principals; stores only hashed secrets.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "principal_id",
+				"type": "uuid",
+				"nullable": false,
+				"index": true,
+				"foreign_key": {
+					"table": "api_principals",
+					"column": "id",
+					"on_delete": "cascade"
+				}
+			},
+			{
+				"name": "credential_name",
+				"type": "varchar",
+				"length": 120,
+				"nullable": false
+			},
+			{
+				"name": "key_prefix",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false,
+				"unique": true,
+				"index": true
+			},
+			{
+				"name": "secret_hash",
+				"type": "varchar",
+				"length": 255,
+				"nullable": false
+			},
+			{
+				"name": "status",
+				"type": "varchar",
+				"length": 20,
+				"default": "'active'",
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "expires_at",
+				"type": "timestamptz",
+				"nullable": true,
+				"index": true
+			},
+			{
+				"name": "last_used_at",
+				"type": "timestamptz",
+				"nullable": true
+			},
+			{
+				"name": "last_used_ip",
+				"type": "varchar",
+				"length": 64,
+				"nullable": true
+			},
+			{
+				"name": "created_by_user_id",
+				"type": "uuid",
+				"nullable": true,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			},
+			{
+				"name": "revoked_at",
+				"type": "timestamptz",
+				"nullable": true
+			},
+			{
+				"name": "revoked_by_user_id",
+				"type": "uuid",
+				"nullable": true,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			}
+		],
+		"indexes": [
+			{
+				"name": "api_credentials_prefix_unique_idx",
+				"columns": ["key_prefix"],
+				"unique": true
+			},
+			{
+				"name": "api_credentials_principal_status_idx",
+				"columns": ["principal_id", "status"],
+				"unique": false
+			}
+		]
+	},
+	{
+		"table_name": "api_scopes",
+		"description": "Allowed API scopes that can be granted to credentials.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "scope_key",
+				"type": "varchar",
+				"length": 120,
+				"nullable": false,
+				"unique": true,
+				"index": true
+			},
+			{
+				"name": "description",
+				"type": "text",
+				"nullable": false
+			},
+			{
+				"name": "is_active",
+				"type": "boolean",
+				"default": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			}
+		],
+		"indexes": [
+			{
+				"name": "api_scopes_scope_key_unique_idx",
+				"columns": ["scope_key"],
+				"unique": true
+			}
+		]
+	},
+	{
+		"table_name": "api_credential_scopes",
+		"description": "Mapping table of scopes granted to API credentials.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "credential_id",
+				"type": "uuid",
+				"nullable": false,
+				"foreign_key": {
+					"table": "api_credentials",
+					"column": "id",
+					"on_delete": "cascade"
+				}
+			},
+			{
+				"name": "scope_id",
+				"type": "uuid",
+				"nullable": false,
+				"foreign_key": {
+					"table": "api_scopes",
+					"column": "id",
+					"on_delete": "cascade"
+				}
+			},
+			{
+				"name": "granted_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			},
+			{
+				"name": "granted_by_user_id",
+				"type": "uuid",
+				"nullable": true,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			}
+		],
+		"indexes": [
+			{
+				"name": "api_credential_scopes_pk_idx",
+				"columns": ["credential_id", "scope_id"],
+				"unique": true
+			},
+			{
+				"name": "api_credential_scopes_scope_idx",
+				"columns": ["scope_id"],
+				"unique": false
+			}
+		]
+	},
+	{
+		"table_name": "api_audit_log",
+		"description": "Audit trail for API authentication and authorization events.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "credential_id",
+				"type": "uuid",
+				"nullable": true,
+				"index": true,
+				"foreign_key": {
+					"table": "api_credentials",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			},
+			{
+				"name": "principal_id",
+				"type": "uuid",
+				"nullable": true,
+				"index": true,
+				"foreign_key": {
+					"table": "api_principals",
+					"column": "id",
+					"on_delete": "set null"
+				}
+			},
+			{
+				"name": "event_type",
+				"type": "varchar",
+				"length": 60,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "request_path",
+				"type": "varchar",
+				"length": 255,
+				"nullable": true
+			},
+			{
+				"name": "request_method",
+				"type": "varchar",
+				"length": 16,
+				"nullable": true
+			},
+			{
+				"name": "status_code",
+				"type": "integer",
+				"nullable": true
+			},
+			{
+				"name": "ip",
+				"type": "varchar",
+				"length": 64,
+				"nullable": true
+			},
+			{
+				"name": "user_agent",
+				"type": "varchar",
+				"length": 255,
+				"nullable": true
+			},
+			{
+				"name": "meta",
+				"type": "jsonb",
+				"default": "'{}'::jsonb",
+				"nullable": false
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false,
+				"index": true
+			}
+		],
+		"indexes": [
+			{
+				"name": "api_audit_log_created_at_idx",
+				"columns": ["created_at"],
+				"unique": false
+			},
+			{
+				"name": "api_audit_log_event_type_idx",
+				"columns": ["event_type"],
+				"unique": false
+			},
+			{
+				"name": "api_audit_log_credential_created_idx",
+				"columns": ["credential_id", "created_at"],
+				"unique": false
+			},
+			{
+				"name": "api_audit_log_principal_created_idx",
+				"columns": ["principal_id", "created_at"],
+				"unique": false
+			}
+		]
+	}
+]

@@ -3,15 +3,8 @@ import re
 import sys
 import threading
 from flask import Flask
-from .api import api
-from .routes import main
-from .resources import resources
-
-from sql.psql_interface import PSQLInterface
-from util.integrations.discord.webhook_interface import ensure_event_keys
 
 _prefix_re = re.compile(r'^(?P<prefix>.+?\])\s+"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d\.\d"\s+(?P<status>\d{3})\b')
-psql = PSQLInterface()
 
 class DevLiveRewriteHandler(logging.Handler):
 	def __init__(self, dev_enabled: bool, stream=None, width: int = 120):
@@ -78,6 +71,12 @@ def setup_logging(dev_enabled: bool):
 	root.addHandler(DevLiveRewriteHandler(dev_enabled=dev_enabled))
 
 def create_app():
+	from .api import api
+	from .routes import main
+	from .resources import resources
+	from sql.psql_interface import PSQLInterface
+	from util.integrations.discord.webhook_interface import ensure_event_keys
+
 	app = Flask(__name__)
 	app.register_blueprint(main)
 	app.register_blueprint(api)
@@ -85,6 +84,7 @@ def create_app():
 
 	setup_logging(dev_enabled=True)
 
+	psql = PSQLInterface()
 	psql.verify_tables(safe_mode=False)
 	ensure_event_keys(psql)
 

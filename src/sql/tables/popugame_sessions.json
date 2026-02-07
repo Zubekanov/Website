@@ -1,0 +1,165 @@
+{
+	"table_name": "popugame_sessions",
+	"description": "Active PopuGame multiplayer sessions.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "code",
+			"type": "varchar",
+			"length": 6,
+			"unique": true,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "status",
+			"type": "varchar",
+			"length": 16,
+			"default": "'waiting'",
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "grid_size",
+			"type": "int",
+			"default": 9,
+			"nullable": false
+		},
+		{
+			"name": "turn_limit",
+			"type": "int",
+			"default": 40,
+			"nullable": false
+		},
+		{
+			"name": "turn",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "active_player",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "grid_state",
+			"type": "jsonb",
+			"default": "'[]'::jsonb",
+			"nullable": false
+		},
+		{
+			"name": "state_version",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "player0_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true
+		},
+		{
+			"name": "player1_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true
+		},
+		{
+			"name": "player0_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": true
+		},
+		{
+			"name": "player1_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": true
+		},
+		{
+			"name": "winner",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "elo_before_p0",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "elo_after_p0",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "elo_delta_p0",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "elo_before_p1",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "elo_after_p1",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "elo_delta_p1",
+			"type": "int",
+			"nullable": true
+		},
+		{
+			"name": "ratings_applied",
+			"type": "boolean",
+			"default": false,
+			"nullable": false
+		},
+		{
+			"name": "ended_reason",
+			"type": "varchar",
+			"length": 32,
+			"nullable": true
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		},
+		{
+			"name": "updated_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		},
+		{
+			"name": "last_move_at",
+			"type": "timestamptz",
+			"nullable": true
+		}
+	],
+	"indexes": [
+		{
+			"name": "popugame_sessions_code_idx",
+			"columns": ["code"],
+			"unique": true
+		},
+		{
+			"name": "popugame_sessions_status_idx",
+			"columns": ["status"],
+			"unique": false
+		}
+	]
+}

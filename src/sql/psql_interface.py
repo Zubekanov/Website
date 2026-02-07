@@ -622,6 +622,25 @@ class PSQLInterface:
 			(reg_id,),
 		) or []
 
+	def get_api_access_registration_by_id(self, reg_id: str):
+		return self.execute_query(
+			"SELECT * FROM api_access_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+
+	def get_api_access_registration_for_user(self, reg_id: str, user_id: str):
+		return self.execute_query(
+			"SELECT id FROM api_access_registrations WHERE id = %s AND user_id = %s LIMIT 1;",
+			(reg_id, user_id),
+		) or []
+
+	def get_api_access_registration_contact_by_id(self, reg_id: str):
+		return self.execute_query(
+			"SELECT first_name, last_name, email, user_id, principal_type, service_name, requested_scopes, use_case "
+			"FROM api_access_registrations WHERE id = %s;",
+			(reg_id,),
+		) or []
+
 	def get_discord_webhook_registration_contact_by_id(self, reg_id: str):
 		return self.execute_query(
 			"SELECT name, event_key, webhook_url, submitted_by_user_id, submitted_by_email "
@@ -661,6 +680,9 @@ class PSQLInterface:
 	def count_pending_minecraft_registrations(self) -> int | None:
 		return self._count_pending_status("minecraft_registrations")
 
+	def count_pending_api_access_registrations(self) -> int | None:
+		return self._count_pending_status("api_access_registrations")
+
 	def _count_pending_status(self, table: str) -> int | None:
 		try:
 			rows = self.execute_query(
@@ -681,7 +703,9 @@ class PSQLInterface:
 			"OR EXISTS (SELECT 1 FROM discord_webhooks w WHERE w.user_id = u.id AND COALESCE(w.is_active, TRUE) = TRUE) "
 			"OR EXISTS (SELECT 1 FROM minecraft_whitelist m WHERE m.user_id = u.id AND COALESCE(m.is_active, TRUE) = TRUE) "
 			"OR EXISTS (SELECT 1 FROM audiobookshelf_registrations a WHERE a.user_id = u.id "
-			"AND a.status = 'approved' AND COALESCE(a.is_active, TRUE) = TRUE)"
+			"AND a.status = 'approved' AND COALESCE(a.is_active, TRUE) = TRUE) "
+			"OR EXISTS (SELECT 1 FROM api_access_registrations api WHERE api.user_id = u.id "
+			"AND api.status = 'approved' AND COALESCE(api.is_active, TRUE) = TRUE)"
 			") "
 			"ORDER BY created_at DESC LIMIT %s;",
 			(limit,),

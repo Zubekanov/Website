@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from util.webpage_builder.metrics_builder import *
 from sql.psql_interface import PSQLInterface
 
 def bootstrap_single_admin() -> tuple[bool, str]:
