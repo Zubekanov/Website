@@ -1,0 +1,136 @@
+:root {
+  --admin-card-bg: var(--card-bg, rgba(10, 12, 18, 0.7));
+  --admin-card-border: var(--card-border, rgba(255, 255, 255, 0.08));
+  --admin-text-muted: var(--text-muted, rgba(255, 255, 255, 0.65));
+  --admin-accent: var(--accent, #7cd2ff);
+}
+
+.admin-users {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.admin-users__header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 2rem;
+}
+
+.admin-users__header p {
+  margin: 0;
+  color: var(--admin-text-muted);
+}
+
+.admin-users__list {
+  margin-top: 2rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.admin-user-card {
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-card-border);
+  border-radius: 18px;
+  padding: 1.5rem;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+}
+
+.admin-user-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.admin-user-card__name {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.admin-user-card__email {
+  margin-top: 0.2rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-user-card__meta {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.admin-user-meta-row {
+  display: flex;
+  gap: 0.5rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-user-meta-label {
+  font-weight: 600;
+  color: inherit;
+}
+
+.admin-user-badge {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-user-badge--admin {
+  background: rgba(80, 190, 120, 0.2);
+  color: #7ee09a;
+}
+
+.admin-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0 1.2rem;
+}
+
+.admin-user-action {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  padding: 0.5rem 0.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.admin-user-action:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.admin-user-action--danger {
+  border-color: rgba(255, 120, 120, 0.4);
+  color: #ffb6b6;
+}
+
+.admin-user-card__integrations .integration-grid {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-user-card__integrations .integration-card {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .admin-user-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

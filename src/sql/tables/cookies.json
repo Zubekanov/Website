@@ -1,0 +1,92 @@
+[
+    {
+        "table_name": "user_sessions",
+        "description": "Login/session tokens for cookie-based authentication.",
+        "columns": [
+            {
+                "name": "id",
+                "type": "uuid",
+                "primary_key": true,
+                "default": "gen_random_uuid()",
+                "nullable": false
+            },
+            {
+                "name": "user_id",
+                "type": "uuid",
+                "nullable": false,
+                "index": true,
+                "foreign_key": {
+                    "table": "users",
+                    "column": "id",
+                    "on_delete": "cascade"
+                }
+            },
+            {
+                "name": "session_token_hash",
+                "type": "varchar",
+                "length": 255,
+                "unique": true,
+                "nullable": false,
+                "index": true
+            },
+            {
+                "name": "created_at",
+                "type": "timestamp",
+                "default": "now()",
+                "nullable": false
+            },
+            {
+                "name": "last_seen_at",
+                "type": "timestamp",
+                "default": "now()",
+                "nullable": false
+            },
+            {
+                "name": "expires_at",
+                "type": "timestamp",
+                "nullable": false,
+                "index": true
+            },
+            {
+                "name": "revoked_at",
+                "type": "timestamp",
+                "nullable": true,
+                "index": true
+            },
+            {
+                "name": "ip",
+                "type": "varchar",
+                "length": 64,
+                "nullable": true
+            },
+            {
+                "name": "user_agent",
+                "type": "varchar",
+                "length": 255,
+                "nullable": true
+            }
+        ],
+        "indexes": [
+            {
+                "name": "user_sessions_user_id_idx",
+                "columns": ["user_id"],
+                "unique": false
+            },
+            {
+                "name": "user_sessions_token_idx",
+                "columns": ["session_token_hash"],
+                "unique": true
+            },
+            {
+                "name": "user_sessions_expires_at_idx",
+                "columns": ["expires_at"],
+                "unique": false
+            },
+            {
+                "name": "user_sessions_revoked_at_idx",
+                "columns": ["revoked_at"],
+                "unique": false
+            }
+        ]
+    }
+]

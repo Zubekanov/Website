@@ -1,0 +1,79 @@
+{
+	"table_name": "minecraft_whitelist",
+	"description": "Approved Minecraft whitelist entries.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true
+		},
+		{
+			"name": "first_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false
+		},
+		{
+			"name": "last_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false
+		},
+		{
+			"name": "email",
+			"type": "varchar",
+			"length": 255,
+			"nullable": false
+		},
+		{
+			"name": "mc_username",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "is_active",
+			"type": "boolean",
+			"default": true,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "ban_reason",
+			"type": "text",
+			"nullable": true
+		},
+		{
+			"name": "whitelisted_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "minecraft_whitelist_user_id_idx",
+			"columns": ["user_id"],
+			"unique": false
+		},
+		{
+			"name": "minecraft_whitelist_email_idx",
+			"columns": ["email"],
+			"unique": false
+		},
+		{
+			"name": "minecraft_whitelist_mc_username_idx",
+			"columns": ["mc_username"],
+			"unique": true
+		}
+	]
+}

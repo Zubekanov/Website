@@ -1,0 +1,79 @@
+{
+	"table_name": "popugame_ratings",
+	"description": "Persistent ELO ratings for PopuGame players.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": false,
+			"unique": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "elo",
+			"type": "int",
+			"default": 1200,
+			"nullable": false
+		},
+		{
+			"name": "games_played",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "wins",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "losses",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "draws",
+			"type": "int",
+			"default": 0,
+			"nullable": false
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		},
+		{
+			"name": "updated_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "popugame_ratings_user_id_unique_idx",
+			"columns": ["user_id"],
+			"unique": true
+		},
+		{
+			"name": "popugame_ratings_elo_idx",
+			"columns": ["elo"],
+			"unique": false
+		}
+	]
+}

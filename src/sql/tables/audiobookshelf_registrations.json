@@ -1,0 +1,100 @@
+{
+	"table_name": "audiobookshelf_registrations",
+	"description": "Audiobookshelf account registration requests.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "first_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "last_name",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "email",
+			"type": "varchar",
+			"length": 255,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "additional_info",
+			"type": "text",
+			"nullable": true
+		},
+		{
+			"name": "status",
+			"type": "varchar",
+			"length": 16,
+			"enum": ["pending", "denied", "approved"],
+			"default": "'pending'",
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "is_active",
+			"type": "boolean",
+			"default": true,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "reviewed_at",
+			"type": "timestamptz",
+			"nullable": true
+		},
+		{
+			"name": "reviewed_by_user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "audiobookshelf_reg_email_idx",
+			"columns": ["email"],
+			"unique": false
+		},
+		{
+			"name": "audiobookshelf_reg_status_idx",
+			"columns": ["status"],
+			"unique": false
+		}
+	]
+}

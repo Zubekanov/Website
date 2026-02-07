@@ -1,0 +1,161 @@
+{
+    "language": {
+        "default" : true
+    },
+    "dir": {
+        "default" : true
+    },
+    "theme": {
+        "default" : true
+    },
+
+
+    "title": {
+        "default" : true
+    },
+
+
+    "meta_description": {
+        "default" : true
+    },
+    "meta_keywords": {
+        "default" : true
+    },
+    "canonical_url": {
+        "default" : true
+    },
+    "robots": {
+        "default" : true
+    },
+    "author": {
+        "default" : true
+    },
+    "theme_color": {
+        "default" : true
+    },
+
+
+    "og_title": {
+        "default" : true
+    },
+    "og_description": {
+        "default" : true
+    },
+    "og_url": {
+        "default" : true
+    },
+    "og_type": {
+        "default" : true
+    },
+    "og_image": {
+        "default" : true
+    },
+    "og_image_alt": {
+        "default" : true
+    },
+
+
+    "twitter_card": {
+        "default" : true
+    },
+    "twitter_site": {
+        "default" : true
+    },
+    "twitter_title": {
+        "default" : true
+    },
+    "twitter_description": {
+        "default" : true
+    },
+    "twitter_image": {
+        "default" : true
+    },
+
+
+    "favicon_ico": {
+        "default" : true
+    },
+    "favicon_svg": {
+        "default" : true
+    },
+    "apple_touch_icon": {
+        "default" : true
+    },
+    "manifest_href": {
+        "default" : true
+    },
+
+
+    "preconnect_html": {
+        "default" : true,
+        "automated": false,
+        "name_list": []
+    },
+    "stylesheets_html": {
+        "default" : false,
+        "automated": false,
+        "name_list": [
+            "/static/css/forms.css"
+        ]
+    },
+    "scripts_head_html": {
+        "default" : false,
+        "automated": false,
+        "name_list": []
+    },
+
+    "body_class": {
+        "default" : true
+    },
+    "header_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+    "nav_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+    "above_fold_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+    "body_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+    "aside_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+    "footer_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+
+
+    "main_module_js": {
+        "default" : true
+    },
+    "legacy_js": {
+        "default" : true
+    },
+    "scripts_html": {
+        "default" : false,
+        "automated": false,
+        "name_list": []
+    },
+    "analytics_html": {
+        "default" : false,
+        "automated": false,
+        "value": ""
+    },
+    "boot_json": {
+        "default" : true
+    }
+}

@@ -1,0 +1,193 @@
+.minecraft-status-card {
+	border: 1px solid var(--border);
+	background: var(--contents);
+	border-radius: 12px;
+	padding: 16px 18px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+	margin-bottom: 18px;
+}
+
+.minecraft-status-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 10px;
+}
+
+.minecraft-status-header h3 {
+	margin: 0;
+	font-size: 18px;
+}
+
+.minecraft-status-pill {
+	font-size: 12px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: #f5f5f5;
+	color: var(--form_text);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.minecraft-status-pill--online {
+	background: rgba(30, 159, 80, 0.12);
+	border-color: rgba(30, 159, 80, 0.3);
+	color: #1a7a43;
+}
+
+.minecraft-status-pill--offline {
+	background: rgba(198, 64, 64, 0.12);
+	border-color: rgba(198, 64, 64, 0.3);
+	color: #b53c3c;
+}
+
+.minecraft-status-pill--loading {
+	background: rgba(0, 122, 204, 0.12);
+	border-color: rgba(0, 122, 204, 0.3);
+	color: #0b5c9e;
+}
+
+.minecraft-status-body {
+	display: grid;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.minecraft-status-row {
+	display: grid;
+	grid-template-columns: 110px 1fr;
+	gap: 10px;
+	align-items: center;
+	font-size: 14px;
+}
+
+.minecraft-status-row .label {
+	color: var(--form_text);
+	opacity: 0.85;
+}
+
+.minecraft-status-row .value {
+	font-weight: 600;
+	color: var(--default);
+	word-break: break-word;
+}
+
+.minecraft-host-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px 4px 6px;
+	margin-left: -6px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--background);
+	box-sizing: border-box;
+}
+
+.minecraft-host-text {
+	font-weight: 600;
+}
+
+.minecraft-host-copy {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 1px solid transparent;
+	background: transparent;
+	cursor: pointer;
+	padding: 0;
+}
+
+.minecraft-host-copy img {
+	width: 14px;
+	height: 14px;
+	display: block;
+	opacity: 0.75;
+}
+
+.minecraft-host-tooltip {
+	position: absolute;
+	right: 6px;
+	top: 50%;
+	font-size: 11px;
+	padding: 3px 8px;
+	border-radius: 999px;
+	background: var(--contents);
+	border: 1px solid var(--border);
+	color: var(--form_text);
+	opacity: 0;
+	transform: translateY(-50%) scale(0.95);
+	pointer-events: none;
+	transition: opacity 140ms ease, transform 140ms ease;
+	z-index: 2;
+}
+
+.minecraft-host-chip {
+	position: relative;
+	overflow: hidden;
+}
+
+.minecraft-host-chip.is-copied .minecraft-host-tooltip {
+	opacity: 1;
+	transform: translateY(-50%) scale(1);
+}
+
+.minecraft-host-copy:hover {
+	border-color: var(--border);
+	background: var(--contents);
+}
+
+.minecraft-host-chip.is-copied {
+	border-color: var(--dark_blue);
+	box-shadow: 0 0 0 2px rgba(86, 156, 214, 0.15);
+}
+
+html[data-theme="dark"] .minecraft-host-copy img {
+	filter: invert(1);
+}
+
+.minecraft-status-footer {
+	font-size: 13px;
+	color: var(--form_text);
+}
+
+.minecraft-registration-wrap.is-hidden {
+	display: none;
+}
+
+.minecraft-whitelist-banner {
+	display: none;
+	border: 1px solid var(--border);
+	background: linear-gradient(135deg, rgba(0, 122, 204, 0.08), rgba(76, 201, 162, 0.08));
+	border-radius: 12px;
+	padding: 14px 16px;
+	margin: 18px 0 16px;
+}
+
+.minecraft-whitelist-banner[data-is-whitelisted="true"] {
+	display: grid;
+	gap: 6px;
+}
+
+.minecraft-whitelist-title {
+	font-weight: 700;
+}
+
+.minecraft-whitelist-subtitle {
+	color: var(--form_text);
+}
+
+.minecraft-whitelist-banner .btn {
+	justify-self: start;
+}
+
+@media (max-width: 640px) {
+	.minecraft-status-row {
+		grid-template-columns: 90px 1fr;
+	}
+}

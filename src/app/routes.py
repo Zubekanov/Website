@@ -1,336 +1,328 @@
-# routes.py
+from http.client import HTTPException
+from functools import wraps
 import logging
-from flask import (
-	Blueprint, abort, g, make_response, jsonify,
-	render_template, request, send_from_directory, current_app, url_for
+import time
+import traceback
+import requests
+import flask
+from flask import g
+from util.user_management import UserManagement
+from util.webpage_builder.webpage_builder import (
+	build_admin_api_access_approvals_page,
+	build_admin_audiobookshelf_approvals_page,
+	build_admin_dashboard_page,
+	build_admin_discord_webhook_approvals_page,
+	build_admin_email_debug_page,
+	build_admin_frontend_test_page,
+	build_admin_minecraft_approvals_page,
+	build_admin_users_page,
+	build_api_access_application_page,
+	build_audiobookshelf_registration_page,
+	build_audiobookshelf_unavailable_page,
+	build_delete_account_page,
+	build_discord_webhook_registration_page,
+	build_discord_webhook_verify_page,
+	build_discord_webhook_verified_page,
+	build_empty_landing_page,
+	build_error_page,
+	build_integration_remove_page,
+	build_integration_removed_page,
+	build_login_page,
+	build_minecraft_page,
+	build_popugame_invalid_link_page,
+	build_popugame_page,
+	build_profile_page,
+	build_psql_interface_page,
+	build_readme_page,
+	build_register_page,
+	build_reset_password_page,
+	build_server_metrics_page,
+	build_verify_email_page,
+	build_verify_email_token_page,
+	build_501_page,
+	_is_admin_user as _builder_is_admin_user,
 )
-from app.layout_fetcher import LayoutFetcher
-from app.breadcrumbs import generate_breadcrumbs
-import util.server_metrics as metrics
-from app.user_management import UserManagement as users
-from util.http_error_checker import validate
 
 logger = logging.getLogger(__name__)
-main = Blueprint('main', __name__)
-user_manager = users()
+main = flask.Blueprint("main", __name__)
+_AUTH_TOKEN_NAME_ = "session"
+PAGE_ACCESS_REQUIREMENTS: dict[str, dict[str, str]] = {}
 
-@main.app_context_processor
-def inject_user():
-	"""
-	Inject current_user into Jinja context (None if not logged in).
-	"""
-	current = getattr(g, "user", None)
-	if current:
-		current = {
-			"username": current.get("username"),
-			"email": current.get("email"),
-			"verified": current.get("verified", False)
+
+def page_access(level: str, *, unauth_redirect: str = "/login", auth_redirect: str = "/profile"):
+	allowed = {"public", "auth", "anon", "admin"}
+	if level not in allowed:
+		raise ValueError(f"Invalid page access level: {level}")
+
+	def _decorator(fn):
+		PAGE_ACCESS_REQUIREMENTS[fn.__name__] = {
+			"level": level,
+			"unauth_redirect": unauth_redirect,
+			"auth_redirect": auth_redirect,
 		}
-	else:
-		current = {}
-	return current
 
-@main.route("/favicon.ico")
-def favicon():
-	"""
-	Serve the favicon.ico from static.
-	"""
-	return send_from_directory(
-		current_app.static_folder, 
-		'favicon.ico', 
-		mimetype='image/vnd.microsoft.icon'
-	)
+		@wraps(fn)
+		def _wrapped(*args, **kwargs):
+			user = getattr(g, "user", None)
+			if level == "auth" and not user:
+				return flask.redirect(unauth_redirect)
+			if level == "anon" and user:
+				return flask.redirect(auth_redirect)
+			if level == "admin":
+				if not user:
+					return flask.redirect("/login")
+				if not _builder_is_admin_user(user):
+					err = HTTPException()
+					err.code = 403
+					err.description = "Admin access required."
+					return build_error_page(user, err), 403
+			return fn(*args, **kwargs)
+
+		return _wrapped
+
+	return _decorator
+
+@main.before_app_request
+def _timing_start():
+	g._t0 = time.perf_counter()
+
+@main.before_request
+def load_user():
+	path = flask.request.path or ""
+	if path == "/api" or path.startswith("/api/"):
+		return
+	g.user = None
+	auth_token = flask.request.cookies.get("session")
+	if auth_token:
+		user = UserManagement.get_user_by_session_token(auth_token)
+		if user:
+			g.user = user
+		else:
+			logging.info("Invalid session token provided.")
+
+def _ensure_user_loaded_for_error():
+	if hasattr(g, "user"):
+		return g.user
+
+	token = flask.request.cookies.get("session")
+	if not token:
+		g.user = None
+		return None
+
+	user = UserManagement.get_user_by_session_token(token)
+	g.user = user
+	return user
+
+@main.after_app_request
+def _timing_end(resp):
+	if not hasattr(g, "_t0"):
+		return resp
+
+	ct = resp.headers.get("Content-Type", "")
+	if "text/html" not in ct:
+		return resp
+
+	total_ms = (time.perf_counter() - g._t0) * 1000.0
+	body = resp.get_data(as_text=True)
+	body = body.replace("__BUILD_MS__", f"{total_ms:.1f} ms")
+	body = body.replace("__BUILD_MS_CACHED__", f"{total_ms:.1f} ms (cached)")
+	resp.set_data(body)
+	return resp
 
 @main.route("/")
-def homepage():
-	components = LayoutFetcher.load_layout("homepage.json")
-	breadcrumbs = generate_breadcrumbs()
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+def landing_page():
+	if g.user:
+		return flask.redirect("/profile")
+	return build_empty_landing_page(g.user)
 
-@main.route("/server")
-def server_overview():
-	components = LayoutFetcher.load_layout("server_overview.json")
-	breadcrumbs = generate_breadcrumbs()
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+@main.route("/readme")
+def readme_page():
+	return build_readme_page(g.user)
 
-@main.route("/verify")
-def verify_email():
-	"""
-	Handle email verification via token, then issue an auth cookie if successful.
-	"""
-	validation = validate(request.args, required=["token"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	token = validation["request_data"]["token"].strip()
-
-	result = user_manager.verify_user(token)
-	if result:
-		components = LayoutFetcher.load_layout("verification_success.json")
-	else:
-		components = LayoutFetcher.load_layout("verification_failure.json")
-
-	# Issue an auth token after successful verification
-	auth_token = user_manager.get_verification_auth_token(token)
-	if auth_token:
-		components["username"] = user_manager.get_user_by_auth_token(auth_token).get("username") if auth_token else None
-		logger.debug(f"Generated verification auth token: {auth_token}")
-		logger.info(f"Fetched user: {components['username']} for verification token: {token}")
-	else:
-		logger.error(f"Failed to generate auth token for verification token: {token}")
-		auth_token = None
-
-	breadcrumbs = generate_breadcrumbs()
-	response = make_response(render_template("main_layout.html", **components, breadcrumbs=breadcrumbs))
-
-	if auth_token:
-		response.set_cookie(
-			"auth_token",
-			auth_token,
-			max_age=current_app.config.get("AUTH_TOKEN_TTL", 60*60*24*7),
-			httponly=True,
-			secure=True,
-			samesite="Lax"
-		)
-		logger.debug(f"User verified; auth token set for token: {token}")
-	
-	response.status_code = 200 if result else 400
-
-	return response
-
-@main.route("/logout")
-def logout():
-	"""
-	Log out the user by invalidating their auth token and clearing the cookie.
-	"""
-	user = getattr(g, "user", None)
-	if not user:
-		abort(400, "No user is currently logged in.")
-
-	# We know there was a token (since g.user is not None), so fetch and invalidate
-	token = request.cookies.get("auth_token")
-	user_manager.invalidate_auth_token(token)
-
-	response = make_response(jsonify({"message": "Logout successful"}), 200)
-	response.set_cookie(
-		"auth_token",
-		"",
-		expires=0,
-		httponly=True,
-		secure=True,
-		samesite="Lax"
-	)
-	logger.debug(f"User '{user['username']}' logged out; auth token invalidated.")
-	return response
-
-@main.route("/login", methods=["POST"])
-def login():
-	"""
-	Accepts JSON {"email": "...", "password": "..."} and returns a new auth_token cookie.
-	"""
-
-	validation = validate(request.get_json(silent=True), required=["email", "password"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	data = validation["request_data"]
-
-	email = data["email"].strip()
-	password = data["password"]
-	
-	auth_token = user_manager.get_auth_token(email=email, password=password)
-	if not auth_token:
-		abort(401, "Invalid email or password.")
-
-	response = make_response(jsonify({"message": "Login successful"}), 200)
-	response.set_cookie(
-		"auth_token",
-		auth_token,
-		max_age=current_app.config.get("AUTH_TOKEN_TTL", 60*60*24*7),
-		httponly=True,
-		secure=True,
-		samesite="Lax"
-	)
-	logger.debug(f"User '{email}' logged in; auth token set.")
-	return response
-
-@main.route("/register", methods=["POST"])
-def register():
-	"""
-	Accepts JSON {"username": "...", "email": "...", "password": "..."} to create a new user.
-	"""
-
-	validation = validate(request.get_json(silent=True), required=["username", "email", "password"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	data = validation["request_data"]
-
-	username = data["username"].strip()
-	email = data["email"].strip()
-	password = data["password"]
-
-	logger.debug(f"Received registration data: username={username}, email={email}")
-
-	success = user_manager.register_user(username=username, email=email, password=password)
-	if not success:
-		abort(400, "Username or email already in use.")
-
-	return make_response(jsonify({
-		"message": "User registered successfully. Please check your email for verification."
-	}), 201)
+@main.route("/server-metrics")
+def server_metrics_page():
+	return build_server_metrics_page(g.user)
 
 @main.route("/profile")
-def profile():
-	user = getattr(g, "user", None)
-	if not user:
-		components = LayoutFetcher.load_layout("403_noaccount.json")
-		breadcrumbs = generate_breadcrumbs()
-		return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+@page_access("auth", unauth_redirect="/login")
+def profile_page():
+	if not g.user:
+		return flask.redirect("/login")
+	return build_profile_page(g.user)
 
-	# Return not implemented for now
-	components = LayoutFetcher.load_layout("501_notimplemented.json")
-	breadcrumbs = generate_breadcrumbs(user=user)
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+@main.route("/login")
+@page_access("anon", auth_redirect="/profile")
+def login_page():
+	if g.user:
+		return flask.redirect("/profile")
+	return build_login_page(g.user)
 
-@main.route("/settings")
-def settings():
-	user = getattr(g, "user", None)
-	if not user:
-		components = LayoutFetcher.load_layout("403_noaccount.json")
-		breadcrumbs = generate_breadcrumbs()
-		return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
+@main.route("/register")
+@page_access("anon", auth_redirect="/profile")
+def register_page():
+	if g.user:
+		return flask.redirect("/profile")
+	return build_register_page(g.user)
 
-	# Return not implemented for now
-	components = LayoutFetcher.load_layout("501_notimplemented.json")
-	breadcrumbs = generate_breadcrumbs()
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
-
-@main.route("/forgot-password")
-def forgot_password():
-	"""
-	Render a page where users can request a password reset.
-	"""
-	components = LayoutFetcher.load_layout("forgot_password.json")
-	breadcrumbs = generate_breadcrumbs()
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
-
-@main.route("/password-reset-request", methods=["POST"])
-def password_reset_request():
-	"""
-	Accepts JSON {"email": "..."} to initiate a password reset.
-	"""
-
-	validation = validate(request.get_json(silent=True), required=["email"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	data = validation["request_data"]
-	email = data.get("email", "").strip()
-	logger.debug(f"Received password reset request for email: {email}")
-	user_manager.request_password_reset(email=email)
-	
-	return make_response(jsonify({
-		"message": "If the email is verified, a password reset link has been sent."
-	}), 200)
+@main.route("/logout")
+def logout_page():
+	resp = flask.make_response(flask.redirect("/"))
+	resp.set_cookie(
+		key = _AUTH_TOKEN_NAME_,
+		value = "",
+		httponly = True,
+		secure = True,
+		samesite = "Lax",
+		max_age = 0,
+		path = "/",
+	)
+	return resp
 
 @main.route("/reset-password")
-def reset_password():
-	"""
-	Render the password reset page where users can set a new password.
-	"""
+def reset_password_page():
+	return build_reset_password_page(g.user)
 
-	validation = validate(request.args, required=["token"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	# TODO reject invalid/expired tokens here
+@main.route("/reset-password/<token>")
+def reset_password_token_page(token):
+	return build_501_page(g.user)
 
-	components = LayoutFetcher.load_layout("password_reset.json")
-	breadcrumbs = generate_breadcrumbs()
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs, token=token)
+@main.route("/delete-account")
+@page_access("auth", unauth_redirect="/")
+def delete_account_page():
+	if not g.user:
+		return flask.redirect("/")
+	return build_delete_account_page(g.user)
 
-@main.route("/reset-password", methods=["POST"])
-def reset_password_submit():
-	"""
-	Accepts JSON {"token": "...", "new_password": "..."} to reset the user's password.
-	"""
+@main.route("/verify-email")
+def verify_email_page():
+	return build_verify_email_page(g.user)
 
-	validation = validate(request.get_json(silent=True), required=["token", "new_password"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	data = validation["request_data"]
+@main.route("/verify-email/<token>")
+def verify_email_token_page(token):
+	return build_verify_email_token_page(g.user, token)
+
+@main.route("/audiobookshelf-registration", methods=["GET"])
+def audiobookshelf_registration_page():
+	return build_audiobookshelf_registration_page(g.user)
+
+@main.route("/api-access-application", methods=["GET"])
+def api_access_application_page():
+	return build_api_access_application_page(g.user)
+
+@main.route("/audiobookshelf", methods=["GET"])
+def audiobookshelf_redirect_page():
+	target = "https://audiobookshelf.zubekanov.com/"
+	try:
+		resp = requests.get(target, timeout=2.0)
+		if resp.status_code < 500:
+			return flask.redirect(target)
+		status_note = f"HTTP {resp.status_code}"
+	except Exception as exc:
+		status_note = str(exc) or "Connection failed."
+	return build_audiobookshelf_unavailable_page(g.user, status_note)
+
+@main.route("/discord-webhook-registration", methods=["GET"])
+def discord_webhook_registration_page():
+	return build_discord_webhook_registration_page(g.user)
+
+@main.route("/discord-webhook/verify", methods=["GET"])
+def discord_webhook_verify_page():
+	return build_discord_webhook_verify_page(g.user)
+
+@main.route("/discord-webhook/verified", methods=["GET"])
+def discord_webhook_verified_page():
+	return build_discord_webhook_verified_page(g.user)
+
+@main.route("/token", methods=["GET"])
+def discord_webhook_token_page():
+	return build_discord_webhook_verify_page(g.user)
+
+@main.route("/minecraft")
+def minecraft_page():
+	return build_minecraft_page(g.user)
+
+@main.route("/popugame")
+def popugame_page():
+	return build_popugame_page(g.user)
+
+@main.route("/popugame/invalid")
+def popugame_invalid_page():
+	return build_popugame_invalid_link_page(g.user), 404
+
+@main.route("/popugame/<code>")
+def popugame_game_page(code: str):
+	code = (code or "").strip()
+	if not code.isalnum() or len(code) != 6:
+		return flask.redirect("/popugame/invalid")
+	return build_popugame_page(g.user, game_code=code)
+
+@main.route("/psql-interface")
+@page_access("admin")
+def psql_interface_page():
+	return build_psql_interface_page(g.user)
+
+@main.route("/admin")
+@page_access("admin")
+def admin_dashboard_page():
+	return build_admin_dashboard_page(g.user)
+
+@main.route("/admin/audiobookshelf-approvals")
+@page_access("admin")
+def admin_audiobookshelf_approvals_page():
+	return build_admin_audiobookshelf_approvals_page(g.user)
+
+@main.route("/admin/discord-webhook-approvals")
+@page_access("admin")
+def admin_discord_webhook_approvals_page():
+	return build_admin_discord_webhook_approvals_page(g.user)
+
+@main.route("/admin/minecraft-approvals")
+@page_access("admin")
+def admin_minecraft_approvals_page():
+	return build_admin_minecraft_approvals_page(g.user)
+
+@main.route("/admin/api-access-approvals")
+@page_access("admin")
+def admin_api_access_approvals_page():
+	return build_admin_api_access_approvals_page(g.user)
+
+@main.route("/admin/email-debug")
+@page_access("admin")
+def admin_email_debug_page():
+	return build_admin_email_debug_page(g.user)
+
+@main.route("/admin/frontend-test")
+@page_access("admin")
+def admin_frontend_test_page():
+	return build_admin_frontend_test_page(g.user)
+
+@main.route("/integration/remove")
+def integration_remove_page():
+	token = flask.request.args.get("token") or ""
+	return build_integration_remove_page(g.user, token)
+
+@main.route("/integration/removed")
+def integration_removed_page():
+	return build_integration_removed_page(g.user)
 
 
-	token = data.get("token", "").strip()
-	new_password = data.get("new_password", "").strip()
-	
-	if not token or not new_password:
-		abort(400, "Token and new password are required.")
+@main.route("/admin/users")
+@page_access("admin")
+def admin_users_page():
+	return build_admin_users_page(g.user)
 
-	logger.debug(f"Received password reset for token: {token}")
+@main.app_errorhandler(Exception)
+def handle_all_errors(e):
+	user = _ensure_user_loaded_for_error()
 
-	success = user_manager.reset_password(token=token, new_password=new_password)
-	if not success:
-		abort(400, "Invalid or expired password reset token.")
+	# HTTP errors
+	if isinstance(e, HTTPException):
+		return build_error_page(user, e), e.code
 
-	return make_response(jsonify({"message": "Password reset successfully."}), 200)
-
-@main.route("/tournament-manager")
-def tournament_manager():
-	"""
-	Render the tournament manager page.
-	"""
-	components = LayoutFetcher.load_layout("swiss_manager.json")
-	breadcrumbs = generate_breadcrumbs()
-	return render_template("main_layout.html", **components, breadcrumbs=breadcrumbs)
-
-@main.route("/api/uptime")
-def api_uptime():
-	return jsonify({"uptime_seconds": metrics.get_uptime()})
-
-@main.route("/api/static_metrics")
-def api_static_metrics():
-	return jsonify(metrics.get_static_metrics())
-
-@main.route("/api/live_metrics")
-def api_live_metrics():
-	return jsonify(metrics.get_latest_metrics())
-
-@main.route("/api/timestamp_metrics")
-def api_compressed_metrics():
-	"""
-	Optionally accepts two timestamp query parameters:
-		- start: Start timestamp in seconds since epoch (default: 1 hour ago, inclusive)
-		- stop: End timestamp in seconds since epoch (default: now, inclusive)
-		- step: Step in seconds (default: 5 seconds, steps should be a multiple of 5 but will be rounded up to the nearest 5)
-	Attempts to return metrics for the specified time range, but advise paged requests for large ranges.
-	"""
-
-	validation = validate(request.args, required=[], optional=["start", "stop", "step"])
-	if validation["error"]:
-		abort(validation["response"], validation["message"])
-	
-	data = validation["request_data"]
-	start = data.get("start", None)
-	if start is not None: start = int(start)
-	stop = data.get("stop", None)
-	if stop is not None: stop = int(stop)
-	step = data.get("step", 5)
- 
-	# Simple check to prevent ridiculous requests from being processed.
-	if start and stop and (stop - start) / step > 65536:
-		abort(400, "Requested range is too large. Please reduce the time range or increase the step size.")
-
-	metric = metrics.get_range_metrics(start=start, stop=stop, step=step)
-
-	return jsonify(metric)
-
-@main.route("/api/ping")
-def api_ping():
-	"""
-	Endpoint to check if the server is up and running.
-	Returns a 200 OK response with a JSON message.
-	"""
-	return jsonify({"message": "pong"}), 200
+	tb_text = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+	logger.error("Unhandled application error: %s", e)
+	logger.error("Unhandled application traceback:\n%s", tb_text)
+	err = HTTPException()
+	err.code = 500
+	err.description = "Internal Server Error"
+	return build_error_page(user, err), 500

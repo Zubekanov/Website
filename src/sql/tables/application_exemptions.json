@@ -1,0 +1,56 @@
+{
+	"table_name": "application_exemptions",
+	"description": "Exemptions that allow users to reapply for integrations despite existing applications.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": false,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "integration_type",
+			"type": "varchar",
+			"length": 64,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "integration_key",
+			"type": "varchar",
+			"length": 120,
+			"nullable": true,
+			"index": true
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "application_exemptions_user_type_idx",
+			"columns": ["user_id", "integration_type"],
+			"unique": false
+		},
+		{
+			"name": "application_exemptions_unique_idx",
+			"columns": ["user_id", "integration_type", "integration_key"],
+			"unique": true
+		}
+	]
+}

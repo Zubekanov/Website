@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="{{ language|default('en') }}" dir="{{ dir|default('ltr') }}" data-theme="{{ theme|default('system') }}">
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>{{ title|default('Joseph Wong') }}</title>
+
+	<!-- SEO & Social -->
+	<meta name="description" content="{{ meta_description|default('Personal website hosting various projects and information.') }}" />
+	<meta name="keywords" content="{{ meta_keywords|default('Joseph Wong, personal website, portfolio') }}" />
+	<link rel="canonical" href="{{ canonical_url|default(request.url if request else '') }}" />
+	<meta name="robots" content="{{ robots|default('index,follow') }}" />
+	<meta name="author" content="{{ author|default('Joseph Wong') }}" />
+	<meta name="theme-color" content="{{ theme_color|default('#1f1f1f') }}" />
+
+	<!-- Open Graph -->
+	<meta property="og:title" content="{{ og_title|default(title) }}" />
+	<meta property="og:description" content="{{ og_description|default(meta_description) }}" />
+	<meta property="og:url" content="{{ og_url|default(canonical_url) }}" />
+	<meta property="og:type" content="{{ og_type|default('website') }}" />
+	<meta property="og:image" content="{{ og_image|default('') }}" />
+	<meta property="og:image:alt" content="{{ og_image_alt|default('No OG image currently set.') }}" />
+
+	<!-- Twitter Cards -->
+	<meta name="twitter:card" content="{{ twitter_card|default('summary_large_image') }}" />
+	<meta name="twitter:site" content="{{ twitter_site|default('') }}" />
+	<meta name="twitter:title" content="{{ twitter_title|default(title) }}" />
+	<meta name="twitter:description" content="{{ twitter_description|default(meta_description) }}" />
+	<meta name="twitter:image" content="{{ twitter_image|default(og_image) }}" />
+
+	<!-- Icons & Manifest -->
+	<link rel="icon" href="{{ favicon_ico|default('/static/favicon/favicon.ico') }}" sizes="any" />
+	<link rel="apple-touch-icon" href="{{ apple_touch_icon|default('/static/favicon/apple-touch-icon.png') }}" />
+	<link rel="manifest" href="{{ manifest_href|default('/static/favicon/site.webmanifest') }}" />
+
+	<!-- Networking hints -->
+	<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	{{ preconnect_html|default('')|safe }}
+
+	<!-- Preload -->
+	{{ preload_html|default('')|safe }}
+
+	<!-- Styles -->
+	{{ stylesheets_html|default('')|safe }}
+
+	<!-- Head scripts -->
+	<script>
+		(function(){
+			try {
+				var setting = localStorage.getItem('theme');
+				var theme = setting && setting !== 'system' ? setting : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+				document.documentElement.dataset.theme = theme;
+			} catch(e) {}
+		})();
+	</script>
+	{{ scripts_head_html|default('')|safe }}
+</head>
+
+<body class="{{ body_class|default('content') }}">
+	<header id="site-header" role="banner">
+		{{ header_html|default('')|safe }}
+	</header>
+
+	<nav id="site-nav" aria-label="Primary">
+		{{ nav_html|default('')|safe }}
+	</nav>
+
+	<main id="main" tabindex="-1">
+		{{ above_fold_html|default('')|safe }}
+
+		{{ body_html|default('')|safe }}
+	</main>
+
+	<aside id="site-aside">
+		{{ aside_html|default('')|safe }}
+	</aside>
+
+	<footer id="site-footer" class="site-footer">
+		{{ footer_html|default('')|safe }}
+	</footer>
+
+	<!-- App scripts -->
+	{{ scripts_html|default('')|safe }}
+
+	<!-- Analytics -->
+	{{ analytics_html|default('')|safe }}
+
+	<!-- Inline boot data -->
+	<script id="boot-data" type="application/json">{{ boot_json|default('{}')|safe }}</script>
+</body>
+</html>

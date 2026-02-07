@@ -1,0 +1,45 @@
+#site-footer {
+	padding: var(--page-padding, 1.5rem);
+	font-size: 0.875em;
+	line-height: 1.5;
+
+	color: rgba(var(--default), 0.7);
+
+	border-top: 1px solid rgba(var(--default), 0.12);
+}
+
+.value {
+	color: var(--string);
+}
+
+.contact-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+
+	display: grid;
+	gap: 0.5rem;
+}
+
+.contact-list li {
+	display: grid;
+	grid-template-columns: minmax(6rem, auto) 1fr;
+	column-gap: 0.75rem;
+	align-items: baseline;
+}
+
+.contact-label {
+	font-size: 0.85em;
+	letter-spacing: 0.08em;
+	color: rgba(var(--default), 0.5);
+	white-space: nowrap;
+}
+
+.contact-list a {
+	color: var(--dark_blue);
+	text-decoration: none;
+}
+
+.contact-list a:hover {
+	text-decoration: underline;
+}

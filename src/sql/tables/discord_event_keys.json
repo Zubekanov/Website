@@ -1,0 +1,52 @@
+{
+	"table_name": "discord_event_keys",
+	"description": "Available event keys and visibility permissions.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "event_key",
+			"type": "varchar",
+			"length": 120,
+			"nullable": false,
+			"unique": true,
+			"index": true
+		},
+		{
+			"name": "permission",
+			"type": "varchar",
+			"length": 16,
+			"nullable": false,
+			"index": true
+		},
+		{
+			"name": "description",
+			"type": "varchar",
+			"length": 255,
+			"nullable": true
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "discord_event_keys_permission_idx",
+			"columns": ["permission"],
+			"unique": false
+		},
+		{
+			"name": "discord_event_keys_event_idx",
+			"columns": ["event_key"],
+			"unique": true
+		}
+	]
+}

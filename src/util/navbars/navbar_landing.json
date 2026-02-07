@@ -1,0 +1,128 @@
+{
+    "logo": {
+        "type": "text",
+        "image_src": "",
+        "text": "Joseph Wong",
+        "href": "/"
+    },
+
+    "items": [
+        {
+            "label": "Projects",
+            "type": "mega",
+            "sections": [
+                {
+                    "label": "Live Views and Stats",
+                    "items": [
+                        {
+                            "label": "Server Metrics",
+                            "desc": "Live graphs and statistics for the server. <br>(ODroid-H4 Ultra)",
+                            "href": "/server-metrics"
+                        }
+                    ]
+                },
+                {
+                    "label": "GitHub Repositories",
+                    "type": "github_repos",
+                    "username": "Zubekanov",
+                    "limit": 6
+                }
+            ]
+        },
+        {
+            "label": "Services",
+            "type": "mega",
+            "sections": [
+                {
+                    "label": "Hosted Services",
+                    "items": [
+                        {
+                            "label": "Audiobookshelf",
+                            "desc": "Self-hosted audiobook and podcast server.",
+                            "href": "/audiobookshelf"
+                        },
+                        {
+                            "label": "Request Audiobookshelf Account",
+                            "desc": "Fill out a form to request an account on the Audiobookshelf server.",
+                            "href": "/audiobookshelf-registration"
+                        },
+                        {
+                            "label": "Request Discord Webhook Subscription",
+                            "desc": "Subscribe to a specified message emitter via Discord webhook.",
+                            "href": "/discord-webhook-registration"
+                        },
+                        {
+                            "label": "Request API Access",
+                            "desc": "Apply for API key access to hosted services.",
+                            "href": "/api-access-application"
+                        }
+                    ]
+                },
+                {
+                    "label": "Hosted Games",
+                    "items": [
+                        {
+                            "label": "Minecraft",
+                            "desc": "Request whitelisting or review information about the Minecraft server.",
+                            "href": "/minecraft"
+                        },
+                        {
+                            "label": "PopuGame",
+                            "desc": "Play the local PopuGame board on this site.",
+                            "href": "/popugame"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "label": "Admin",
+            "type": "link",
+            "href": "/admin",
+            "desc": "Open admin dashboard and moderation tools.",
+            "visibility": ["admin"]
+        },
+        {
+            "label": "Website Description",
+            "type": "link",
+            "href": "/readme",
+            "desc": "Read the README.md for a quick overview of the site."
+        }
+    ],
+
+    "account": [
+        {
+            "label": "Login / Register",
+            "type": "link",
+            "href": "/login",
+            "visibility": ["anonymous"]
+        },
+        {
+            "label": "{{first_name}} {{last_name}}",
+            "type": "mega",
+            "visibility": ["authenticated"],
+            "sections": [
+                {
+                    "items": [
+                        {
+                            "label": "Profile",
+                            "desc": "View and edit your profile.",
+                            "href": "/profile"
+                        },
+                        {
+                            "label": "Admin Dashboard",
+                            "desc": "Open admin dashboard and moderation tools.",
+                            "href": "/admin",
+                            "visibility": ["admin"]
+                        },
+                        {
+                            "label": "Logout",
+                            "desc": "Log out of your account.",
+                            "href": "/logout"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

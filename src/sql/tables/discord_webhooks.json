@@ -1,0 +1,192 @@
+[
+	{
+		"table_name": "discord_webhooks",
+		"description": "Stored Discord webhook endpoints.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "name",
+				"type": "varchar",
+				"length": 80,
+				"nullable": false,
+				"index": true
+			},
+		{
+			"name": "webhook_url",
+			"type": "text",
+			"unique": true,
+			"nullable": false
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": true,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "set null"
+			}
+		},
+		{
+			"name": "guild_id",
+			"type": "varchar",
+			"length": 32,
+				"nullable": true
+			},
+			{
+				"name": "channel_id",
+				"type": "varchar",
+				"length": 32,
+				"nullable": true
+			},
+			{
+				"name": "is_active",
+				"type": "boolean",
+				"default": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "disabled_reason",
+				"type": "varchar",
+				"length": 255,
+				"nullable": true
+			},
+			{
+				"name": "last_sent_at",
+				"type": "timestamptz",
+				"nullable": true
+			},
+			{
+				"name": "last_status_code",
+				"type": "integer",
+				"nullable": true
+			},
+			{
+				"name": "last_error",
+				"type": "text",
+				"nullable": true
+			},
+			{
+				"name": "consecutive_failures",
+				"type": "integer",
+				"default": 0,
+				"nullable": false
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			},
+			{
+				"name": "updated_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			}
+		],
+		"indexes": [
+			{
+				"name": "discord_webhooks_name_idx",
+				"columns": ["name"],
+				"unique": false
+			},
+			{
+				"name": "discord_webhooks_active_idx",
+				"columns": ["is_active"],
+				"unique": false
+			},
+			{
+				"name": "discord_webhooks_url_idx",
+				"columns": ["webhook_url"],
+				"unique": true
+			}
+		]
+	},
+	{
+		"table_name": "discord_webhook_subscriptions",
+		"description": "Subscriptions that route backend events to Discord webhooks.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "webhook_id",
+				"type": "uuid",
+				"nullable": false,
+				"index": true,
+				"foreign_key": {
+					"table": "discord_webhooks",
+					"column": "id",
+					"on_delete": "cascade"
+				}
+			},
+			{
+				"name": "event_key",
+				"type": "varchar",
+				"length": 120,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "filter_json",
+				"type": "jsonb",
+				"default": "'{}'::jsonb",
+				"nullable": false
+			},
+			{
+				"name": "format_json",
+				"type": "jsonb",
+				"default": "'{}'::jsonb",
+				"nullable": false
+			},
+			{
+				"name": "is_active",
+				"type": "boolean",
+				"default": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "created_at",
+				"type": "timestamptz",
+				"default": "now()",
+				"nullable": false
+			}
+		],
+		"indexes": [
+			{
+				"name": "discord_webhook_subs_webhook_event_idx",
+				"columns": ["webhook_id", "event_key"],
+				"unique": false
+			},
+			{
+				"name": "discord_webhook_subs_event_idx",
+				"columns": ["event_key"],
+				"unique": false
+			},
+			{
+				"name": "discord_webhook_subs_active_idx",
+				"columns": ["is_active"],
+				"unique": false
+			},
+			{
+				"name": "discord_webhook_subs_unique_idx",
+				"columns": ["webhook_id", "event_key", "filter_json"],
+				"unique": true
+			}
+		]
+	}
+]

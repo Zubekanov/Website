@@ -1,0 +1,182 @@
+[
+	{
+		"table_name": "pending_users",
+		"description": "Accounts awaiting email verification.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "email",
+				"type": "varchar",
+				"length": 255,
+				"unique": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "first_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "last_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "password_hash",
+				"type": "varchar",
+				"length": 255,
+				"nullable": false
+			},
+			{
+				"name": "verification_token_hash",
+				"type": "varchar",
+				"length": 255,
+				"unique": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "token_expires_at",
+				"type": "timestamp",
+				"nullable": false
+			},
+			{
+				"name": "created_at",
+				"type": "timestamp",
+				"default": "now()",
+				"nullable": false
+			}
+		],
+		"indexes": [
+			{
+				"name": "pending_users_email_idx",
+				"columns": ["email"],
+				"unique": true
+			},
+			{
+				"name": "pending_users_token_idx",
+				"columns": ["verification_token_hash"],
+				"unique": true
+			}
+		]
+	},
+	{
+		"table_name": "users",
+		"description": "Verified user accounts.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "email",
+				"type": "varchar",
+				"length": 255,
+				"unique": true,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "first_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "last_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "password_hash",
+				"type": "varchar",
+				"length": 255,
+				"nullable": true
+			},
+			{
+				"name": "is_anonymous",
+				"type": "boolean",
+				"default": false,
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "is_active",
+				"type": "boolean",
+				"default": true,
+				"nullable": false
+			},
+			{
+				"name": "created_at",
+				"type": "timestamp",
+				"default": "now()",
+				"nullable": false
+			},
+			{
+				"name": "last_login_at",
+				"type": "timestamp",
+				"nullable": true
+			}
+		],
+		"indexes": [
+			{
+				"name": "users_email_idx",
+				"columns": ["email"],
+				"unique": true
+			}
+		]
+	},
+	{
+		"table_name": "admins",
+		"description": "Admin users.",
+		"columns": [
+			{
+				"name": "user_id",
+				"type": "uuid",
+				"primary_key": true,
+				"nullable": false,
+				"foreign_key": {
+					"table": "users",
+					"column": "id",
+					"on_delete": "cascade"
+				}
+			},
+			{
+				"name": "created_at",
+				"type": "timestamp",
+				"default": "now()",
+				"nullable": false
+			},
+			{
+				"name": "note",
+				"type": "varchar",
+				"length": 255,
+				"nullable": true
+			}
+		],
+		"indexes": [
+			{
+				"name": "admins_user_id_idx",
+				"columns": ["user_id"],
+				"unique": true
+			}
+		]
+	}
+]

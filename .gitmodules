@@ -1,0 +1,3 @@
+[submodule "src/util/fcr"]
+	path = src/util/fcr
+	url = https://github.com/Zubekanov/file_config_utils.git

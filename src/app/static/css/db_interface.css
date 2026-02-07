@@ -1,0 +1,236 @@
+.db-admin {
+	padding: 0.5rem 0.75rem 2rem;
+	color: var(--default);
+	max-width: 100%;
+}
+
+.db-admin h1 {
+	margin: 0 0 0.75rem;
+	font-size: 1.35rem;
+}
+
+.db-section {
+	padding: 0.75rem 0 1.25rem;
+	margin-bottom: 1.25rem;
+}
+
+.db-section h2 {
+	margin: 0 0 0.5rem;
+	font-size: 1.05rem;
+}
+
+.db-section + .db-section {
+	border-top: 1px solid var(--border);
+	margin-top: 1.25rem;
+}
+
+.db-grid {
+	display: grid;
+	gap: 0;
+	align-items: stretch;
+	width: 100%;
+	align-items: center;
+	max-width: 100%;
+	overflow-x: hidden;
+	border: 1px solid var(--form_border);
+	border-radius: 6px;
+	min-width: 0;
+}
+
+.db-grid-row {
+	display: contents;
+}
+
+.db-grid-row.form {
+	display: contents;
+}
+
+.db-grid-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+.db-cell {
+	background: var(--form_body);
+	border: 0;
+	border-right: 1px solid var(--form_border);
+	border-bottom: 1px solid var(--form_border);
+	padding: 0.06rem 0.2rem;
+	box-sizing: border-box;
+	min-height: 1.15rem;
+	display: flex;
+	align-items: center;
+	position: relative;
+}
+
+.db-cell--head {
+	background: var(--contents);
+	border-color: var(--border);
+	color: var(--default);
+	font-weight: 600;
+	position: relative;
+	user-select: none;
+}
+
+.db-cell--actions {
+	justify-content: center;
+	background: var(--contents);
+	border-right: 0;
+	position: sticky;
+	right: 0;
+	z-index: 2;
+}
+
+.db-cell--head.db-cell--actions {
+	z-index: 3;
+}
+
+.db-cell--section {
+	grid-column: 1 / -1;
+	background: var(--contents);
+	border-right: 0;
+	font-weight: 600;
+}
+
+.db-cell--span-all {
+	grid-column: 1 / -1;
+}
+
+.db-cell--empty {
+	grid-column: 1 / -1;
+	color: var(--form_text);
+	background: var(--contents);
+	border-right: 0;
+}
+
+.db-form-input {
+	width: 100%;
+	align-items: center;
+	box-sizing: border-box;
+	padding: 0.06rem 0.2rem;
+	border: 1px solid var(--form_border);
+	border-radius: 4px;
+	background: var(--form_body);
+	color: var(--form_text);
+	min-width: 0;
+	line-height: 1.2;
+	height: 1.25rem;
+}
+
+.db-user-id-dropdown {
+	position: absolute;
+	z-index: 999;
+	background: var(--contents);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+	padding: 6px;
+	max-height: 260px;
+	overflow: auto;
+	box-sizing: border-box;
+}
+
+.db-user-id-option {
+	display: grid;
+	gap: 2px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.db-user-id-option .label {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.db-user-id-option .meta {
+	font-size: 11px;
+	color: var(--form_text);
+	word-break: break-all;
+}
+
+.db-user-id-option:hover {
+	background: var(--background);
+}
+
+.db-form-input--checkbox {
+	width: 1.25rem;
+	height: 1.25rem;
+	padding: 0;
+	margin: 0;
+	display: block;
+}
+
+.db-cell--checkbox {
+	justify-content: center;
+	padding: 0.06rem 0.2rem;
+}
+
+.db-cell--tooltip::after {
+	content: attr(data-tooltip);
+	position: absolute;
+	left: 0.35rem;
+	top: 100%;
+	transform: translateY(4px);
+	background: var(--default);
+	color: var(--contents);
+	padding: 0.2rem 0.35rem;
+	border-radius: 4px;
+	font-size: 0.75rem;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transition: none;
+	z-index: 10;
+}
+
+.db-cell--tooltip[data-tooltip]:hover::after {
+	opacity: 1;
+}
+
+.db-actions {
+	display: flex;
+	gap: 0.25rem;
+	flex-wrap: nowrap;
+	justify-content: center;
+	width: 100%;
+	align-items: center;
+}
+
+.db-actions .btn {
+	min-width: 70px;
+}
+
+.db-hidden {
+	display: none;
+}
+
+.db-resize-handle {
+	position: absolute;
+	right: -6px;
+	top: 0;
+	width: 12px;
+	height: 100%;
+	cursor: col-resize;
+}
+
+.db-resize-handle::after {
+	content: "";
+	position: absolute;
+	right: 5px;
+	top: 15%;
+	height: 70%;
+	width: 2px;
+	background: var(--border);
+}
+
+@media (max-width: 900px) {
+	.db-grid {
+		grid-auto-flow: row;
+	}
+
+	.db-cell--actions {
+		justify-content: flex-start;
+	}
+}
