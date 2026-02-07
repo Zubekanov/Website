@@ -1,0 +1,11 @@
+# /etc/cloudflared/config.yml
+# Replace with your real UUID and host.
+tunnel: YOUR_TUNNEL_UUID
+credentials-file: /etc/cloudflared/YOUR_TUNNEL_UUID.json
+
+ingress:
+  - hostname: zubekanov.com
+    service: http://127.0.0.1:8000
+  - hostname: www.zubekanov.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

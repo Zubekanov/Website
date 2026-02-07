@@ -1,0 +1,28 @@
+[Unit]
+Description=Gunicorn service for Website_Dev Flask app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zubekanov
+Group=zubekanov
+WorkingDirectory=/home/zubekanov/Repositories/Website_Dev/src
+Environment=PYTHONUNBUFFERED=1
+
+# Optional: define secrets/config via file if you use env vars.
+# EnvironmentFile=/etc/default/website-dev
+
+ExecStart=/home/zubekanov/Repositories/Website_Dev/.venv/bin/gunicorn \
+  -c /home/zubekanov/Repositories/Website_Dev/deploy/gunicorn.conf.py \
+  wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
