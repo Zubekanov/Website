@@ -864,6 +864,22 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				cta_label=cta_label,
 				cta_url=cta_url,
 			)
+			notify_moderators(
+				ctx,
+				"audiobookshelf_request_approved",
+				title="Audiobookshelf request approved",
+				actor=user.get("email") or user.get("id"),
+				subject=f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or reg.get("email"),
+				details=[
+					f"Email: {reg.get('email', '')}",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "audiobookshelf_request_approved",
+					"reviewer_user_id": user.get("id"),
+					"request_id": reg_id,
+				},
+			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/audiobookshelf-approvals")
@@ -924,6 +940,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		if not reg_id:
 			return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 		try:
+			rows = ctx.interface.get_audiobookshelf_registration_contact_by_id(reg_id)
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Not found."}), 404
+			reg = rows[0]
 			ctx.interface.client.update_rows_with_filters(
 				"audiobookshelf_registrations",
 				{
@@ -934,6 +954,22 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				},
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
+			)
+			notify_moderators(
+				ctx,
+				"audiobookshelf_request_denied",
+				title="Audiobookshelf request denied",
+				actor=user.get("email") or user.get("id"),
+				subject=f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or reg.get("email"),
+				details=[
+					f"Email: {reg.get('email', '')}",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "audiobookshelf_request_denied",
+					"reviewer_user_id": user.get("id"),
+					"request_id": reg_id,
+				},
 			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
@@ -1069,6 +1105,24 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				cta_label=cta_label,
 				cta_url=cta_url,
 			)
+			notify_moderators(
+				ctx,
+				"discord_webhook_request_approved",
+				title="Discord webhook request approved",
+				actor=user.get("email") or user.get("id"),
+				subject=reg.get("name") or reg.get("webhook_url"),
+				details=[
+					f"Event key: {reg.get('event_key')}",
+					f"Webhook URL: {reg.get('webhook_url')}",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "discord_webhook_request_approved",
+					"reviewer_user_id": user.get("id"),
+					"event_key": reg.get("event_key"),
+					"request_id": reg_id,
+				},
+			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/discord-webhook-approvals")
@@ -1130,6 +1184,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		if not reg_id:
 			return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 		try:
+			rows = ctx.interface.get_discord_webhook_registration_basic_by_id(reg_id)
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Not found."}), 404
+			reg = rows[0]
 			ctx.interface.client.update_rows_with_filters(
 				"discord_webhook_registrations",
 				{
@@ -1139,6 +1197,24 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				},
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
+			)
+			notify_moderators(
+				ctx,
+				"discord_webhook_request_denied",
+				title="Discord webhook request denied",
+				actor=user.get("email") or user.get("id"),
+				subject=reg.get("name") or reg.get("webhook_url"),
+				details=[
+					f"Event key: {reg.get('event_key')}",
+					f"Webhook URL: {reg.get('webhook_url')}",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "discord_webhook_request_denied",
+					"reviewer_user_id": user.get("id"),
+					"event_key": reg.get("event_key"),
+					"request_id": reg_id,
+				},
 			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
@@ -1273,6 +1349,22 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					f"Scopes: {scopes_text or '—'}",
 				],
 			)
+			notify_moderators(
+				ctx,
+				"api_access_request_approved",
+				title="API access request approved",
+				actor=user.get("email") or user.get("id"),
+				subject=f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or reg.get("email"),
+				details=[
+					f"Email: {reg.get('email', '')}",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "api_access_request_approved",
+					"reviewer_user_id": user.get("id"),
+					"request_id": reg_id,
+				},
+			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/api-access-approvals")
@@ -1339,6 +1431,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		if not reg_id:
 			return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 		try:
+			rows = ctx.interface.get_api_access_registration_contact_by_id(reg_id)
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Not found."}), 404
+			reg = rows[0]
 			ctx.interface.client.update_rows_with_filters(
 				"api_access_registrations",
 				{
@@ -1349,6 +1445,22 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				},
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
+			)
+			notify_moderators(
+				ctx,
+				"api_access_request_denied",
+				title="API access request denied",
+				actor=user.get("email") or user.get("id"),
+				subject=f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or reg.get("email"),
+				details=[
+					f"Email: {reg.get('email', '')}",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "api_access_request_denied",
+					"reviewer_user_id": user.get("id"),
+					"request_id": reg_id,
+				},
 			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
@@ -1533,6 +1645,25 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				cta_label=cta_label,
 				cta_url=cta_url,
 			)
+			notify_moderators(
+				ctx,
+				"minecraft_request_approved",
+				title="Minecraft whitelist request approved",
+				actor=user.get("email") or user.get("id"),
+				subject=reg.get("mc_username"),
+				details=[
+					f"Name: {reg.get('first_name', '')} {reg.get('last_name', '')}".strip(),
+					f"Email: {reg.get('email', '')}",
+					f"User ID: {reg.get('user_id')}" if reg.get("user_id") else "User ID: anonymous",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "minecraft_request_approved",
+					"reviewer_user_id": user.get("id"),
+					"mc_username": reg.get("mc_username"),
+					"request_id": reg_id,
+				},
+			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.redirect("/admin/minecraft-approvals")
@@ -1593,6 +1724,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		if not reg_id:
 			return flask.jsonify({"ok": False, "message": "Missing id."}), 400
 		try:
+			rows = ctx.interface.get_minecraft_registration_by_id(reg_id)
+			if not rows:
+				return flask.jsonify({"ok": False, "message": "Not found."}), 404
+			reg = rows[0]
 			ctx.interface.client.update_rows_with_filters(
 				"minecraft_registrations",
 				{
@@ -1602,6 +1737,25 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				},
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
+			)
+			notify_moderators(
+				ctx,
+				"minecraft_request_denied",
+				title="Minecraft whitelist request denied",
+				actor=user.get("email") or user.get("id"),
+				subject=reg.get("mc_username"),
+				details=[
+					f"Name: {reg.get('first_name', '')} {reg.get('last_name', '')}".strip(),
+					f"Email: {reg.get('email', '')}",
+					f"User ID: {reg.get('user_id')}" if reg.get("user_id") else "User ID: anonymous",
+					f"Request ID: {reg_id}",
+				],
+				context={
+					"action": "minecraft_request_denied",
+					"reviewer_user_id": user.get("id"),
+					"mc_username": reg.get("mc_username"),
+					"request_id": reg_id,
+				},
 			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400

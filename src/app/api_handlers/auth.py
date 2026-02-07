@@ -159,6 +159,22 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				title="Account deleted",
 				intro="Your account has been deleted and access has been revoked.",
 			)
+			notify_moderators(
+				ctx,
+				"account_deleted",
+				title="Account deleted by user",
+				actor=user.get("email") or user.get("id"),
+				subject=user.get("email") or user.get("id"),
+				details=[
+					f"User ID: {user.get('id')}",
+					"Deletion initiated by account owner.",
+				],
+				context={
+					"action": "account_deleted",
+					"user_id": user.get("id"),
+					"initiator": "self",
+				},
+			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
