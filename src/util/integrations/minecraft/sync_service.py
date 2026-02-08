@@ -46,18 +46,21 @@ def sync_amp_minecraft_whitelist(
 		inactive = [(r.get("mc_username") or "").strip() for r in (inactive_rows or [])]
 		conf = load_amp_minecraft_config()
 		client = AmpMinecraftClient(conf)
-		result = client.sync_whitelist(
+		# Reconcile against the live AMP whitelist so we only send delta commands.
+		result = client.reconcile_whitelist(
 			active_usernames=active,
 			inactive_usernames=inactive,
 			dry_run=dry_run,
 		)
 		logger.info(
-			"AMP whitelist sync trigger=%s actor_user_id=%s dry_run=%s requested_add=%s requested_remove=%s added=%s removed=%s errors=%s",
+			"AMP whitelist sync trigger=%s actor_user_id=%s dry_run=%s requested_add=%s requested_remove=%s planned_add=%s planned_remove=%s added=%s removed=%s errors=%s",
 			trigger,
 			actor_user_id,
 			dry_run,
 			result.get("requested_add"),
 			result.get("requested_remove"),
+			result.get("planned_add"),
+			result.get("planned_remove"),
 			result.get("added"),
 			result.get("removed"),
 			len(result.get("errors") or []),
