@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 import re
+import threading
 
 import flask
 import requests
@@ -10,6 +11,61 @@ import requests
 from app.api_context import ApiContext
 
 _MC_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,16}$")
+_AVATAR_CACHE_TTL_SECONDS = 60 * 60
+_AVATAR_NEGATIVE_TTL_SECONDS = 5 * 60
+_AVATAR_CACHE_MAX_ENTRIES = 256
+_avatar_cache_lock = threading.Lock()
+_avatar_cache: dict[str, dict[str, object]] = {}
+
+
+def _avatar_cache_get(username: str) -> tuple[bytes | None, bool, str]:
+	now = time.time()
+	with _avatar_cache_lock:
+		entry = _avatar_cache.get(username.lower())
+		if not entry:
+			return None, False, "MISS"
+		ok = bool(entry.get("ok"))
+		ts = float(entry.get("ts") or 0.0)
+		content = entry.get("content")
+		ttl = _AVATAR_CACHE_TTL_SECONDS if ok else _AVATAR_NEGATIVE_TTL_SECONDS
+		age = now - ts
+		if age <= ttl:
+			if ok and isinstance(content, (bytes, bytearray)) and content:
+				return bytes(content), True, "HIT"
+			return None, True, "NEGATIVE_HIT"
+		return None, False, "EXPIRED"
+
+
+def _avatar_cache_put(username: str, *, ok: bool, content: bytes | None = None) -> None:
+	now = time.time()
+	key = username.lower()
+	with _avatar_cache_lock:
+		_avatar_cache[key] = {
+			"ts": now,
+			"ok": bool(ok),
+			"content": bytes(content) if content else None,
+		}
+		if len(_avatar_cache) > _AVATAR_CACHE_MAX_ENTRIES:
+			oldest_key = min(_avatar_cache.items(), key=lambda item: float(item[1].get("ts") or 0.0))[0]
+			_avatar_cache.pop(oldest_key, None)
+
+
+def _avatar_cache_get_stale_success(username: str) -> bytes | None:
+	with _avatar_cache_lock:
+		entry = _avatar_cache.get(username.lower())
+		if not entry or not bool(entry.get("ok")):
+			return None
+		content = entry.get("content")
+		if not isinstance(content, (bytes, bytearray)) or not content:
+			return None
+		return bytes(content)
+
+
+def _avatar_response(content: bytes, cache_state: str) -> flask.Response:
+	out = flask.Response(content, status=200, mimetype="image/png")
+	out.headers["Cache-Control"] = f"public, max-age={_AVATAR_CACHE_TTL_SECONDS}"
+	out.headers["X-Minecraft-Avatar-Cache"] = cache_state
+	return out
 
 def _extract_player_names(status: object) -> list[str]:
 	try:
@@ -59,6 +115,13 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		name = (username or "").strip()
 		if not _MC_USERNAME_RE.fullmatch(name):
 			return flask.Response(status=404)
+		cached, cache_hit, state = _avatar_cache_get(name)
+		if cache_hit:
+			if cached:
+				return _avatar_response(cached, state)
+			out = flask.Response(status=404)
+			out.headers["X-Minecraft-Avatar-Cache"] = state
+			return out
 		try:
 			resp = requests.get(
 				f"https://mc-heads.net/avatar/{name}/24",
@@ -66,12 +129,23 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				headers={"User-Agent": "WebsiteMinecraftAvatarProxy/1.0"},
 			)
 			if resp.status_code != 200 or not resp.content:
-				return flask.Response(status=404)
-			out = flask.Response(resp.content, status=200, mimetype="image/png")
-			out.headers["Cache-Control"] = "public, max-age=600"
-			return out
+				stale = _avatar_cache_get_stale_success(name)
+				if stale:
+					return _avatar_response(stale, "STALE")
+				_avatar_cache_put(name, ok=False, content=None)
+				out = flask.Response(status=404)
+				out.headers["X-Minecraft-Avatar-Cache"] = "MISS_NEGATIVE"
+				return out
+			_avatar_cache_put(name, ok=True, content=resp.content)
+			return _avatar_response(resp.content, "MISS")
 		except Exception:
-			return flask.Response(status=404)
+			stale = _avatar_cache_get_stale_success(name)
+			if stale:
+				return _avatar_response(stale, "STALE")
+			_avatar_cache_put(name, ok=False, content=None)
+			out = flask.Response(status=404)
+			out.headers["X-Minecraft-Avatar-Cache"] = "MISS_NEGATIVE"
+			return out
 
 	@api.route("/api/minecraft/status")
 	def api_minecraft_status():
