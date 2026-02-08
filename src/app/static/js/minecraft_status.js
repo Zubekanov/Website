@@ -83,7 +83,7 @@
 			const encoded = encodeURIComponent(name);
 			return (
 				`<span class="minecraft-player-badge">`
-				+ `<img class="minecraft-player-badge__head" src="https://mc-heads.net/avatar/${encoded}/24" alt="">`
+				+ `<img class="minecraft-player-badge__head" src="/api/minecraft/avatar/${encoded}" alt="">`
 				+ `<span class="minecraft-player-badge__name">${safe}</span>`
 				+ "</span>"
 			);

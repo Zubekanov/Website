@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
+import re
 
 import flask
+import requests
 
 from app.api_context import ApiContext
 
+_MC_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,16}$")
 
 def _extract_player_names(status: object) -> list[str]:
 	try:
@@ -51,6 +54,25 @@ def _load_minecraft_target(ctx: ApiContext) -> tuple[str, int]:
 
 
 def register(api: flask.Blueprint, ctx: ApiContext) -> None:
+	@api.route("/api/minecraft/avatar/<username>")
+	def api_minecraft_avatar(username: str):
+		name = (username or "").strip()
+		if not _MC_USERNAME_RE.fullmatch(name):
+			return flask.Response(status=404)
+		try:
+			resp = requests.get(
+				f"https://mc-heads.net/avatar/{name}/24",
+				timeout=4,
+				headers={"User-Agent": "WebsiteMinecraftAvatarProxy/1.0"},
+			)
+			if resp.status_code != 200 or not resp.content:
+				return flask.Response(status=404)
+			out = flask.Response(resp.content, status=200, mimetype="image/png")
+			out.headers["Cache-Control"] = "public, max-age=600"
+			return out
+		except Exception:
+			return flask.Response(status=404)
+
 	@api.route("/api/minecraft/status")
 	def api_minecraft_status():
 		host, port = _load_minecraft_target(ctx)
