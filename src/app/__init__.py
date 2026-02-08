@@ -77,6 +77,7 @@ def create_app():
 	from .resources import resources
 	from sql.psql_interface import PSQLInterface
 	from util.integrations.discord.webhook_interface import ensure_event_keys
+	from util.integrations.minecraft.sync_service import startup_reconcile_amp_minecraft_whitelist
 
 	app = Flask(__name__)
 	app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
@@ -89,5 +90,9 @@ def create_app():
 	psql = PSQLInterface()
 	psql.verify_tables(safe_mode=False)
 	ensure_event_keys(psql)
+	try:
+		startup_reconcile_amp_minecraft_whitelist(psql)
+	except Exception:
+		logging.getLogger(__name__).exception("AMP whitelist startup reconcile failed.")
 
 	return app

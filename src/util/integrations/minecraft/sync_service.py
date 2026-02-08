@@ -96,3 +96,64 @@ def sync_amp_minecraft_whitelist(
 			"message": str(exc),
 			"errors": [{"action": "sync", "error": str(exc)}],
 		}
+
+
+def startup_reconcile_amp_minecraft_whitelist(interface: Any) -> dict:
+	try:
+		conf = load_amp_minecraft_config()
+	except Exception as exc:
+		if _is_unconfigured_error(exc):
+			logger.info("AMP whitelist startup reconcile skipped reason=amp_not_configured")
+			return {
+				"ok": False,
+				"sync_status": "skipped",
+				"skip_reason": "amp_not_configured",
+				"message": str(exc),
+			}
+		raise
+	if not conf.startup_reconcile:
+		logger.info("AMP whitelist startup reconcile skipped by config.")
+		return {
+			"ok": True,
+			"sync_status": "skipped",
+			"skip_reason": "startup_disabled",
+		}
+
+	active_rows, _ = interface.client.get_rows_with_filters(
+		"minecraft_whitelist",
+		raw_conditions=["COALESCE(is_active, TRUE) = TRUE"],
+		page_limit=5000,
+		page_num=0,
+		order_by="mc_username",
+		order_dir="ASC",
+	)
+	inactive_rows, _ = interface.client.get_rows_with_filters(
+		"minecraft_whitelist",
+		raw_conditions=["COALESCE(is_active, FALSE) = FALSE"],
+		page_limit=5000,
+		page_num=0,
+		order_by="mc_username",
+		order_dir="ASC",
+	)
+	active = [(r.get("mc_username") or "").strip() for r in (active_rows or [])]
+	inactive = [(r.get("mc_username") or "").strip() for r in (inactive_rows or [])]
+
+	client = AmpMinecraftClient(conf)
+	result = client.reconcile_whitelist(
+		active_usernames=active,
+		inactive_usernames=inactive,
+		dry_run=False,
+	)
+	result["sync_status"] = "synced" if bool(result.get("ok")) else "failed"
+	result["trigger"] = "app_startup_reconcile"
+	logger.info(
+		"AMP whitelist startup reconcile ok=%s remote_before_count=%s planned_add=%s planned_remove=%s added=%s removed=%s errors=%s",
+		result.get("ok"),
+		result.get("remote_before_count"),
+		result.get("planned_add"),
+		result.get("planned_remove"),
+		result.get("added"),
+		result.get("removed"),
+		len(result.get("errors") or []),
+	)
+	return result

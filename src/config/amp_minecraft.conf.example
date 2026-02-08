@@ -17,3 +17,11 @@ AMP_REQUEST_TIMEOUT_SECONDS=20
 
 # If true, website entries marked inactive are removed from AMP whitelist.
 AMP_SYNC_REMOVE_INACTIVE=true
+
+# If true, app startup fetches current AMP whitelist via "whitelist list"
+# and applies only required add/remove changes to match website whitelist policy.
+AMP_STARTUP_RECONCILE=true
+
+# Poll settings for waiting on the "whitelist list" console output.
+AMP_WHITELIST_POLL_ATTEMPTS=10
+AMP_WHITELIST_POLL_INTERVAL_SECONDS=0.3
