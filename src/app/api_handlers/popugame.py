@@ -386,7 +386,8 @@ def _get_player_elos(ctx: ApiContext, row: dict) -> dict[str, int]:
 	try:
 		rows, _ = ctx.interface.client.get_rows_with_filters(
 			"popugame_ratings",
-			raw_conditions=["user_id = ANY(%s)"],
+			# Compare as text so UUID vs parameter typing does not drop valid matches.
+			raw_conditions=["user_id::text = ANY(%s)"],
 			raw_params=[user_ids],
 			page_limit=10,
 			page_num=0,
