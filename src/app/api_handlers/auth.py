@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from app.api_context import ApiContext
 from app.api_common import get_request_user, notify_moderators, send_notification_email
+from util.integrations.minecraft.sync_service import sync_amp_minecraft_whitelist
 from util.user_management import UserManagement
 
 
@@ -113,6 +114,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		user = get_request_user(ctx)
 		if not user:
 			return flask.jsonify({"ok": False, "message": "Unauthorized."}), 401
+		sync_status = None
 
 		data = flask.request.json or {}
 		password = (data.get("password") or "").strip()
@@ -148,6 +150,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_conditions=["user_id = %s"],
 				raw_params=[user.get("id")],
 			)
+			sync_status = sync_amp_minecraft_whitelist(
+				ctx.interface,
+				trigger="self_account_delete",
+				actor_user_id=str(user.get("id") or ""),
+			)
 			ctx.interface.client.delete_rows_with_filters(
 				"audiobookshelf_registrations",
 				raw_conditions=["user_id = %s"],
@@ -178,7 +185,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 
-		resp = flask.make_response(flask.jsonify({"ok": True, "message": "Account deleted."}))
+		resp = flask.make_response(flask.jsonify({"ok": True, "message": "Account deleted.", "sync": sync_status}))
 		resp.set_cookie(
 			key=ctx.auth_token_name,
 			value="",

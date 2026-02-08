@@ -20,6 +20,7 @@ from app.api_common import (
 	send_notification_email,
 )
 from util.integrations.discord.webhook_interface import DiscordWebhookEmitter
+from util.integrations.minecraft.sync_service import sync_amp_minecraft_whitelist
 
 
 def register(api: flask.Blueprint, ctx: ApiContext) -> None:
@@ -233,6 +234,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		if user:
 			user_id = user.get("id")
 		is_admin = _is_admin(ctx, user_id)
+		sync_status = None
 
 		if not first_name or not last_name or not email:
 			if user:
@@ -334,6 +336,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 						raw_conditions=["id = %s"],
 						raw_params=[existing[0]["id"]],
 					)
+				sync_status = sync_amp_minecraft_whitelist(
+					ctx.interface,
+					trigger="minecraft_registration_auto_approved",
+					actor_user_id=str(user_id or ""),
+				)
 				notify_moderators(
 					ctx,
 					"minecraft_request_approved",
@@ -389,6 +396,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		return flask.jsonify({
 			"ok": True,
 			"message": "Request approved." if is_admin else "Request submitted. You will receive a follow-up email if approved.",
+			"sync": sync_status,
 		})
 
 	@api.route("/api-access-application", methods=["POST"])
@@ -1008,6 +1016,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					raw_conditions=["id = %s"],
 					raw_params=[integration_id],
 				)
+				sync_status = sync_amp_minecraft_whitelist(
+					ctx.interface,
+					trigger="integration_remove_token_minecraft",
+					actor_user_id=str(user_id or ""),
+				)
 				if is_anon:
 					notify_moderators(
 						ctx,
@@ -1031,6 +1044,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					"ok": True,
 					"message": "Minecraft integration removed.",
 					"redirect": "/integration/removed",
+					"sync": sync_status,
 				})
 			if integration_type == "audiobookshelf":
 				rows = ctx.interface.get_audiobookshelf_registration_for_user(integration_id, user_id)
@@ -1148,6 +1162,11 @@ def _disable_minecraft_for_user(ctx: ApiContext, user: dict, integration_id: str
 		raw_conditions=["id = %s"],
 		raw_params=[integration_id],
 	)
+	sync_status = sync_amp_minecraft_whitelist(
+		ctx.interface,
+		trigger="profile_disable_minecraft",
+		actor_user_id=str(user.get("id") or ""),
+	)
 	ctx.interface.client.delete_rows_with_filters(
 		"application_exemptions",
 		raw_conditions=["user_id = %s", "integration_type = 'minecraft'", "integration_key = %s"],
@@ -1186,7 +1205,7 @@ def _disable_minecraft_for_user(ctx: ApiContext, user: dict, integration_id: str
 			"reason": reason,
 		},
 	)
-	return flask.jsonify({"ok": True, "message": "Minecraft integration disabled."})
+	return flask.jsonify({"ok": True, "message": "Minecraft integration disabled.", "sync": sync_status})
 
 
 def _disable_audiobookshelf_for_user(ctx: ApiContext, user: dict, integration_id: str, reason: str):

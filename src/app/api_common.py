@@ -16,6 +16,7 @@ from app.api_context import ApiContext
 from util.base_url import get_public_base_url as resolve_public_base_url
 from util.integrations.discord.webhook_interface import DiscordWebhookEmitter
 from util.integrations.email.email_interface import render_template, send_email
+from util.integrations.minecraft.sync_service import sync_amp_minecraft_whitelist
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +455,11 @@ def _handle_minecraft_mod_action(ctx: ApiContext, action: str, reg_id: str) -> t
 				},
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
+			)
+			sync_amp_minecraft_whitelist(
+				ctx.interface,
+				trigger="discord_moderation_minecraft_approve",
+				actor_user_id=None,
 			)
 			return True, "Minecraft request approved."
 		except Exception as e:
