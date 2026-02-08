@@ -8,6 +8,7 @@
 	const hostTooltip = card.querySelector("[data-mc-tooltip]");
 	const motdEl = card.querySelector("[data-mc-motd]");
 	const playersEl = card.querySelector("[data-mc-players]");
+	const playerListEl = card.querySelector("[data-mc-player-list]");
 	const versionEl = card.querySelector("[data-mc-version]");
 	const latencyEl = card.querySelector("[data-mc-latency]");
 	const pillEl = card.querySelector("[data-mc-status-pill]");
@@ -54,9 +55,41 @@
 		setPill("offline", "Offline");
 		motdEl.textContent = "No server detected.";
 		playersEl.textContent = "--";
+		if (playerListEl) {
+			playerListEl.innerHTML = "";
+			playerListEl.hidden = true;
+		}
 		versionEl.textContent = "--";
 		latencyEl.textContent = "--";
 		noteEl.textContent = message || "Server is offline or unreachable.";
+	};
+
+	const renderPlayers = (names) => {
+		if (!playerListEl) return;
+		const list = Array.isArray(names) ? names.filter((v) => typeof v === "string" && v.trim()) : [];
+		if (!list.length) {
+			playerListEl.innerHTML = "";
+			playerListEl.hidden = true;
+			return;
+		}
+		const html = list.map((raw) => {
+			const name = raw.trim();
+			const safe = name
+				.replaceAll("&", "&amp;")
+				.replaceAll("<", "&lt;")
+				.replaceAll(">", "&gt;")
+				.replaceAll('"', "&quot;")
+				.replaceAll("'", "&#39;");
+			const encoded = encodeURIComponent(name);
+			return (
+				`<span class="minecraft-player-badge">`
+				+ `<img class="minecraft-player-badge__head" src="https://mc-heads.net/avatar/${encoded}/24" alt="">`
+				+ `<span class="minecraft-player-badge__name">${safe}</span>`
+				+ "</span>"
+			);
+		}).join("");
+		playerListEl.innerHTML = html;
+		playerListEl.hidden = false;
 	};
 
 	const applyData = (data) => {
@@ -84,6 +117,7 @@
 			} else {
 				playersEl.textContent = "--";
 			}
+			renderPlayers(data.player_names || []);
 			versionEl.textContent = data.version || "--";
 			latencyEl.textContent = data.latency_ms != null ? `${data.latency_ms} ms` : "--";
 		}
@@ -107,6 +141,7 @@
 			motd: data.motd,
 			players_online: data.players_online,
 			players_max: data.players_max,
+			player_names: Array.isArray(data.player_names) ? data.player_names : [],
 			version: data.version,
 			latency_ms: data.latency_ms,
 			fetched_at: data.fetched_at,

@@ -1,0 +1,4 @@
+# Public Minecraft server target for status checks and UI host display.
+# Hostname or IP shown on the Minecraft page and queried by /api/minecraft/status.
+MINECRAFT_SERVER_HOST=mc.example.com
+MINECRAFT_SERVER_PORT=25565

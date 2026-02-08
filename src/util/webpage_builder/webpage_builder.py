@@ -1671,6 +1671,16 @@ def build_delete_account_page(user: dict | None) -> str:
 	))
 
 def build_minecraft_page(user: dict | None) -> str:
+	def minecraft_target_host() -> str:
+		default_host = "mc.zubekanov.com"
+		try:
+			conf = fcr.find("minecraft_status.conf")
+			if not isinstance(conf, dict):
+				return default_host
+			return (conf.get("MINECRAFT_SERVER_HOST") or "").strip() or default_host
+		except Exception:
+			return default_host
+
 	contact_fields: tuple[Step, ...] = ()
 	hidden_contact: tuple[Step, ...] = ()
 	submission_fields = ["first_name", "last_name", "email", "mc_username", "who_are_you", "additional_info"]
@@ -1705,7 +1715,7 @@ def build_minecraft_page(user: dict | None) -> str:
 		steps=(
 			step_set_page_title("Minecraft Server"),
 			add_minecraft_assets,
-			step_text_block(html_fragments.minecraft_status_card()),
+			step_text_block(html_fragments.minecraft_status_card(minecraft_target_host())),
 			step_text_block(html_fragments.minecraft_whitelist_banner(is_whitelisted, whitelist_username or "")),
 			step_wrap(
 				html_fragments.minecraft_registration_wrap_open(is_whitelisted),

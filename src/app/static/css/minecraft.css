@@ -74,6 +74,42 @@
 	word-break: break-word;
 }
 
+.minecraft-status-player-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 2px 0 4px 120px;
+}
+
+.minecraft-player-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--background);
+	color: var(--default);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1;
+	max-width: 100%;
+}
+
+.minecraft-player-badge__head {
+	width: 18px;
+	height: 18px;
+	border-radius: 4px;
+	image-rendering: pixelated;
+	flex: 0 0 auto;
+}
+
+.minecraft-player-badge__name {
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+
 .minecraft-host-chip {
 	display: inline-flex;
 	align-items: center;
@@ -189,5 +225,9 @@ html[data-theme="dark"] .minecraft-host-copy img {
 @media (max-width: 640px) {
 	.minecraft-status-row {
 		grid-template-columns: 90px 1fr;
+	}
+
+	.minecraft-status-player-list {
+		padding-left: 100px;
 	}
 }

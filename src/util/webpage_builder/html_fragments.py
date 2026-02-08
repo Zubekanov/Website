@@ -776,7 +776,8 @@ def metrics_dashboard_close() -> str:
 	return "</section></div>"
 
 
-def minecraft_status_card() -> str:
+def minecraft_status_card(host: str = "mc.zubekanov.com") -> str:
+	host_safe = html.escape((host or "").strip() or "mc.zubekanov.com")
 	return (
 		"<div class=\"minecraft-status-card\" data-mc-status>"
 		"<div class=\"minecraft-status-header\">"
@@ -787,7 +788,7 @@ def minecraft_status_card() -> str:
 		"<div class=\"minecraft-status-row\"><span class=\"label\">Host</span>"
 		"<span class=\"value\">"
 		"<span class=\"minecraft-host-chip\" data-mc-host-chip>"
-		"<span class=\"minecraft-host-text\" data-mc-host>mc.zubekanov.com</span>"
+		f"<span class=\"minecraft-host-text\" data-mc-host>{host_safe}</span>"
 		"<button class=\"minecraft-host-copy\" type=\"button\" data-mc-copy "
 		"aria-label=\"Copy server address\" title=\"Copy\">"
 		"<img src=\"/static/img/copy.png\" alt=\"\">"
@@ -799,6 +800,7 @@ def minecraft_status_card() -> str:
 		"<span class=\"value\" data-mc-motd>Fetching description...</span></div>"
 		"<div class=\"minecraft-status-row\"><span class=\"label\">Players</span>"
 		"<span class=\"value\" data-mc-players>--</span></div>"
+		"<div class=\"minecraft-status-player-list\" data-mc-player-list hidden></div>"
 		"<div class=\"minecraft-status-row\"><span class=\"label\">Version</span>"
 		"<span class=\"value\" data-mc-version>--</span></div>"
 		"<div class=\"minecraft-status-row\"><span class=\"label\">Latency</span>"
