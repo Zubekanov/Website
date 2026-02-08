@@ -23,6 +23,7 @@ from util.popugame.engine import (
 _ANON_PREFIX = "anon:"
 _DEFAULT_ELO = 1200
 _ELO_K = 24
+_ABANDON_SECONDS = 20 * 60
 
 
 def register(api: flask.Blueprint, ctx: ApiContext) -> None:
@@ -38,6 +39,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 
 		code = _generate_popugame_code(ctx)
 		grid = make_grid(POPUGAME_DEFAULT_SIZE, 0)
+		starting_player = secrets.randbelow(2)
 
 		player0_name = guest_name
 		player0_user_id = None
@@ -52,7 +54,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				"grid_size": POPUGAME_DEFAULT_SIZE,
 				"turn_limit": POPUGAME_TURN_LIMIT,
 				"turn": 0,
-				"active_player": 0,
+				"active_player": starting_player,
 				"grid_state": json.dumps(grid),
 				"player0_user_id": player0_user_id,
 				"player0_name": player0_name,
@@ -87,6 +89,8 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				"redirect_url": "/popugame/invalid",
 				"message": "Game not found.",
 			}), 404
+		row = _maybe_finish_abandoned_game(ctx, row)
+		row = _maybe_apply_elo_for_finished_game(ctx, row)
 
 		user = get_request_user(ctx)
 		guest_name = None
@@ -154,6 +158,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		row = _get_session_by_code(ctx, code)
 		if not row:
 			return flask.jsonify({"ok": False, "message": "Game not found."}), 404
+		row = _maybe_finish_abandoned_game(ctx, row)
 		row = _maybe_apply_elo_for_finished_game(ctx, row)
 		return flask.jsonify({"ok": True, "state": _popu_state_payload(row, ctx=ctx)}), 200
 
@@ -167,6 +172,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		row = _get_session_by_code(ctx, code)
 		if not row:
 			return flask.jsonify({"ok": False, "message": "Game not found."}), 404
+		row = _maybe_finish_abandoned_game(ctx, row)
 
 		user = get_request_user(ctx)
 		player = _resolve_session_player(row, user, data.get("guest_name", ""))
@@ -252,6 +258,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				if not row:
 					yield event({"ok": False, "message": "Game not found."}, event_name="error")
 					return
+				row = _maybe_finish_abandoned_game(ctx, row)
 				row = _maybe_apply_elo_for_finished_game(ctx, row)
 				version = int(row.get("state_version") or 0)
 				if version != state["last_seen"]:
@@ -276,6 +283,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		row = _get_session_by_code(ctx, code)
 		if not row:
 			return flask.jsonify({"ok": False, "message": "Game not found."}), 404
+		row = _maybe_finish_abandoned_game(ctx, row)
 
 		user = get_request_user(ctx)
 		player = _resolve_session_player(row, user, data.get("guest_name", ""))
@@ -505,6 +513,45 @@ def _maybe_apply_elo_for_finished_game(ctx: ApiContext, row: dict | None) -> dic
 		# If ratings fail, game state should still be returned.
 		return row
 
+	return row
+
+
+def _maybe_finish_abandoned_game(ctx: ApiContext, row: dict | None) -> dict | None:
+	if not row:
+		return row
+	if (row.get("status") or "") != "active":
+		return row
+
+	last_ts = row.get("last_move_at") or row.get("updated_at") or row.get("created_at")
+	if not isinstance(last_ts, datetime):
+		return row
+	if last_ts.tzinfo is None:
+		last_ts = last_ts.replace(tzinfo=timezone.utc)
+	else:
+		last_ts = last_ts.astimezone(timezone.utc)
+
+	idle_seconds = (datetime.now(timezone.utc) - last_ts).total_seconds()
+	if idle_seconds < _ABANDON_SECONDS:
+		return row
+
+	try:
+		active_player = 1 if int(row.get("active_player") or 0) == 1 else 0
+	except Exception:
+		active_player = 0
+	winner = 1 - active_player
+
+	try:
+		updated = ctx.interface.execute_query(
+			"UPDATE popugame_sessions SET "
+			"status = 'finished', winner = %s, ended_reason = 'abandon', "
+			"updated_at = now(), last_move_at = now(), state_version = state_version + 1 "
+			"WHERE code = %s AND status = 'active' RETURNING *;",
+			(winner, row.get("code")),
+		) or []
+		if updated:
+			return updated[0]
+	except Exception:
+		return row
 	return row
 
 

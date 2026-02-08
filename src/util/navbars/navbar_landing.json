@@ -76,6 +76,12 @@
                             "label": "Audiobookshelf",
                             "desc": "Self-hosted audiobook and podcast server.",
                             "href": "/audiobookshelf"
+                        },
+                        {
+                            "label": "AMP Panel",
+                            "desc": "Admin-only redirect to the AMP control panel.",
+                            "href": "/admin/amp",
+                            "visibility": ["admin"]
                         }
                     ]
                 }

@@ -1,4 +1,3 @@
-from http.client import HTTPException
 from functools import wraps
 import logging
 import time
@@ -6,6 +5,7 @@ import traceback
 import requests
 import flask
 from flask import g
+from werkzeug.exceptions import HTTPException
 from util.user_management import UserManagement
 from util.webpage_builder.webpage_builder import (
 	build_admin_api_access_approvals_page,
@@ -117,9 +117,14 @@ def _ensure_user_loaded_for_error():
 def _timing_end(resp):
 	if not hasattr(g, "_t0"):
 		return resp
+	if resp.is_streamed:
+		return resp
 
-	ct = resp.headers.get("Content-Type", "")
+	ct = (resp.headers.get("Content-Type", "") or "").lower()
 	if "text/html" not in ct:
+		return resp
+	ce = (resp.headers.get("Content-Encoding", "") or "").lower()
+	if ce and ce != "identity":
 		return resp
 
 	total_ms = (time.perf_counter() - g._t0) * 1000.0
@@ -221,6 +226,12 @@ def audiobookshelf_redirect_page():
 	except Exception as exc:
 		status_note = str(exc) or "Connection failed."
 	return build_audiobookshelf_unavailable_page(g.user, status_note)
+
+@main.route("/admin/amp", methods=["GET"])
+@main.route("/admin/amp/", methods=["GET"])
+@page_access("admin")
+def admin_amp_redirect_page():
+	return flask.redirect("http://192.168.1.146:8080/")
 
 @main.route("/discord-webhook-registration", methods=["GET"])
 def discord_webhook_registration_page():

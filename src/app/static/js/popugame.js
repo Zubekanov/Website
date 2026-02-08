@@ -118,6 +118,7 @@
 	const humanEndReason = (reason) => {
 		if (reason === "concede") return "concede";
 		if (reason === "turn_limit") return "turn limit";
+		if (reason === "abandon") return "abandonment";
 		return "completed";
 	};
 
@@ -216,6 +217,21 @@
 				endgameReasonEl.innerHTML = `Reason: <span class="${concederClass}">${escapeHtml(concederName)}</span> conceded`;
 			} else {
 				endgameReasonEl.textContent = "Reason: concede";
+			}
+		} else if (endedReason === "abandon") {
+			let timedOutName = "";
+			let timedOutClass = "";
+			if (winner === 0) {
+				timedOutName = p1;
+				timedOutClass = "popugame__name--p1";
+			} else if (winner === 1) {
+				timedOutName = p0;
+				timedOutClass = "popugame__name--p0";
+			}
+			if (timedOutName) {
+				endgameReasonEl.innerHTML = `Reason: Game ended due to abandonment. <span class="${timedOutClass}">${escapeHtml(timedOutName)}</span> timed out`;
+			} else {
+				endgameReasonEl.textContent = "Reason: Game ended due to abandonment";
 			}
 		} else {
 			endgameReasonEl.textContent = `Reason: ${humanEndReason(endedReason)}`;
@@ -720,10 +736,12 @@
 		});
 
 		if (concedeBtn) {
+			const notStarted = isMultiplayer && gameStatus !== "active";
 			const finished = gameOver || gameStatus === "finished";
-			concedeBtn.hidden = finished;
-			concedeBtn.disabled = finished;
-			concedeBtn.classList.toggle("is-hidden", finished);
+			const hideConcede = finished || notStarted;
+			concedeBtn.hidden = hideConcede;
+			concedeBtn.disabled = hideConcede;
+			concedeBtn.classList.toggle("is-hidden", hideConcede);
 		}
 		if (isMultiplayer && postgameButtons && postgameButtons.length > 0) {
 			postgameButtons.forEach((btn) => {

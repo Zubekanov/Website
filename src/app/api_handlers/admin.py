@@ -20,6 +20,10 @@ from app.api_common import (
 )
 from util.integrations.discord.webhook_interface import DiscordWebhookEmitter
 from util.integrations.email.email_interface import render_template, send_email
+from util.integrations.minecraft.amp_interface import (
+	AmpMinecraftClient,
+	load_amp_minecraft_config,
+)
 from util.verification_utils import build_verification_expiry_text
 
 logger = logging.getLogger(__name__)
@@ -1773,3 +1777,71 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		return flask.jsonify({"count": count})
+
+	@api.route("/api/admin/minecraft/sync-whitelist", methods=["POST"])
+	def api_admin_minecraft_sync_whitelist():
+		user, err = require_admin(ctx)
+		if err:
+			return err
+
+		data = flask.request.json or {}
+		dry_run = bool(data.get("dry_run", False))
+
+		try:
+			active_rows, _ = ctx.interface.client.get_rows_with_filters(
+				"minecraft_whitelist",
+				raw_conditions=["COALESCE(is_active, TRUE) = TRUE"],
+				page_limit=5000,
+				page_num=0,
+				order_by="mc_username",
+				order_dir="ASC",
+			)
+			inactive_rows, _ = ctx.interface.client.get_rows_with_filters(
+				"minecraft_whitelist",
+				raw_conditions=["COALESCE(is_active, FALSE) = FALSE"],
+				page_limit=5000,
+				page_num=0,
+				order_by="mc_username",
+				order_dir="ASC",
+			)
+
+			active = [(r.get("mc_username") or "").strip() for r in (active_rows or [])]
+			inactive = [(r.get("mc_username") or "").strip() for r in (inactive_rows or [])]
+
+			conf = load_amp_minecraft_config()
+			client = AmpMinecraftClient(conf)
+			result = client.sync_whitelist(
+				active_usernames=active,
+				inactive_usernames=inactive,
+				dry_run=dry_run,
+			)
+
+			notify_moderators(
+				ctx,
+				"minecraft_whitelist_sync",
+				title="Minecraft whitelist sync executed",
+				actor=user.get("email") or user.get("id"),
+				subject=result.get("instance_name") or "Minecraft",
+				details=[
+					f"Dry run: {bool(result.get('dry_run'))}",
+					f"Requested add: {result.get('requested_add', 0)}",
+					f"Requested remove: {result.get('requested_remove', 0)}",
+					f"Added: {result.get('added', 0)}",
+					f"Removed: {result.get('removed', 0)}",
+					f"Errors: {len(result.get('errors') or [])}",
+				],
+				context={
+					"action": "minecraft_whitelist_sync",
+					"reviewer_user_id": user.get("id"),
+					"dry_run": bool(result.get("dry_run")),
+					"requested_add": result.get("requested_add", 0),
+					"requested_remove": result.get("requested_remove", 0),
+					"added": result.get("added", 0),
+					"removed": result.get("removed", 0),
+				},
+			)
+		except Exception as e:
+			logger.exception("Failed to sync minecraft whitelist to AMP.")
+			return flask.jsonify({"ok": False, "message": f"Whitelist sync failed: {e}"}), 400
+
+		return flask.jsonify({"ok": bool(result.get("ok")), "result": result})

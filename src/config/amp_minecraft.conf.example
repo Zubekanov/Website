@@ -1,0 +1,19 @@
+# AMP controller URL (ADS)
+AMP_BASE_URL=http://192.168.1.146:8080
+
+# AMP user credentials (API login)
+AMP_USERNAME=[AMP username]
+AMP_PASSWORD=[AMP password]
+AMP_TOKEN=
+
+# Target Minecraft instance selection
+# If AMP_INSTANCE_ID is set, it is used directly.
+# Otherwise AMP_INSTANCE_NAME is used against ADSModule/GetLocalInstances.
+AMP_INSTANCE_ID=
+AMP_INSTANCE_NAME=Minecraft
+
+# Request timeout for AMP API calls
+AMP_REQUEST_TIMEOUT_SECONDS=20
+
+# If true, website entries marked inactive are removed from AMP whitelist.
+AMP_SYNC_REMOVE_INACTIVE=true
