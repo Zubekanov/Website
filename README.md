@@ -4,6 +4,7 @@ The website is hosted at [zubekanov.com](https://zubekanov.com), which you may b
 
 ### What the app does
 
+- **[PopuGame](https://zubekanov.com/popugame)**: A minigame I replicated from POPUCOM as I was unable to find out what real game it was based off of, supports two-player local games and url/code based online multiplayer games, with an implemented ELO system. ![2026-02-09_11-00-55_PopuGame_http_127_0_0_1_5000_popugame_C9JXZY](https://github.com/user-attachments/assets/7909f72c-834c-4df6-a177-fe67bb528d4a)
 - **[Public site + account flows](https://zubekanov.com/)**: Landing page, login, registration, email verification, password reset (stub), and profile pages. ![2026-02-04_08-36-01_Joseph_Wong&#39;s_Profile_http_127_0_0_1_5000_profile](https://github.com/user-attachments/assets/a5722414-2c58-4069-9247-ec4d50f5e42c)
 - **Session-based auth**: Secure session cookies backed by hashed tokens stored in `user_sessions`, with server-side validation and cache.
 - **[Email verification & messaging](https://zubekanov.com/register)**: Registration creates a pending user, emails a verification link, and activates the account on success.
