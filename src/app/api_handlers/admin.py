@@ -30,6 +30,56 @@ logger = logging.getLogger(__name__)
 
 
 def register(api: flask.Blueprint, ctx: ApiContext) -> None:
+	def _sync_amp_minecraft_whitelist(*, actor_user_id: str | None, trigger: str, dry_run: bool = False, fail_hard: bool = False):
+		try:
+			active_rows, _ = ctx.interface.client.get_rows_with_filters(
+				"minecraft_whitelist",
+				raw_conditions=["COALESCE(is_active, TRUE) = TRUE"],
+				page_limit=5000,
+				page_num=0,
+				order_by="mc_username",
+				order_dir="ASC",
+			)
+			inactive_rows, _ = ctx.interface.client.get_rows_with_filters(
+				"minecraft_whitelist",
+				raw_conditions=["COALESCE(is_active, FALSE) = FALSE"],
+				page_limit=5000,
+				page_num=0,
+				order_by="mc_username",
+				order_dir="ASC",
+			)
+			active = [(r.get("mc_username") or "").strip() for r in (active_rows or [])]
+			inactive = [(r.get("mc_username") or "").strip() for r in (inactive_rows or [])]
+			conf = load_amp_minecraft_config()
+			client = AmpMinecraftClient(conf)
+			result = client.sync_whitelist(
+				active_usernames=active,
+				inactive_usernames=inactive,
+				dry_run=dry_run,
+			)
+			logger.info(
+				"AMP whitelist sync trigger=%s actor_user_id=%s dry_run=%s requested_add=%s requested_remove=%s added=%s removed=%s errors=%s",
+				trigger,
+				actor_user_id,
+				dry_run,
+				result.get("requested_add"),
+				result.get("requested_remove"),
+				result.get("added"),
+				result.get("removed"),
+				len(result.get("errors") or []),
+			)
+			return result
+		except Exception:
+			logger.exception(
+				"AMP whitelist sync failed trigger=%s actor_user_id=%s dry_run=%s",
+				trigger,
+				actor_user_id,
+				dry_run,
+			)
+			if fail_hard:
+				raise
+			return None
+
 	@api.route("/api/admin/users/promote", methods=["POST"])
 	def api_admin_users_promote():
 		user, err = require_admin(ctx)
@@ -228,6 +278,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 						"admin_user_id": admin_user.get("id"),
 					},
 				)
+				_sync_amp_minecraft_whitelist(
+					actor_user_id=str(admin_user.get("id") or ""),
+					trigger="admin_integration_disable_minecraft",
+				)
 				return flask.jsonify({"ok": True, "message": "Minecraft integration disabled."})
 			if integration_type == "audiobookshelf":
 				rows = ctx.interface.get_audiobookshelf_registration_for_user(integration_id, target_user_id)
@@ -360,6 +414,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 						"admin_user_id": admin_user.get("id"),
 					},
 				)
+				_sync_amp_minecraft_whitelist(
+					actor_user_id=str(admin_user.get("id") or ""),
+					trigger="admin_integration_enable_minecraft",
+				)
 				return flask.jsonify({"ok": True, "message": "Minecraft integration enabled."})
 			if integration_type == "audiobookshelf":
 				rows = ctx.interface.get_audiobookshelf_registration_for_user(integration_id, target_user_id)
@@ -448,6 +506,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				"minecraft_whitelist",
 				raw_conditions=["user_id = %s"],
 				raw_params=[target_user_id],
+			)
+			_sync_amp_minecraft_whitelist(
+				actor_user_id=str(admin_user.get("id") or ""),
+				trigger="admin_user_delete",
 			)
 			ctx.interface.client.delete_rows_with_filters(
 				"audiobookshelf_registrations",
@@ -627,6 +689,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			equalities,
 			updates,
 		)
+		if schema == "public" and table == "minecraft_whitelist":
+			_sync_amp_minecraft_whitelist(
+				actor_user_id=str(user.get("id") or ""),
+				trigger="admin_db_update_row",
+			)
 		return flask.jsonify({"ok": True, "message": "Row updated."})
 
 	@api.route("/api/admin/db/delete-row", methods=["POST"])
@@ -671,6 +738,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			table,
 			equalities,
 		)
+		if schema == "public" and table == "minecraft_whitelist":
+			_sync_amp_minecraft_whitelist(
+				actor_user_id=str(user.get("id") or ""),
+				trigger="admin_db_delete_row",
+			)
 		if schema == "public" and table == "admins":
 			notify_moderators(
 				ctx,
@@ -734,6 +806,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			table,
 			inserts,
 		)
+		if schema == "public" and table == "minecraft_whitelist":
+			_sync_amp_minecraft_whitelist(
+				actor_user_id=str(user.get("id") or ""),
+				trigger="admin_db_insert_row",
+			)
 		if schema == "public" and table == "admins":
 			notify_moderators(
 				ctx,
@@ -1524,6 +1601,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
 			)
+			_sync_amp_minecraft_whitelist(
+				actor_user_id=str(user.get("id") or ""),
+				trigger="admin_minecraft_approve",
+			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 400
 		anon_user = is_anonymous_user(ctx, reg.get("user_id"))
@@ -1617,6 +1698,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				},
 				raw_conditions=["id = %s"],
 				raw_params=[reg_id],
+			)
+			_sync_amp_minecraft_whitelist(
+				actor_user_id=str(user.get("id") or ""),
+				trigger="admin_minecraft_approve_link",
 			)
 			anon_user = is_anonymous_user(ctx, reg.get("user_id"))
 			cta_label = None
@@ -1788,32 +1873,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		dry_run = bool(data.get("dry_run", False))
 
 		try:
-			active_rows, _ = ctx.interface.client.get_rows_with_filters(
-				"minecraft_whitelist",
-				raw_conditions=["COALESCE(is_active, TRUE) = TRUE"],
-				page_limit=5000,
-				page_num=0,
-				order_by="mc_username",
-				order_dir="ASC",
-			)
-			inactive_rows, _ = ctx.interface.client.get_rows_with_filters(
-				"minecraft_whitelist",
-				raw_conditions=["COALESCE(is_active, FALSE) = FALSE"],
-				page_limit=5000,
-				page_num=0,
-				order_by="mc_username",
-				order_dir="ASC",
-			)
-
-			active = [(r.get("mc_username") or "").strip() for r in (active_rows or [])]
-			inactive = [(r.get("mc_username") or "").strip() for r in (inactive_rows or [])]
-
-			conf = load_amp_minecraft_config()
-			client = AmpMinecraftClient(conf)
-			result = client.sync_whitelist(
-				active_usernames=active,
-				inactive_usernames=inactive,
+			result = _sync_amp_minecraft_whitelist(
+				actor_user_id=str(user.get("id") or ""),
+				trigger="admin_minecraft_sync_endpoint",
 				dry_run=dry_run,
+				fail_hard=True,
 			)
 
 			notify_moderators(

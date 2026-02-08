@@ -174,6 +174,7 @@ class AmpMinecraftClient:
 		return f"{scheme}://{ip}:{port}"
 
 	def _send_console(self, instance_url: str, instance_token: str, command: str) -> None:
+		logger.info("AMP Minecraft command send instance=%s command=%s", instance_url, command)
 		self._post(
 			instance_url,
 			"/API/Core/SendConsoleMessage",
@@ -200,11 +201,13 @@ class AmpMinecraftClient:
 				cmd = f"whitelist add {username}"
 				commands.append(cmd)
 				if dry_run:
+					logger.info("AMP Minecraft dry-run command instance=%s command=%s", instance_url, cmd)
 					continue
 				try:
 					self._send_console(instance_url, instance_token, cmd)
 					added += 1
 				except Exception as exc:
+					logger.exception("AMP Minecraft command failed instance=%s command=%s", instance_url, cmd)
 					errors.append({"username": username, "action": "add", "error": str(exc)})
 
 			if self.conf.remove_inactive:
@@ -212,11 +215,13 @@ class AmpMinecraftClient:
 					cmd = f"whitelist remove {username}"
 					commands.append(cmd)
 					if dry_run:
+						logger.info("AMP Minecraft dry-run command instance=%s command=%s", instance_url, cmd)
 						continue
 					try:
 						self._send_console(instance_url, instance_token, cmd)
 						removed += 1
 					except Exception as exc:
+						logger.exception("AMP Minecraft command failed instance=%s command=%s", instance_url, cmd)
 						errors.append({"username": username, "action": "remove", "error": str(exc)})
 
 			if not dry_run:
@@ -224,6 +229,7 @@ class AmpMinecraftClient:
 					self._send_console(instance_url, instance_token, "whitelist reload")
 					commands.append("whitelist reload")
 				except Exception as exc:
+					logger.exception("AMP Minecraft command failed instance=%s command=%s", instance_url, "whitelist reload")
 					errors.append({"username": "", "action": "reload", "error": str(exc)})
 		finally:
 			for token, base in ((instance_token, instance_url), (controller_token, self.conf.base_url)):
