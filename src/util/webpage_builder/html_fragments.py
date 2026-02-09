@@ -606,8 +606,18 @@ def admin_dashboard(cards_html: str) -> str:
 		"<p>Manage approvals, data, and system tooling.</p>"
 		"</div>"
 		"</header>"
-		f"<section class=\"admin-dashboard__grid\">{cards_html}</section>"
+		f"<div class=\"admin-dashboard__content\">{cards_html}</div>"
 		"</div>"
+	)
+
+
+def admin_dashboard_section(title: str, cards_html: str, *, compact: bool = False) -> str:
+	compact_class = " admin-dashboard__grid--compact" if compact else ""
+	return (
+		"<section class=\"admin-dashboard__section\">"
+		f"<h2 class=\"admin-dashboard__section-title\">{html.escape(title)}</h2>"
+		f"<div class=\"admin-dashboard__grid{compact_class}\">{cards_html}</div>"
+		"</section>"
 	)
 
 
@@ -616,9 +626,11 @@ def admin_card(
 	meta_html: str,
 	title: str,
 	description: str,
+	class_name: str = "",
 ) -> str:
+	extra_class = f" {class_name}" if class_name else ""
 	return (
-		f"<a class=\"admin-card\" href=\"{href}\">"
+		f"<a class=\"admin-card{extra_class}\" href=\"{href}\">"
 		f"{meta_html}"
 		f"<div class=\"admin-card__title\">{title}</div>"
 		f"<div class=\"admin-card__desc\">{description}</div>"

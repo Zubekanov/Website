@@ -2251,21 +2251,15 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 	count_minecraft = interface.count_pending_minecraft_registrations()
 	count_api_access = interface.count_pending_api_access_registrations()
 
-	cards_html = (
+	approvals_cards_html = (
 		html_fragments.admin_card(
-			"/psql-interface",
-			html_fragments.admin_card_meta("Database"),
-			"Database Interface",
-			"View and edit database tables.",
-		)
-		+ html_fragments.admin_card(
-			"/admin/audiobookshelf-approvals",
+			"/admin/minecraft-approvals",
 			html_fragments.admin_card_meta(
 				"Approvals",
-				html_fragments.admin_badge_count(count_audiobookshelf),
+				html_fragments.admin_badge_count(count_minecraft),
 			),
-			"Audiobookshelf Requests",
-			"Review account registrations.",
+			"Minecraft Requests",
+			"Review Minecraft whitelist requests.",
 		)
 		+ html_fragments.admin_card(
 			"/admin/discord-webhook-approvals",
@@ -2277,15 +2271,6 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Review webhook registration requests.",
 		)
 		+ html_fragments.admin_card(
-			"/admin/minecraft-approvals",
-			html_fragments.admin_card_meta(
-				"Approvals",
-				html_fragments.admin_badge_count(count_minecraft),
-			),
-			"Minecraft Requests",
-			"Review Minecraft whitelist requests.",
-		)
-		+ html_fragments.admin_card(
 			"/admin/api-access-approvals",
 			html_fragments.admin_card_meta(
 				"Approvals",
@@ -2295,12 +2280,34 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Review API key access applications.",
 		)
 		+ html_fragments.admin_card(
+			"/admin/audiobookshelf-approvals",
+			html_fragments.admin_card_meta(
+				"Approvals",
+				html_fragments.admin_badge_count(count_audiobookshelf),
+			),
+			"Audiobookshelf Requests",
+			"Review account registrations.",
+		)
+	)
+
+	operations_cards_html = (
+		html_fragments.admin_card(
+			"/psql-interface",
+			html_fragments.admin_card_meta("Database"),
+			"Database Interface",
+			"View and edit database tables.",
+			class_name="admin-card--wide",
+		)
+		+ html_fragments.admin_card(
 			"/admin/users",
 			html_fragments.admin_card_meta("Accounts"),
 			"User Management",
 			"View users, roles, and integrations.",
 		)
-		+ html_fragments.admin_card(
+	)
+
+	diagnostics_cards_html = (
+		html_fragments.admin_card(
 			"/admin/email-debug",
 			html_fragments.admin_card_meta("Tools"),
 			"Debug Email",
@@ -2312,6 +2319,11 @@ def build_admin_dashboard_page(user: dict | None) -> str:
 			"Frontend Test Page",
 			"Preview labeled UI elements and styles.",
 		)
+	)
+	cards_html = (
+		html_fragments.admin_dashboard_section("Approvals", approvals_cards_html)
+		+ html_fragments.admin_dashboard_section("Operations", operations_cards_html)
+		+ html_fragments.admin_dashboard_section("Diagnostics", diagnostics_cards_html, compact=True)
 	)
 	return build_page(user, PageSpec(
 		steps=(
