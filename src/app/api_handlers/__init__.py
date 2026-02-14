@@ -13,6 +13,7 @@ def register_all(api, ctx: ApiContext) -> None:
 		minecraft,
 		ping,
 		popugame,
+		stocks,
 	)
 
 	ping.register(api, ctx)
@@ -23,3 +24,4 @@ def register_all(api, ctx: ApiContext) -> None:
 	discord.register(api, ctx)
 	admin.register(api, ctx)
 	popugame.register(api, ctx)
+	stocks.register(api, ctx)

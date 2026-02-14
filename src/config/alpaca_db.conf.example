@@ -1,0 +1,5 @@
+database=[Name of the Alpaca market data database]
+user=[Database username used for Alpaca reads]
+password=[Password for the Alpaca database user]
+host=[Optional host, defaults to localhost]
+port=[Optional port]

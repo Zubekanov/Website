@@ -37,6 +37,7 @@ from util.webpage_builder.webpage_builder import (
 	build_register_page,
 	build_reset_password_page,
 	build_server_metrics_page,
+	build_stock_viewer_page,
 	build_verify_email_page,
 	build_verify_email_token_page,
 	build_501_page,
@@ -147,6 +148,10 @@ def readme_page():
 @main.route("/server-metrics")
 def server_metrics_page():
 	return build_server_metrics_page(g.user)
+
+@main.route("/stocks")
+def stocks_page():
+	return build_stock_viewer_page(g.user)
 
 @main.route("/profile")
 @page_access("auth", unauth_redirect="/login")

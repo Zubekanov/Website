@@ -43,6 +43,7 @@ def _build_stub_webpage_builder_module() -> ModuleType:
 		"build_register_page",
 		"build_reset_password_page",
 		"build_server_metrics_page",
+		"build_stock_viewer_page",
 		"build_verify_email_page",
 		"build_verify_email_token_page",
 		"build_501_page",

@@ -18,6 +18,11 @@
                             "label": "Server Metrics",
                             "desc": "Live graphs and statistics for the server. <br>(ODroid-H4 Ultra)",
                             "href": "/server-metrics"
+                        },
+                        {
+                            "label": "US Equities Searcher",
+                            "desc": "Search and view 1 day US equities data.",
+                            "href": "/stocks"
                         }
                     ]
                 },

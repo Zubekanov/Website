@@ -1609,6 +1609,46 @@ def build_server_metrics_page(user: dict | None) -> str:
 		),
 	))
 
+def build_stock_viewer_page(user: dict | None) -> str:
+	return build_page(user, PageSpec(
+		steps=(
+			step_set_page_title("Stock Search"),
+			step_add_stylesheets("/static/css/stocks.css"),
+			step_add_scripts("https://cdn.plot.ly/plotly-2.35.2.min.js", "/static/js/stocks.js"),
+			step_text_block("""
+			<section class="stocks-page" data-stock-viewer data-default-timeframe="5Min" data-rolling-window-days="7">
+				<div class="stocks-page__search">
+					<h2>Stock Search</h2>
+					<p>Search US equities and view historical 5-minute prices (rolling 7-day window).</p>
+					<label for="stock-search-input">Ticker or company name</label>
+					<input id="stock-search-input" type="search" autocomplete="off" placeholder="AAPL or Apple">
+					<div id="stock-search-status" class="stocks-page__status">Type to search...</div>
+					<ul id="stock-search-results" class="stocks-page__results" aria-live="polite"></ul>
+				</div>
+				<div class="stocks-page__viewer">
+					<div class="stocks-page__header">
+						<h3 id="stock-symbol-label">No symbol selected</h3>
+						<div id="stock-name-label" class="stocks-page__name"></div>
+						<div id="stock-price-label" class="stocks-page__price">-</div>
+					</div>
+					<div class="stocks-page__controls">
+						<div class="stocks-page__ranges" role="group" aria-label="Range">
+							<button class="stock-range-btn" data-range="1D" type="button">1D</button>
+							<button class="stock-range-btn is-active" data-range="1W" type="button">1W</button>
+						</div>
+						<span class="stocks-page__timeframe-pill">Timeframe: 5Min | Retention: 7D</span>
+					</div>
+					<div id="stock-chart-wrap" class="stocks-page__chart-wrap">
+						<div id="stock-plot" class="stocks-page__plot" role="img" aria-label="Stock price chart"></div>
+					</div>
+					<div id="stock-view-status" class="stocks-page__status">Select a symbol to load prices.</div>
+				</div>
+			</section>
+			"""),
+			add_return_home,
+		),
+	))
+
 def build_reset_password_page(user: dict | None) -> str:
 	return build_page(user, PageSpec(
 		steps=(

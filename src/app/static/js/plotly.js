@@ -73,6 +73,12 @@ async function getBulkCached(metrics, range) {
 	return promise;
 }
 
+function invalidateRangeCache(range) {
+	const key = rangeKey(range);
+	HIST_CACHE.delete(key);
+	HIST_INFLIGHT.delete(key);
+}
+
 function getHistForMetric(bulk, metric) {
 	if (!bulk || bulk.error) return null;
 	if (!bulk.data || !Object.prototype.hasOwnProperty.call(bulk.data, metric)) return null;
@@ -418,7 +424,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
 			states.forEach((st) => st.div.classList.add("is-loading"));
 			const metrics = states.map((st) => st.metric);
-			const bulk = await getBulkCached(metrics, range);
+			let bulk;
+			if (isLive) {
+				// Always refresh live baseline when returning from historical views.
+				invalidateRangeCache(range);
+				bulk = await fetchMetricsBulk(metrics, range);
+				if (bulk && !bulk.error) {
+					HIST_CACHE.set(rangeKey(range), bulk);
+				}
+			} else {
+				bulk = await getBulkCached(metrics, range);
+			}
 			await Promise.all(states.map((st) => updatePlotRange(st, range, bulk)));
 
 			if (pollerId) {
