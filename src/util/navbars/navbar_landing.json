@@ -85,7 +85,7 @@
                         {
                             "label": "AMP Panel",
                             "desc": "Admin-only redirect to the AMP control panel.",
-                            "href": "/admin/amp",
+                            "href": "https://amp-panel.zubekanov.com/",
                             "visibility": ["admin"]
                         }
                     ]
