@@ -236,7 +236,7 @@ def audiobookshelf_redirect_page():
 @main.route("/admin/amp/", methods=["GET"])
 @page_access("admin")
 def admin_amp_redirect_page():
-	return flask.redirect("http://192.168.1.146:8080/")
+	return flask.redirect("https://amp-panel.zubekanov.com/")
 
 @main.route("/discord-webhook-registration", methods=["GET"])
 def discord_webhook_registration_page():
