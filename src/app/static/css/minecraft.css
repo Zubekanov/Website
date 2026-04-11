@@ -1,66 +1,70 @@
 .minecraft-status-card {
 	border: 1px solid var(--border);
 	background: var(--contents);
-	border-radius: 12px;
-	padding: 16px 18px;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-	margin-bottom: 18px;
+	border-radius: var(--radius-md);
+	padding: 1rem 1.125rem;
+	box-shadow: var(--shadow-sm);
+	margin-bottom: 1.125rem;
 }
 
 .minecraft-status-header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	margin-bottom: 10px;
+	gap: 0.75rem;
+	margin-bottom: 0.625rem;
 }
 
 .minecraft-status-header h3 {
 	margin: 0;
-	font-size: 18px;
+	font-size: 1.1rem;
+	background: linear-gradient(90deg, var(--dark_blue), var(--objects));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
 }
 
 .minecraft-status-pill {
-	font-size: 12px;
-	padding: 4px 10px;
-	border-radius: 999px;
+	font-size: 0.75rem;
+	padding: 0.25rem 0.625rem;
+	border-radius: var(--radius-pill);
 	border: 1px solid var(--border);
-	background: #f5f5f5;
+	background: var(--background);
 	color: var(--form_text);
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
 
 .minecraft-status-pill--online {
-	background: rgba(30, 159, 80, 0.12);
-	border-color: rgba(30, 159, 80, 0.3);
-	color: #1a7a43;
+	background: var(--badge-success-bg);
+	border-color: var(--badge-success-border);
+	color: var(--badge-success-text);
 }
 
 .minecraft-status-pill--offline {
-	background: rgba(198, 64, 64, 0.12);
-	border-color: rgba(198, 64, 64, 0.3);
-	color: #b53c3c;
+	background: var(--badge-error-bg);
+	border-color: var(--badge-error-border);
+	color: var(--badge-error-text);
 }
 
 .minecraft-status-pill--loading {
-	background: rgba(0, 122, 204, 0.12);
-	border-color: rgba(0, 122, 204, 0.3);
-	color: #0b5c9e;
+	background: var(--badge-info-bg);
+	border-color: var(--badge-info-border);
+	color: var(--badge-info-text);
 }
 
 .minecraft-status-body {
 	display: grid;
-	gap: 8px;
-	margin-bottom: 10px;
+	gap: 0.5rem;
+	margin-bottom: 0.625rem;
 }
 
 .minecraft-status-row {
 	display: grid;
-	grid-template-columns: 110px 1fr;
-	gap: 10px;
+	grid-template-columns: 6.875rem 1fr;
+	gap: 0.625rem;
 	align-items: center;
-	font-size: 14px;
+	font-size: 0.875rem;
 }
 
 .minecraft-status-row .label {
@@ -77,20 +81,20 @@
 .minecraft-status-player-list {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
-	padding: 2px 0 4px 120px;
+	gap: 0.5rem;
+	padding: 0.125rem 0 0.25rem 7.5rem;
 }
 
 .minecraft-player-badge {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 8px;
-	border-radius: 999px;
+	gap: 0.375rem;
+	padding: 0.25rem 0.5rem;
+	border-radius: var(--radius-pill);
 	border: 1px solid var(--border);
 	background: var(--background);
 	color: var(--default);
-	font-size: 12px;
+	font-size: 0.75rem;
 	font-weight: 600;
 	line-height: 1;
 	max-width: 100%;
@@ -113,11 +117,11 @@
 .minecraft-host-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 8px 4px 6px;
-	margin-left: -6px;
+	gap: 0.375rem;
+	padding: 0.25rem 0.5rem 0.25rem 0.375rem;
+	margin-left: -0.375rem;
 	border: 1px solid var(--border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--background);
 	box-sizing: border-box;
 }
@@ -130,8 +134,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
+	width: 1.375rem;
+	height: 1.375rem;
 	border-radius: 50%;
 	border: 1px solid transparent;
 	background: transparent;
@@ -148,11 +152,11 @@
 
 .minecraft-host-tooltip {
 	position: absolute;
-	right: 6px;
+	right: 0.375rem;
 	top: 50%;
-	font-size: 11px;
-	padding: 3px 8px;
-	border-radius: 999px;
+	font-size: 0.688rem;
+	padding: 0.188rem 0.5rem;
+	border-radius: var(--radius-pill);
 	background: var(--contents);
 	border: 1px solid var(--border);
 	color: var(--form_text);
@@ -180,7 +184,7 @@
 
 .minecraft-host-chip.is-copied {
 	border-color: var(--dark_blue);
-	box-shadow: 0 0 0 2px rgba(86, 156, 214, 0.15);
+	box-shadow: var(--focus-ring);
 }
 
 html[data-theme="dark"] .minecraft-host-copy img {
@@ -188,7 +192,7 @@ html[data-theme="dark"] .minecraft-host-copy img {
 }
 
 .minecraft-status-footer {
-	font-size: 13px;
+	font-size: 0.8125rem;
 	color: var(--form_text);
 }
 
@@ -199,10 +203,10 @@ html[data-theme="dark"] .minecraft-host-copy img {
 .minecraft-whitelist-banner {
 	display: none;
 	border: 1px solid var(--border);
-	background: linear-gradient(135deg, rgba(0, 122, 204, 0.08), rgba(76, 201, 162, 0.08));
-	border-radius: 12px;
-	padding: 14px 16px;
-	margin: 18px 0 16px;
+	background: linear-gradient(135deg, color-mix(in srgb, var(--dark_blue) 8%, transparent), color-mix(in srgb, var(--objects) 8%, transparent));
+	border-radius: var(--radius-md);
+	padding: 0.875rem 1rem;
+	margin: 1.125rem 0 1rem;
 }
 
 .minecraft-whitelist-banner[data-is-whitelisted="true"] {
@@ -224,10 +228,10 @@ html[data-theme="dark"] .minecraft-host-copy img {
 
 @media (max-width: 640px) {
 	.minecraft-status-row {
-		grid-template-columns: 90px 1fr;
+		grid-template-columns: 5.625rem 1fr;
 	}
 
 	.minecraft-status-player-list {
-		padding-left: 100px;
+		padding-left: 6.25rem;
 	}
 }

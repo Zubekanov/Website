@@ -33,7 +33,7 @@
 
 .metrics-status {
 	padding: 0.25rem 0.6rem;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	border: 1px solid var(--form_border);
 	font-size: 0.8rem;
 	font-weight: 700;
@@ -46,7 +46,7 @@
 	display: inline-flex;
 	gap: 0.35rem;
 	padding: 0.25rem;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	border: 1px solid var(--form_border);
 	background: var(--background);
 }
@@ -56,7 +56,7 @@
 	background: transparent;
 	color: var(--form_text);
 	padding: 0.35rem 0.8rem;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 	font: inherit;
 	font-weight: 600;
@@ -65,7 +65,7 @@
 .range-btn.is-active {
 	background: var(--contents);
 	color: var(--dark_blue);
-	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--shadow-sm);
 }
 
 .metrics-grid .metric-plot-grid {
@@ -88,7 +88,7 @@
 
 .metrics-range::-webkit-scrollbar-thumb {
 	background: var(--border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 .metrics-kpis {
@@ -100,22 +100,32 @@
 .kpi-card {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	padding: 0.75rem 0.9rem;
-	box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--shadow-sm);
 	display: grid;
 	gap: 0.35rem;
 	min-width: 0;
+	transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.kpi-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-md);
 }
 
 .kpi-label {
-	color: var(--form_text);
 	font-size: 0.85rem;
+	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	background: linear-gradient(90deg, var(--dark_blue), var(--objects));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
 }
 
 .kpi-value {
@@ -127,9 +137,9 @@
 .metric-plot {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	padding: 0.75rem;
-	box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--shadow-sm);
 }
 
 @media (max-width: 720px) {
