@@ -8,5 +8,10 @@
 		"event_key": "debug.test",
 		"permission": "admins",
 		"description": "Empty subscription key for testing allocation."
+	},
+	{
+		"event_key": "system.alerts",
+		"permission": "admins",
+		"description": "Automated system health alerts (token expiry, scheduled job failures, etc.)."
 	}
 ]

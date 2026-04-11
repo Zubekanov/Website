@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import threading
 import time
@@ -26,6 +27,32 @@ def _load_kv_config(path: str) -> dict[str, str]:
 			key, value = line.split("=", 1)
 			config[key.strip()] = value.strip()
 	return config
+
+
+def _write_kv_value(path: str, key: str, value: str) -> None:
+	"""
+	Update or append a single KEY=VALUE entry in the config file in-place.
+	"""
+	with open(path, "r", encoding="utf-8") as handle:
+		lines = handle.readlines()
+
+	pattern = re.compile(r"^" + re.escape(key) + r"\s*=")
+	replaced = False
+	new_lines = []
+	for line in lines:
+		if pattern.match(line):
+			new_lines.append(f"{key}={value}\n")
+			replaced = True
+		else:
+			new_lines.append(line)
+
+	if not replaced:
+		if new_lines and not new_lines[-1].endswith("\n"):
+			new_lines.append("\n")
+		new_lines.append(f"{key}={value}\n")
+
+	with open(path, "w", encoding="utf-8") as handle:
+		handle.writelines(new_lines)
 
 
 def _build_auth_url(*, client_id: str, redirect_uri: str, scope: str) -> str:
@@ -69,8 +96,11 @@ class _OAuthHandler(BaseHTTPRequestHandler):
 		code = (params.get("code") or [None])[0]
 		error = (params.get("error") or [None])[0]
 
-		self.__class__.code = code
-		self.__class__.error = error
+		# Only capture if this looks like the OAuth callback (has code or error).
+		# Ignore unrelated requests such as favicon.ico.
+		if code or error:
+			self.__class__.code = code
+			self.__class__.error = error
 
 		self.send_response(200)
 		self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -81,13 +111,15 @@ class _OAuthHandler(BaseHTTPRequestHandler):
 		elif error:
 			body = f"<html><body><h3>Authorization error:</h3><pre>{error}</pre></body></html>"
 		else:
-			body = "<html><body><h3>No authorization code found.</h3></body></html>"
+			body = "<html><body><h3>Waiting for authorization...</h3></body></html>"
 		self.wfile.write(body.encode("utf-8"))
 
 
 def _start_local_server(host: str, port: int) -> tuple[HTTPServer, threading.Thread]:
 	server = HTTPServer((host, port), _OAuthHandler)
-	thread = threading.Thread(target=server.handle_request, daemon=True)
+	# serve_forever handles multiple requests so favicon/preflight requests
+	# don't consume the one allowed handle_request() call before the callback arrives.
+	thread = threading.Thread(target=server.serve_forever, daemon=True)
 	thread.start()
 	return server, thread
 
@@ -122,23 +154,26 @@ def main() -> int:
 			server, _ = _start_local_server(parsed_redirect.hostname, parsed_redirect.port)
 		except Exception as exc:
 			print(f"Failed to start local server on {parsed_redirect.hostname}:{parsed_redirect.port}: {exc}")
+			print("Falling back to manual code entry.")
 			server = None
 
 	print("Open this URL in a browser and authorize the app:")
 	print(_build_auth_url(client_id=client_id, redirect_uri=redirect_uri, scope=scope))
 	print("")
+
+	code: str | None = None
+
 	if server:
 		print("Waiting for redirect on the local server...")
 		timeout_s = int(os.environ.get("GMAIL_OAUTH_TIMEOUT", "180"))
 		start = time.time()
-		code = None
 		while time.time() - start < timeout_s:
 			if _OAuthHandler.code or _OAuthHandler.error:
 				code = _OAuthHandler.code
 				break
 			time.sleep(0.2)
-		if server:
-			server.server_close()
+		server.shutdown()
+		server.server_close()
 	else:
 		print("After approving, you'll be redirected to your redirect URI with a `code` parameter.")
 		print("Paste the `code` value here (not the whole URL).")
@@ -153,7 +188,7 @@ def main() -> int:
 		return 1
 
 	if not code:
-		print("No authorization code provided.")
+		print("No authorization code received within the timeout period.")
 		return 1
 
 	try:
@@ -168,22 +203,22 @@ def main() -> int:
 		return 1
 
 	refresh_token = tokens.get("refresh_token", "")
-	access_token = tokens.get("access_token", "")
-
-	print("")
-	print("Gmail OAuth values:")
-	print(f"GMAIL_CLIENT_ID={client_id}")
-	print(f"GMAIL_CLIENT_SECRET={client_secret}")
-	print(f"GMAIL_SENDER_EMAIL={sender_email}")
-	print(f"GMAIL_REFRESH_TOKEN={refresh_token}")
-	if access_token:
-		print(f"GMAIL_ACCESS_TOKEN={access_token}")
 
 	if not refresh_token:
 		print("")
-		print("Warning: refresh_token was not returned. Re-run and ensure prompt=consent is honored,")
-		print("or revoke prior consent for this client and try again.")
+		print("Warning: refresh_token was not returned.")
+		print("Revoke the app's access at https://myaccount.google.com/permissions and re-run.")
+		return 1
 
+	try:
+		_write_kv_value(conf_path, "GMAIL_REFRESH_TOKEN", refresh_token)
+		print(f"GMAIL_REFRESH_TOKEN written to {conf_path}")
+	except Exception as exc:
+		print(f"Failed to update gmail.conf: {exc}")
+		print(f"Set GMAIL_REFRESH_TOKEN manually: {refresh_token}")
+		return 1
+
+	print("Done. Restart the server to pick up the new token.")
 	return 0
 
 
