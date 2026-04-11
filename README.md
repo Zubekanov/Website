@@ -26,6 +26,30 @@ The website is hosted at [zubekanov.com](https://zubekanov.com), which you may b
 - **Integrations** (`src/util/integrations/*`): Discord webhook emitter, event key registry, and email delivery via Gmail OAuth.
 - **Metrics** (`src/util/webpage_builder/metrics_builder.py`): Reads from a metrics DB configured in `src/config/metrics_db.conf`.
 
+### Playwright E2E tests
+
+The browser suite lives in `tests/e2e/` and is designed to run against a dedicated disposable Postgres database with mocked outbound integrations.
+
+Setup:
+
+- Install the test-only Python packages: `python -m pip install -r requirements-dev.txt`
+- Install the browser once: `python -m playwright install chromium`
+- Export a dedicated website DB for the test run:
+  - `WEBSITE_DB_DATABASE`
+  - `WEBSITE_DB_USER`
+  - `WEBSITE_DB_PASSWORD`
+  - optional: `WEBSITE_DB_HOST`, `WEBSITE_DB_PORT`
+- Optional overrides:
+  - `WEBSITE_TOKEN_SECRET` for deterministic token generation
+  - `PUBLIC_BASE_URL` if you want to override the in-test local base URL
+  - `AUTH_COOKIE_SECURE=false` for local HTTP browser auth
+
+Run:
+
+- `python -m pytest tests/e2e`
+
+The E2E harness starts the Flask app in-process, truncates and reseeds the public schema before each test, and stubs email, Discord webhook verification, Minecraft status/avatar calls, metrics queries, GitHub repo cards, and Plotly CDN loading so no live external services are required.
+
 ### Attributions
 
 - [Copy Icon](https://uxwing.com/copy-icon/) from uxwing.com  
