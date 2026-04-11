@@ -2,9 +2,9 @@
 	display: grid;
 	place-items: center;
 	padding: 2rem 1rem 3.5rem;
-	margin-top: -20px;
+	margin-top: -1rem;
 	background:
-		radial-gradient(circle at top, rgba(86, 156, 214, 0.12), transparent 55%),
+		radial-gradient(circle at top, color-mix(in srgb, var(--dark_blue) 12%, transparent), transparent 55%),
 		linear-gradient(180deg, rgba(0, 0, 0, 0.02), transparent 35%);
 }
 
@@ -17,8 +17,8 @@
 .login-window {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
-	border-radius: 16px;
+	box-shadow: var(--shadow-md);
+	border-radius: var(--radius-lg);
 
 	display: flex;
 	flex-direction: column;
@@ -54,7 +54,7 @@
 	gap: 0.5rem;
 	background: var(--background);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	padding: 0.6rem 0.75rem;
 }
 
@@ -103,7 +103,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 0.2rem 0.4rem;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	border: 1px solid transparent;
 	background: transparent;
 	color: var(--dark_blue);

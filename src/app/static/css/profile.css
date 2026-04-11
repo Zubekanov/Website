@@ -7,9 +7,9 @@
 .profile-card {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 16px;
+	border-radius: var(--radius-lg);
 	padding: 1.5rem;
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--shadow-md);
 	display: grid;
 	gap: 1.25rem;
 	align-content: start;
@@ -75,7 +75,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 0.2rem 0.5rem;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	font-size: 0.7rem;
 	font-weight: 700;
 	letter-spacing: 0.06em;
@@ -109,6 +109,10 @@
 .profile-section-header h3 {
 	margin: 0 0 0.2rem;
 	font-size: 1.1rem;
+	background: linear-gradient(90deg, var(--dark_blue), var(--objects));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
 }
 
 .profile-section-header p {
@@ -122,9 +126,9 @@
 	gap: 0.75rem;
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	padding: 0.95rem;
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+	box-shadow: var(--shadow-sm);
 }
 
 .profile-popugame__stats {
@@ -136,7 +140,7 @@
 .profile-popu-stat {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	padding: 0.55rem 0.7rem;
 	display: grid;
 	gap: 0.1rem;
@@ -164,7 +168,7 @@
 .profile-popugame__history-box {
 	background: var(--background);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 	padding: 0.5rem;
 	overflow: visible;
 }
@@ -181,15 +185,15 @@
 }
 
 .profile-popu-box--win {
-	background: #31a874;
+	background: var(--player-0-color);
 }
 
 .profile-popu-box--loss {
-	background: #d55050;
+	background: var(--error);
 }
 
 .profile-popu-box--draw {
-	background: #9b9b9b;
+	background: var(--form_text);
 }
 
 .profile-popu-box--empty {
@@ -206,11 +210,11 @@
 	background: var(--contents);
 	color: var(--form_text);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	padding: 0.3rem 0.5rem;
 	font-size: 0.75rem;
 	white-space: nowrap;
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+	box-shadow: var(--shadow-md);
 	pointer-events: none;
 	z-index: 2000;
 	opacity: 0;
@@ -235,15 +239,21 @@
 	position: relative;
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	padding: 1.2rem 1rem 2.2rem;
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+	box-shadow: var(--shadow-sm);
 	display: grid;
 	gap: 0.35rem;
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
 	box-sizing: border-box;
+	transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.integration-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-md);
 }
 
 .integration-card--empty {
@@ -276,7 +286,7 @@
 	gap: 0.4rem;
 	background: var(--background);
 	border: 1px solid var(--border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	padding: 0.2rem 0.5rem 0.2rem 0.6rem;
 	width: 100%;
 	box-sizing: border-box;
@@ -344,7 +354,7 @@
 	top: 50%;
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	padding: 0.15rem 0.45rem;
 	font-size: 0.65rem;
 	color: var(--form_text);
@@ -404,10 +414,10 @@ html[data-theme="dark"] .secret-copy img {
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 	padding: 0.2rem 0.5rem;
-	border-radius: 999px;
-	background: rgba(30, 159, 80, 0.12);
-	color: #1a7a43;
-	border: 1px solid rgba(30, 159, 80, 0.3);
+	border-radius: var(--radius-pill);
+	background: var(--badge-success-bg);
+	color: var(--badge-success-text);
+	border: 1px solid var(--badge-success-border);
 }
 
 .integration-delete,
@@ -418,7 +428,7 @@ html[data-theme="dark"] .secret-copy img {
 	border: 1px solid var(--form_border);
 	background: var(--background);
 	color: var(--form_text);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	padding: 0.25rem 0.65rem;
 	font-size: 0.7rem;
 	font-weight: 600;
@@ -429,7 +439,7 @@ html[data-theme="dark"] .secret-copy img {
 .integration-delete:hover,
 .btn--integration-delete:hover {
 	border-color: var(--dark_blue);
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--shadow-sm);
 	transform: translateY(-1px);
 }
 
@@ -437,10 +447,10 @@ html[data-theme="dark"] .secret-copy img {
 	position: absolute;
 	right: 0.75rem;
 	bottom: 0.65rem;
-	border: 1px solid rgba(30, 159, 80, 0.35);
-	background: rgba(30, 159, 80, 0.12);
-	color: #1a7a43;
-	border-radius: 999px;
+	border: 1px solid var(--badge-success-border);
+	background: var(--badge-success-bg);
+	color: var(--badge-success-text);
+	border-radius: var(--radius-pill);
 	padding: 0.25rem 0.65rem;
 	font-size: 0.7rem;
 	font-weight: 600;
@@ -449,8 +459,8 @@ html[data-theme="dark"] .secret-copy img {
 }
 
 .integration-enable:hover {
-	border-color: rgba(30, 159, 80, 0.7);
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+	border-color: color-mix(in srgb, var(--objects) 50%, transparent);
+	box-shadow: var(--shadow-sm);
 	transform: translateY(-1px);
 }
 
@@ -469,16 +479,16 @@ html[data-theme="dark"] .secret-copy img {
 .integration-delete-modal__backdrop {
 	position: absolute;
 	inset: 0;
-	background: rgba(0, 0, 0, 0.45);
+	background: var(--modal-backdrop);
 }
 
 .integration-delete-modal__card {
 	position: relative;
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 16px;
+	border-radius: var(--radius-lg);
 	padding: 1.2rem 1.4rem;
-	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+	box-shadow: var(--shadow-lg);
 	width: min(420px, calc(100% - 2rem));
 	display: grid;
 	gap: 0.85rem;
@@ -524,7 +534,7 @@ html[data-theme="dark"] .secret-copy img {
 	box-sizing: border-box;
 	padding: 0.6rem 0.7rem;
 	border: 1px solid var(--form_border);
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	background: var(--form_body);
 	color: var(--form_text);
 	font-size: 0.95rem;
@@ -533,7 +543,7 @@ html[data-theme="dark"] .secret-copy img {
 
 .integration-delete-modal__fields select:focus {
 	border-color: var(--form_text);
-	box-shadow: 0 0 0 4px rgba(152, 152, 152, 0.12);
+	box-shadow: var(--focus-ring);
 	outline: none;
 }
 
@@ -553,7 +563,7 @@ html[data-theme="dark"] .secret-copy img {
 
 .integration-delete-modal__cancel,
 .integration-delete-modal__submit {
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	padding: 0.5rem 0.9rem;
 	border: 1px solid var(--form_border);
 	background: var(--form_body);
@@ -565,7 +575,7 @@ html[data-theme="dark"] .secret-copy img {
 .integration-delete-modal__submit {
 	border-color: var(--error);
 	color: var(--error);
-	background: rgba(198, 64, 64, 0.1);
+	background: var(--badge-error-bg);
 }
 
 .integration-delete-modal__message {
@@ -574,11 +584,12 @@ html[data-theme="dark"] .secret-copy img {
 	font-size: 0.85rem;
 }
 
-.profile-password-panel {
+.profile-password-panel,
+.profile-delete-panel {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 16px;
-	box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-md);
 	display: grid;
 	gap: 0.85rem;
 	max-height: 0;
@@ -590,7 +601,8 @@ html[data-theme="dark"] .secret-copy img {
 	transition: max-height 280ms ease, opacity 280ms ease, transform 280ms ease, padding 280ms ease, margin-top 280ms ease;
 }
 
-.profile-password-panel[hidden] {
+.profile-password-panel[hidden],
+.profile-delete-panel[hidden] {
 	display: none;
 }
 
@@ -634,7 +646,7 @@ html[data-theme="dark"] .secret-copy img {
 
 .profile-password-panel__cancel,
 .profile-password-panel__submit {
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	padding: 0.5rem 0.9rem;
 	border: 1px solid var(--form_border);
 	background: var(--form_body);
@@ -653,26 +665,6 @@ html[data-theme="dark"] .secret-copy img {
 	min-height: 1.2rem;
 	color: var(--error);
 	font-size: 0.85rem;
-}
-
-.profile-delete-panel {
-	background: var(--contents);
-	border: 1px solid var(--border);
-	border-radius: 16px;
-	box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
-	display: grid;
-	gap: 0.85rem;
-	max-height: 0;
-	opacity: 0;
-	transform: translateY(-6px);
-	overflow: hidden;
-	padding: 0 1.2rem;
-	margin-top: 0;
-	transition: max-height 280ms ease, opacity 280ms ease, transform 280ms ease, padding 280ms ease, margin-top 280ms ease;
-}
-
-.profile-delete-panel[hidden] {
-	display: none;
 }
 
 .profile-delete-panel.is-open {
@@ -720,7 +712,7 @@ html[data-theme="dark"] .secret-copy img {
 
 .profile-delete-panel__cancel,
 .profile-delete-panel__submit {
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	padding: 0.5rem 0.9rem;
 	border: 1px solid var(--form_border);
 	background: var(--form_body);
@@ -732,7 +724,7 @@ html[data-theme="dark"] .secret-copy img {
 .profile-delete-panel__submit {
 	border-color: var(--error);
 	color: var(--error);
-	background: rgba(198, 64, 64, 0.1);
+	background: var(--badge-error-bg);
 }
 
 .profile-delete-panel__message {
@@ -752,7 +744,7 @@ html[data-theme="dark"] .secret-copy img {
 	box-sizing: border-box;
 	padding: 0.65rem 0.75rem;
 	border: 1px solid var(--form_border);
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	background: var(--form_body);
 	color: var(--form_text);
 	font-size: 1rem;
@@ -762,7 +754,7 @@ html[data-theme="dark"] .secret-copy img {
 .profile-password-panel .form-group input:focus,
 .profile-delete-panel .form-group input:focus {
 	border-color: var(--form_text);
-	box-shadow: 0 0 0 4px rgba(152, 152, 152, 0.12);
+	box-shadow: var(--focus-ring);
 	outline: none;
 }
 
@@ -771,12 +763,12 @@ html[data-theme="dark"] .secret-copy img {
 .profile-delete-panel__cancel,
 .profile-delete-panel__submit {
 	padding: 0.6rem 0.95rem;
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 }
 .integration-badge--inactive {
-	background: rgba(198, 64, 64, 0.12);
-	color: #b53c3c;
-	border-color: rgba(198, 64, 64, 0.3);
+	background: var(--badge-error-bg);
+	color: var(--badge-error-text);
+	border-color: var(--badge-error-border);
 }
 
 .integration-subscriptions {
@@ -795,7 +787,7 @@ html[data-theme="dark"] .secret-copy img {
 .subscription-card {
 	position: relative;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	padding: 0.9rem 0.7rem 0.6rem;
 	background: var(--background);
 	display: grid;
@@ -847,16 +839,16 @@ html[data-theme="dark"] .secret-copy img {
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	padding: 0.15rem 0.45rem;
-	border-radius: 999px;
-	background: rgba(30, 159, 80, 0.12);
-	color: #1a7a43;
-	border: 1px solid rgba(30, 159, 80, 0.3);
+	border-radius: var(--radius-pill);
+	background: var(--badge-success-bg);
+	color: var(--badge-success-text);
+	border: 1px solid var(--badge-success-border);
 }
 
 .subscription-status--inactive {
-	background: rgba(198, 64, 64, 0.12);
-	color: #b53c3c;
-	border-color: rgba(198, 64, 64, 0.3);
+	background: var(--badge-error-bg);
+	color: var(--badge-error-text);
+	border-color: var(--badge-error-border);
 }
 
 .subscription-empty {
@@ -870,7 +862,7 @@ html[data-theme="dark"] .secret-copy img {
 	align-items: center;
 	justify-content: center;
 	padding: 0.75rem 1rem;
-	border-radius: 12px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--form_border);
 	background: var(--background);
 	color: var(--form_text);
@@ -881,7 +873,7 @@ html[data-theme="dark"] .secret-copy img {
 .profile-action:hover {
 	transform: translateY(-1px);
 	border-color: var(--dark_blue);
-	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--shadow-sm);
 }
 
 .profile-action--danger {

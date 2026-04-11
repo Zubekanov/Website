@@ -7,32 +7,70 @@
 	--return: #c586c0;
 	--string: #ce9178;
 	--error: #f14c4c;
+	--danger: #f14c4c;
 	--variables: #68cdfe;
 	--form_text: #4d4d4d;
 	--form_body: #ffffff;
 	--form_border: #dcdcdc;
 
 	--background: #f3f3f3;
-    --border: #ededed;
+	--border: #ededed;
 	--contents: #ffffff;
 
-    --info_box: #16825d;
-    --info_box_text: #dae1be;
+	--info_box: #16825d;
+	--info_box_text: #dae1be;
+
+	--shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.07);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+	--shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.14);
+
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-pill: 999px;
 
 	--font-base: Consolas, Menlo, "Liberation Mono", "Courier New", monospace;
+
+	/* Focus ring — shared across all interactive elements */
+	--focus-ring: 0 0 0 3px rgba(152, 152, 152, 0.12);
+
+	/* Semantic badge colours */
+	--badge-success-bg:     rgba(30, 159, 80, 0.12);
+	--badge-success-text:   #1a7a43;
+	--badge-success-border: rgba(30, 159, 80, 0.30);
+
+	--badge-error-bg:       rgba(198, 64, 64, 0.10);
+	--badge-error-text:     #b53c3c;
+	--badge-error-border:   rgba(198, 64, 64, 0.30);
+
+	--badge-info-bg:        rgba(0, 122, 204, 0.12);
+	--badge-info-text:      #0b5c9e;
+	--badge-info-border:    rgba(0, 122, 204, 0.30);
+
+	/* Modal / overlay */
+	--modal-backdrop: rgba(0, 0, 0, 0.45);
+
+	/* Game player colours (popugame) */
+	--player-0-color: #1a7f45;
+	--player-1-color: #2b5dd1;
 }
 
 html[data-theme="dark"] {
 	--background: #181818;
-    --border: #333333;
+	--border: #333333;
 	--contents: #1f1f1f;
 	--default: #cccccc;
 	--form_text: #989898;
 	--form_body: #313131;
 	--form_border: #3c3c3c;
 
-    --info_box: #007acc;
-    --info_box_text: #dcf6f8;
+	--info_box: #007acc;
+	--info_box_text: #dcf6f8;
+
+	/* Badge text must be lighter in dark mode */
+	--badge-success-text: #4ec9b0;
+	--badge-error-text:   var(--error);
+	--badge-info-text:    var(--variables);
 }
 
 html {
@@ -55,7 +93,7 @@ body {
 main {
 	flex: 1 0 auto;
 	background: var(--contents);
-	padding: 20px;
+	padding: 1rem;
 	min-width: 0;
 	max-width: 100%;
 	overflow-x: hidden;
@@ -66,6 +104,13 @@ a {
 	text-decoration: none;
 }
 
+main h1 {
+	background: linear-gradient(90deg, var(--dark_blue), var(--objects));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}
+
 .token-string   { color: var(--string); }
 .token-func     { color: var(--functions); }
 .token-var      { color: var(--variables); }
@@ -74,3 +119,57 @@ a {
 .token-default  { color: var(--default); }
 .token-object   { color: var(--objects); }
 .token-return   { color: var(--return); }
+
+/* ─── Shared UI primitives ────────────────────────────────────────────────── */
+
+/* Badge pill — semantic status indicators */
+.badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.2rem 0.5rem;
+	border-radius: var(--radius-pill);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	border: 1px solid transparent;
+}
+.badge--success { background: var(--badge-success-bg); color: var(--badge-success-text); border-color: var(--badge-success-border); }
+.badge--error   { background: var(--badge-error-bg);   color: var(--badge-error-text);   border-color: var(--badge-error-border);   }
+.badge--info    { background: var(--badge-info-bg);    color: var(--badge-info-text);    border-color: var(--badge-info-border);    }
+.badge--muted   { background: var(--background);       color: var(--form_text);          border-color: var(--border);               }
+
+/* Card — base layout shared by profile-card, admin-card, approval-card */
+.card {
+	background: var(--contents);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-md);
+	transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-lg);
+}
+
+/* Collapsible panel — slide-down animation */
+.panel-collapse {
+	max-height: 0;
+	opacity: 0;
+	transform: translateY(-6px);
+	overflow: hidden;
+	padding: 0;
+	margin-top: 0;
+	transition:
+		max-height 280ms ease,
+		opacity 280ms ease,
+		transform 280ms ease,
+		padding 280ms ease,
+		margin-top 280ms ease;
+}
+.panel-collapse.is-open {
+	max-height: 500px;
+	opacity: 1;
+	transform: translateY(0);
+}

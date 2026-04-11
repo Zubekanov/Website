@@ -1,9 +1,9 @@
 .frontend-test-page {
-	max-width: 1100px;
+	max-width: 1200px;
 	margin: 0 auto;
 	padding: 2rem 1rem 3rem;
 	display: grid;
-	gap: 1.5rem;
+	gap: 2rem;
 }
 
 .frontend-test-page h1 {
@@ -22,30 +22,41 @@
 
 .frontend-test-section h2 {
 	margin: 0;
-	font-size: 1.15rem;
+	font-size: 0.9rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	background: linear-gradient(90deg, var(--dark_blue), var(--objects));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
 }
 
 .frontend-test-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 	gap: 0.9rem;
 }
 
 .frontend-sample {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 12px;
-	padding: 0.8rem;
+	border-radius: var(--radius-lg);
+	padding: 0.9rem;
 	display: grid;
-	gap: 0.55rem;
+	gap: 0.6rem;
+}
+
+.frontend-sample--full {
+	grid-column: 1 / -1;
 }
 
 .frontend-sample__label {
-	font-size: 0.78rem;
+	font-size: 0.72rem;
 	font-weight: 700;
-	letter-spacing: 0.04em;
+	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	color: var(--dark_blue);
+	color: var(--form_text);
 }
 
 .frontend-sample__body {
@@ -54,11 +65,73 @@
 	align-content: start;
 }
 
-.frontend-sample .admin-card {
+/* Prevent click-through on static preview components */
+.frontend-sample .admin-card,
+.frontend-sample .kpi-card,
+.frontend-sample .integration-card {
 	pointer-events: none;
 }
 
 .frontend-sample .profile-badge {
 	display: inline-flex;
 	width: fit-content;
+}
+
+/* Token swatches */
+.ft-token-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.ft-token {
+	display: grid;
+	gap: 0.25rem;
+	align-items: center;
+	font-size: 0.72rem;
+	color: var(--form_text);
+}
+
+.ft-swatch {
+	display: block;
+	width: 2.5rem;
+	height: 1.5rem;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border);
+}
+
+/* Row layout for button sets */
+.ft-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+/* Nested full-width shells should not re-constrain width */
+.frontend-sample--full .metrics-dashboard,
+.frontend-sample--full .admin-dashboard,
+.frontend-sample--full .admin-users,
+.frontend-sample--full .profile-page,
+.frontend-sample--full .landing-nav {
+	max-width: 100%;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+/* Suppress JS-driven placeholders inside the test page */
+.frontend-sample [data-metric] {
+	min-height: 60px;
+	background: var(--background);
+	border-radius: var(--radius-sm);
+}
+
+.frontend-sample [data-mc-status-pill] {
+	pointer-events: none;
+}
+
+.frontend-sample .login-container {
+	margin-top: 0;
+	padding: 0;
+	background: none;
 }

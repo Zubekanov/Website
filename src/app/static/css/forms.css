@@ -26,18 +26,18 @@
 .form-message {
 	margin-top: 0.75rem;
 	padding: 0.65rem 0.75rem;
-	border-radius: 10px;
-	border: 1px solid rgba(var(--border, 0, 0, 0), 0.25);
-	background: rgba(var(--info_box, 240, 240, 240), 1);
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border);
+	background: var(--background);
 }
 
 .form-message[data-state="success"] {
-	border-color: rgba(var(--accent, 0, 0, 0), 0.35);
+	border-color: color-mix(in srgb, var(--objects) 50%, transparent);
     color: var(--objects);
 }
 
 .form-message[data-state="error"] {
-	border-color: rgba(var(--danger, 180, 40, 40), 0.45);
+	border-color: color-mix(in srgb, var(--danger) 50%, transparent);
     color: var(--error);
 }
 
@@ -58,10 +58,6 @@
 	min-height: 4.2em;
 }
 
-.form-message[hidden] {
-	display: block;
-	visibility: hidden;
-}
 
 .form-group select {
 	width: 100%;
@@ -83,7 +79,7 @@
 
     padding: 0.6rem 0.7rem;
     border: 1px solid var(--form_border);
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     background: var(--form_body);
     color: var(--form_text);
 
@@ -104,7 +100,7 @@
 .form-group textarea:focus,
 .form-group select:focus {
     border-color: var(--form_text);
-    box-shadow: 0 0 0 3px rgba(152, 152, 152, 0.12);
+    box-shadow: var(--focus-ring);
 }
 
 .form-group input:disabled,
@@ -120,8 +116,8 @@
 	z-index: 999;
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 10px;
-	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+	border-radius: var(--radius-sm);
+	box-shadow: var(--shadow-lg);
 	padding: 6px;
 	max-height: 260px;
 	overflow: auto;
@@ -163,7 +159,7 @@
 	min-height: 2.2rem;
 	padding: 0.5rem;
 	border: 1px solid var(--form_border);
-	border-radius: 10px;
+	border-radius: var(--radius-sm);
 	background: var(--form_body);
 }
 
@@ -174,9 +170,9 @@
 
 .scope-selector__chip {
 	border: 1px solid var(--dark_blue);
-	background: rgba(27, 84, 143, 0.1);
+	background: color-mix(in srgb, var(--dark_blue) 10%, transparent);
 	color: var(--form_text);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	padding: 0.3rem 0.65rem;
 	font-size: 0.85rem;
 	cursor: pointer;
@@ -213,7 +209,7 @@ button[data-submit-route][data-submit-method] {
     justify-content: center;
 
     padding: 0.6rem 0.95rem;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
 
     border: 1px solid var(--form_border);
     background: var(--form_body);
@@ -246,7 +242,7 @@ button[data-submit-route][data-submit-method] {
 }
 
 .btn--pill {
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 .btn--accent {
@@ -258,7 +254,7 @@ button[data-submit-route][data-submit-method] {
 .btn--primary {
 	border-color: var(--dark_blue);
 	background: var(--dark_blue);
-	color: #ffffff;
+	color: var(--form_body);
 }
 
 .btn--ghost {
@@ -267,9 +263,9 @@ button[data-submit-route][data-submit-method] {
 }
 
 .btn--danger {
-	background: rgba(var(--danger, 180, 40, 40), 1);
+	background: var(--danger);
 	color: var(--form_body);
-	border-color: rgba(var(--danger, 180, 40, 40), 0.35);
+	border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .btn:hover,
@@ -302,13 +298,13 @@ button[data-submit-route][data-submit-method][data-busy="true"] {
 button.primary[data-submit-route][data-submit-method] {
     border-color: var(--dark_blue);
     background: var(--dark_blue);
-    color: #ffffff;
+    color: var(--form_body);
 }
 
 button.danger[data-submit-route][data-submit-method] {
-    background: rgba(var(--danger, 180, 40, 40), 1);
+    background: var(--danger);
     color: var(--form_body);
-    border-color: rgba(var(--danger, 180, 40, 40), 0.35);
+    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 html[data-theme="dark"] button.primary[data-submit-route][data-submit-method] {
@@ -332,7 +328,7 @@ html[data-theme="dark"] .btn--primary {
     line-height: 1.45;
 
     padding: 0.65rem 0.7rem;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--form_border);
     background: var(--form_body);
     color: var(--form_text);
