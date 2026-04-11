@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import sys
 import threading
@@ -71,7 +72,25 @@ def setup_logging(dev_enabled: bool):
 	root.handlers.clear()
 	root.addHandler(DevLiveRewriteHandler(dev_enabled=dev_enabled))
 
-def create_app():
+def _env_bool(name: str, *, default: bool) -> bool:
+	value = os.environ.get(name)
+	if value is None:
+		return default
+	normalized = value.strip().lower()
+	if normalized in {"1", "true", "yes", "on"}:
+		return True
+	if normalized in {"0", "false", "no", "off"}:
+		return False
+	return default
+
+
+def create_app(
+	*,
+	testing: bool = False,
+	verify_tables_safe_mode: bool | None = None,
+	run_startup_tasks: bool = True,
+	auth_cookie_secure: bool | None = None,
+):
 	from .api import api
 	from .routes import main
 	from .resources import resources
@@ -80,19 +99,31 @@ def create_app():
 	from util.integrations.minecraft.sync_service import startup_reconcile_amp_minecraft_whitelist
 
 	app = Flask(__name__)
+	if verify_tables_safe_mode is None:
+		verify_tables_safe_mode = bool(testing)
+	if auth_cookie_secure is None:
+		auth_cookie_secure = _env_bool("AUTH_COOKIE_SECURE", default=not testing)
+
+	app.config.update(
+		TESTING=bool(testing),
+		AUTH_COOKIE_SECURE=bool(auth_cookie_secure),
+		RUN_STARTUP_TASKS=bool(run_startup_tasks),
+		VERIFY_TABLES_SAFE_MODE=bool(verify_tables_safe_mode),
+	)
 	app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 	app.register_blueprint(main)
 	app.register_blueprint(api)
 	app.register_blueprint(resources)
 
-	setup_logging(dev_enabled=True)
+	setup_logging(dev_enabled=not testing)
 
 	psql = PSQLInterface()
-	psql.verify_tables(safe_mode=False)
-	ensure_event_keys(psql)
-	try:
-		startup_reconcile_amp_minecraft_whitelist(psql)
-	except Exception:
-		logging.getLogger(__name__).exception("AMP whitelist startup reconcile failed.")
+	psql.verify_tables(safe_mode=bool(verify_tables_safe_mode))
+	if run_startup_tasks:
+		ensure_event_keys(psql)
+		try:
+			startup_reconcile_amp_minecraft_whitelist(psql)
+		except Exception:
+			logging.getLogger(__name__).exception("AMP whitelist startup reconcile failed.")
 
 	return app

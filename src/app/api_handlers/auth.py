@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import flask
 import bcrypt
-from datetime import datetime, timezone
 
+from app.auth_cookies import session_cookie_kwargs
 from app.api_context import ApiContext
 from app.api_common import get_request_user, notify_moderators, send_notification_email
 from util.integrations.minecraft.sync_service import sync_amp_minecraft_whitelist
@@ -60,12 +60,10 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 
 		resp.set_cookie(
 			key=ctx.auth_token_name,
-			value=token,
-			httponly=True,
-			secure=True,
-			samesite="Lax",
-			max_age=30 * 24 * 60 * 60 if data.get("remember_me", False) else 24 * 60 * 60,
-			path="/",
+			**session_cookie_kwargs(
+				value=token,
+				max_age=30 * 24 * 60 * 60 if data.get("remember_me", False) else 24 * 60 * 60,
+			),
 		)
 
 		return resp, 200
@@ -73,7 +71,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 	@api.route("/register", methods=["POST"])
 	def api_register():
 		data = flask.request.json or {}
-		validation = UserManagement.validate_registration_fields(
+		ok, message, is_infra_error = UserManagement.validate_registration_fields(
 			referral_source=data.get("referral_source", ""),
 			first_name=data.get("first_name", ""),
 			last_name=data.get("last_name", ""),
@@ -81,11 +79,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			password=data.get("password", ""),
 			repeat_password=data.get("repeat_password", ""),
 		)
-		if validation[0]:
-			email = (data.get("email", "") or "").strip().lower()
-			first_name = (data.get("first_name", "") or "").strip()
-			last_name = (data.get("last_name", "") or "").strip()
-			referral_source = (data.get("referral_source", "") or "").strip()
+		email = (data.get("email", "") or "").strip().lower()
+		first_name = (data.get("first_name", "") or "").strip()
+		last_name = (data.get("last_name", "") or "").strip()
+		referral_source = (data.get("referral_source", "") or "").strip()
+		if ok:
 			notify_moderators(
 				ctx,
 				"account_registration_submitted",
@@ -101,12 +99,20 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 					"email": email,
 				},
 			)
+		elif is_infra_error:
+			notify_moderators(
+				ctx,
+				"registration_infra_failure",
+				title="Registration infrastructure failure",
+				details=[
+					f"Error: {message}",
+					f"Email: {email}" if email else "",
+				],
+				context={"action": "registration_infra_failure", "email": email},
+			)
 		return (
-			flask.jsonify({
-				"ok": validation[0],
-				"message": validation[1],
-			}),
-			200 if validation[0] else 400,
+			flask.jsonify({"ok": ok, "message": message}),
+			200 if ok else 400,
 		)
 
 	@api.route("/delete-account", methods=["POST"])
@@ -128,37 +134,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			if not bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8")):
 				return flask.jsonify({"ok": False, "message": "Incorrect password."}), 401
 
-			ctx.interface.client.update_rows_with_filters(
-				"users",
-				{"is_active": False},
-				raw_conditions=["id = %s"],
-				raw_params=[user.get("id")],
-			)
-			ctx.interface.client.update_rows_with_filters(
-				"user_sessions",
-				{"revoked_at": datetime.now(timezone.utc)},
-				raw_conditions=["user_id = %s", "revoked_at IS NULL"],
-				raw_params=[user.get("id")],
-			)
-			ctx.interface.client.delete_rows_with_filters(
-				"discord_webhooks",
-				raw_conditions=["user_id = %s"],
-				raw_params=[user.get("id")],
-			)
-			ctx.interface.client.delete_rows_with_filters(
-				"minecraft_whitelist",
-				raw_conditions=["user_id = %s"],
-				raw_params=[user.get("id")],
-			)
+			ctx.interface.delete_user(user.get("id"))
 			sync_status = sync_amp_minecraft_whitelist(
 				ctx.interface,
 				trigger="self_account_delete",
 				actor_user_id=str(user.get("id") or ""),
-			)
-			ctx.interface.client.delete_rows_with_filters(
-				"audiobookshelf_registrations",
-				raw_conditions=["user_id = %s"],
-				raw_params=[user.get("id")],
 			)
 			send_notification_email(
 				to_email=user.get("email"),
@@ -188,11 +168,6 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		resp = flask.make_response(flask.jsonify({"ok": True, "message": "Account deleted.", "sync": sync_status}))
 		resp.set_cookie(
 			key=ctx.auth_token_name,
-			value="",
-			httponly=True,
-			secure=True,
-			samesite="Lax",
-			max_age=0,
-			path="/",
+			**session_cookie_kwargs(value="", max_age=0),
 		)
 		return resp

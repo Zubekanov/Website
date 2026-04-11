@@ -191,7 +191,7 @@ def build_admin_action_buttons(kind: str, reg_id: str) -> list[dict]:
 	]
 
 
-def get_user_email(ctx: ApiContext, user_id: str | None) -> str | None:
+def get_user_by_id(ctx: ApiContext, user_id: str | None) -> dict | None:
 	if not user_id:
 		return None
 	try:
@@ -201,28 +201,21 @@ def get_user_email(ctx: ApiContext, user_id: str | None) -> str | None:
 			page_limit=1,
 			page_num=0,
 		)
-		if rows:
-			return (rows[0].get("email") or "").strip() or None
+		return rows[0] if rows else None
 	except Exception:
-		pass
-	return None
+		return None
+
+
+def get_user_email(ctx: ApiContext, user_id: str | None) -> str | None:
+	row = get_user_by_id(ctx, user_id)
+	return (row.get("email") or "").strip() or None if row else None
 
 
 def is_anonymous_user(ctx: ApiContext, user_id: str | None) -> bool:
 	if not user_id:
 		return False
-	try:
-		rows, _ = ctx.interface.client.get_rows_with_filters(
-			"users",
-			equalities={"id": user_id},
-			page_limit=1,
-			page_num=0,
-		)
-		if rows:
-			return bool(rows[0].get("is_anonymous"))
-	except Exception:
-		pass
-	return False
+	row = get_user_by_id(ctx, user_id)
+	return bool(row.get("is_anonymous")) if row else False
 
 
 def get_public_base_url(ctx: ApiContext) -> str:
@@ -245,7 +238,7 @@ def build_integration_removal_token(
 		"exp": int(expires_at.timestamp()),
 	}
 	raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-	sig = hmac.new(ctx.interface._token_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+	sig = hmac.new(ctx.interface.token_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
 	b64 = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
 	return f"{b64}.{sig}"
 
@@ -257,7 +250,7 @@ def parse_integration_removal_token(ctx: ApiContext, token: str) -> dict | None:
 	try:
 		padded = b64 + "=" * (-len(b64) % 4)
 		raw = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
-		expected = hmac.new(ctx.interface._token_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+		expected = hmac.new(ctx.interface.token_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
 		if not hmac.compare_digest(expected, sig):
 			return None
 		payload = json.loads(raw)
@@ -319,6 +312,20 @@ def send_notification_email(
 		)
 	except Exception:
 		logger.exception("Failed to send notification email to %s", to_email)
+		try:
+			from app.api import _ctx
+			notify_moderators(
+				_ctx,
+				"notification_email_failed",
+				title="Notification email failed to send",
+				details=[
+					f"To: {to_email}",
+					f"Subject: {subject}",
+				],
+				context={"action": "notification_email_failed"},
+			)
+		except Exception:
+			pass
 
 
 def get_or_create_anonymous_user(
@@ -333,16 +340,6 @@ def get_or_create_anonymous_user(
 	last_norm = (last_name or "").strip()
 	if not email_norm or not first_norm or not last_norm:
 		return False, "First name, last name, and email are required."
-
-	# Ensure schema supports anonymous users.
-	try:
-		cols = ctx.interface.client.get_column_info("public", "users")
-		if "is_anonymous" not in cols:
-			ctx.interface.client.add_column("public", "users", "is_anonymous", "boolean DEFAULT false NOT NULL")
-		if cols.get("password_hash") and str(cols["password_hash"].get("is_nullable", "")).upper() != "YES":
-			ctx.interface.client.alter_column_nullability("public", "users", "password_hash", nullable=True)
-	except Exception as e:
-		return False, "Unable to complete request right now."
 
 	try:
 		rows = ctx.interface.get_user_by_email_case_insensitive(email_norm)
@@ -369,37 +366,43 @@ def get_or_create_anonymous_user(
 		return False, "Unable to complete request right now."
 
 
+def _update_registration_status(
+	ctx: ApiContext,
+	table: str,
+	reg_id: str,
+	*,
+	status: str,
+	extra_fields: dict | None = None,
+	success_message: str,
+) -> tuple[bool, str]:
+	try:
+		fields: dict = {"status": status, "reviewed_at": datetime.now(timezone.utc)}
+		if extra_fields:
+			fields.update(extra_fields)
+		ctx.interface.client.update_rows_with_filters(
+			table,
+			fields,
+			raw_conditions=["id = %s"],
+			raw_params=[reg_id],
+		)
+		return True, success_message
+	except Exception:
+		return False, "Request failed. Please try again."
+
+
 def _handle_audiobookshelf_mod_action(ctx: ApiContext, action: str, reg_id: str) -> tuple[bool, str]:
 	if action == "approve":
-		try:
-			ctx.interface.client.update_rows_with_filters(
-				"audiobookshelf_registrations",
-				{
-					"status": "approved",
-					"is_active": True,
-					"reviewed_at": datetime.now(timezone.utc),
-				},
-				raw_conditions=["id = %s"],
-				raw_params=[reg_id],
-			)
-			return True, "Audiobookshelf request approved."
-		except Exception as e:
-			return False, "Request failed. Please try again."
+		return _update_registration_status(
+			ctx, "audiobookshelf_registrations", reg_id,
+			status="approved", extra_fields={"is_active": True},
+			success_message="Audiobookshelf request approved.",
+		)
 	if action == "deny":
-		try:
-			ctx.interface.client.update_rows_with_filters(
-				"audiobookshelf_registrations",
-				{
-					"status": "denied",
-					"is_active": False,
-					"reviewed_at": datetime.now(timezone.utc),
-				},
-				raw_conditions=["id = %s"],
-				raw_params=[reg_id],
-			)
-			return True, "Audiobookshelf request denied."
-		except Exception as e:
-			return False, "Request failed. Please try again."
+		return _update_registration_status(
+			ctx, "audiobookshelf_registrations", reg_id,
+			status="denied", extra_fields={"is_active": False},
+			success_message="Audiobookshelf request denied.",
+		)
 	return False, "Unsupported action."
 
 
@@ -408,19 +411,11 @@ def _handle_discord_webhook_mod_action(ctx: ApiContext, action: str, reg_id: str
 		emitter = DiscordWebhookEmitter(ctx.interface)
 		return emitter.approve_registration(registration_id=reg_id, reviewer_user_id=None)
 	if action == "deny":
-		try:
-			ctx.interface.client.update_rows_with_filters(
-				"discord_webhook_registrations",
-				{
-					"status": "denied",
-					"reviewed_at": datetime.now(timezone.utc),
-				},
-				raw_conditions=["id = %s"],
-				raw_params=[reg_id],
-			)
-			return True, "Discord webhook request denied."
-		except Exception as e:
-			return False, "Request failed. Please try again."
+		return _update_registration_status(
+			ctx, "discord_webhook_registrations", reg_id,
+			status="denied",
+			success_message="Discord webhook request denied.",
+		)
 	return False, "Unsupported action."
 
 
@@ -462,54 +457,28 @@ def _handle_minecraft_mod_action(ctx: ApiContext, action: str, reg_id: str) -> t
 				actor_user_id=None,
 			)
 			return True, "Minecraft request approved."
-		except Exception as e:
+		except Exception:
 			return False, "Request failed. Please try again."
 	if action == "deny":
-		try:
-			ctx.interface.client.update_rows_with_filters(
-				"minecraft_registrations",
-				{
-					"status": "denied",
-					"reviewed_at": datetime.now(timezone.utc),
-				},
-				raw_conditions=["id = %s"],
-				raw_params=[reg_id],
-			)
-			return True, "Minecraft request denied."
-		except Exception as e:
-			return False, "Request failed. Please try again."
+		return _update_registration_status(
+			ctx, "minecraft_registrations", reg_id,
+			status="denied",
+			success_message="Minecraft request denied.",
+		)
 	return False, "Unsupported action."
 
 
 def _handle_api_access_mod_action(ctx: ApiContext, action: str, reg_id: str) -> tuple[bool, str]:
 	if action == "approve":
-		try:
-			ctx.interface.client.update_rows_with_filters(
-				"api_access_registrations",
-				{
-					"status": "approved",
-					"is_active": True,
-					"reviewed_at": datetime.now(timezone.utc),
-				},
-				raw_conditions=["id = %s"],
-				raw_params=[reg_id],
-			)
-			return True, "API access request approved."
-		except Exception as e:
-			return False, "Request failed. Please try again."
+		return _update_registration_status(
+			ctx, "api_access_registrations", reg_id,
+			status="approved", extra_fields={"is_active": True},
+			success_message="API access request approved.",
+		)
 	if action == "deny":
-		try:
-			ctx.interface.client.update_rows_with_filters(
-				"api_access_registrations",
-				{
-					"status": "denied",
-					"is_active": False,
-					"reviewed_at": datetime.now(timezone.utc),
-				},
-				raw_conditions=["id = %s"],
-				raw_params=[reg_id],
-			)
-			return True, "API access request denied."
-		except Exception as e:
-			return False, "Request failed. Please try again."
+		return _update_registration_status(
+			ctx, "api_access_registrations", reg_id,
+			status="denied", extra_fields={"is_active": False},
+			success_message="API access request denied.",
+		)
 	return False, "Unsupported action."
