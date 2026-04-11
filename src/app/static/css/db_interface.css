@@ -29,11 +29,10 @@
 	gap: 0;
 	align-items: stretch;
 	width: 100%;
-	align-items: center;
 	max-width: 100%;
 	overflow-x: hidden;
 	border: 1px solid var(--form_border);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	min-width: 0;
 }
 
@@ -56,12 +55,27 @@
 	border: 0;
 	border-right: 1px solid var(--form_border);
 	border-bottom: 1px solid var(--form_border);
-	padding: 0.06rem 0.2rem;
+	padding: 0.25rem 0.4rem;
 	box-sizing: border-box;
-	min-height: 1.15rem;
+	min-height: 1.75rem;
 	display: flex;
 	align-items: center;
 	position: relative;
+}
+
+/* Alternating row shading */
+.db-row-form--data:nth-child(even) > .db-cell {
+	background: color-mix(in srgb, var(--background) 55%, var(--form_body));
+}
+
+/* Row hover */
+.db-row-form--data:hover > .db-cell {
+	background: var(--background);
+}
+
+/* Row focus-within */
+.db-row-form--data:focus-within > .db-cell {
+	background: var(--background);
 }
 
 .db-cell--head {
@@ -69,6 +83,7 @@
 	border-color: var(--border);
 	color: var(--default);
 	font-weight: 600;
+	padding: 0.3rem 0.4rem;
 	position: relative;
 	user-select: none;
 }
@@ -84,6 +99,16 @@
 
 .db-cell--head.db-cell--actions {
 	z-index: 3;
+}
+
+/* Keep actions column consistent with alternating/hover */
+.db-row-form--data:nth-child(even) > .db-cell--actions {
+	background: color-mix(in srgb, var(--background) 55%, var(--contents));
+}
+
+.db-row-form--data:hover > .db-cell--actions,
+.db-row-form--data:focus-within > .db-cell--actions {
+	background: var(--background);
 }
 
 .db-cell--section {
@@ -104,18 +129,30 @@
 	border-right: 0;
 }
 
+/* Add-row cells — slightly distinct background */
+.db-row-form--add > .db-cell {
+	background: color-mix(in srgb, var(--background) 70%, var(--form_body));
+}
+
 .db-form-input {
 	width: 100%;
-	align-items: center;
 	box-sizing: border-box;
-	padding: 0.06rem 0.2rem;
-	border: 1px solid var(--form_border);
-	border-radius: 4px;
-	background: var(--form_body);
+	padding: 0.2rem 0.35rem;
+	border: none;
+	border-radius: 0;
+	background: transparent;
 	color: var(--form_text);
 	min-width: 0;
 	line-height: 1.2;
-	height: 1.25rem;
+	height: 100%;
+	min-height: 1.35rem;
+	outline: none;
+	font-family: var(--font-base);
+	font-size: inherit;
+}
+
+.db-form-input:focus {
+	background: color-mix(in srgb, var(--form_border) 40%, var(--form_body));
 }
 
 .db-user-id-dropdown {
@@ -123,8 +160,8 @@
 	z-index: 999;
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 10px;
-	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-lg);
 	padding: 6px;
 	max-height: 260px;
 	overflow: auto;
@@ -135,17 +172,17 @@
 	display: grid;
 	gap: 2px;
 	padding: 6px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
 .db-user-id-option .label {
-	font-size: 13px;
+	font-size: 0.8125rem;
 	font-weight: 600;
 }
 
 .db-user-id-option .meta {
-	font-size: 11px;
+	font-size: 0.6875rem;
 	color: var(--form_text);
 	word-break: break-all;
 }
@@ -164,7 +201,6 @@
 
 .db-cell--checkbox {
 	justify-content: center;
-	padding: 0.06rem 0.2rem;
 }
 
 .db-cell--tooltip::after {
