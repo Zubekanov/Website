@@ -1,13 +1,28 @@
-# PopuGame Rules
+## How to Play
 
-1. Players alternate turns placing one token on an empty square.
-2. You cannot place a token on a square currently claimed by the opponent.
-3. If your move forms a continuous line of at least 3 of your tokens (horizontal, vertical, or diagonal), a claim is triggered.
-4. The triggered token line is removed, then claim territory extends along that line in both directions until blocked by board edge or an opponent token.
-5. Claims may overwrite opponent claims, but does not remove opponent tokens.
-6. Score equals the number of currently claimed squares.
-7. The game ends at the turn limit. Highest score wins; equal scores are a draw.
+Players alternate placing one **token** on any empty square that isn't currently **claimed** by the opponent.
 
-I played this game in the POPUCOM minigames section, and I couldn't find any real game it was based off of when searching afterwards. 
+## Triggering a Claim
 
-If you know what this game is, please let me know.
+When your move completes a continuous line of **3 or more** of your tokens (horizontal, vertical, or diagonal):
+
+1. That token line is **removed** from the board.
+2. **Claim territory** extends outward along that same line in both directions — until it hits the board edge or an opponent's token.
+3. Claimed squares are marked in your colour. Your claims can overwrite the opponent's, but tokens are never removed by claiming.
+
+## Scoring & Victory
+
+- **Score** = number of squares currently claimed by you.
+- The game ends at the **turn limit** (40 turns by default).
+- Highest score wins. Equal scores are a draw.
+
+## Quick Reference
+
+- **X / your colour** — your placed token
+- **O / opponent colour** — opponent's token
+- **Coloured background** — claimed territory
+- You cannot place on a square claimed by the opponent — only on empty or your own claimed squares.
+
+---
+
+> I played this game in the POPUCOM minigames section and couldn't find what it was based on. If you know the original game, let me know!

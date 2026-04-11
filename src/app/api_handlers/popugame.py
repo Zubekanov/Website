@@ -40,6 +40,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		code = _generate_popugame_code(ctx)
 		grid = make_grid(POPUGAME_DEFAULT_SIZE, 0)
 		starting_player = secrets.randbelow(2)
+		is_public = bool(data.get("is_public", False))
+		is_casual = bool(data.get("is_casual", False))
+		is_members_only = bool(data.get("is_members_only", False))
+		if is_casual and is_members_only:
+			is_members_only = False
 
 		player0_name = guest_name
 		player0_user_id = None
@@ -58,6 +63,9 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				"grid_state": json.dumps(grid),
 				"player0_user_id": player0_user_id,
 				"player0_name": player0_name,
+				"is_public": is_public,
+				"is_casual": is_casual,
+				"is_members_only": is_members_only,
 			})
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
@@ -93,6 +101,13 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		row = _maybe_apply_elo_for_finished_game(ctx, row)
 
 		user = get_request_user(ctx)
+		if bool(row.get("is_members_only")) and not user:
+			return flask.jsonify({
+				"ok": False,
+				"members_only": True,
+				"message": "This game is members only. Please log in or register to join.",
+			}), 403
+
 		guest_name = None
 		if not user:
 			guest_name = _normalize_guest_name(data.get("guest_name", ""))
@@ -218,6 +233,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				winner = None
 			ended_reason = "turn_limit"
 
+		session_id = row.get("id")
 		try:
 			ctx.interface.execute_query(
 				"UPDATE popugame_sessions SET grid_state = %s, turn = %s, active_player = %s, "
@@ -227,6 +243,16 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			)
 		except Exception as e:
 			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
+
+		try:
+			ctx.interface.execute_query(
+				"INSERT INTO popugame_moves "
+				"(session_id, move_number, player, row_idx, col_idx, grid_state) "
+				"VALUES (%s, %s, %s, %s, %s, %s);",
+				(str(session_id), turn, player, row_i, col_i, json.dumps(grid)),
+			)
+		except Exception:
+			pass  # Move recording failure must not block game progression
 
 		row = _get_session_by_code(ctx, code)
 		row = _maybe_apply_elo_for_finished_game(ctx, row)
@@ -308,6 +334,172 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			"state": _popu_state_payload(row, ctx=ctx),
 		}), 200
 
+	@api.route("/api/popugame/abandon", methods=["POST"])
+	def api_popugame_abandon():
+		data = flask.request.json or {}
+		code = (data.get("code") or "").strip().upper()
+		if not code or len(code) != 6 or not code.isalnum():
+			return flask.jsonify({"ok": False, "message": "Invalid game code."}), 400
+
+		row = _get_session_by_code(ctx, code)
+		if not row:
+			return flask.jsonify({"ok": False, "message": "Game not found."}), 404
+
+		if (row.get("status") or "waiting") != "waiting":
+			return flask.jsonify({"ok": False, "message": "Game already started."}), 409
+
+		user = get_request_user(ctx)
+		p0_uid = row.get("player0_user_id")
+		# If the game has a registered owner, only that user may abandon it.
+		if p0_uid:
+			if not user or str(user.get("id")) != str(p0_uid):
+				return flask.jsonify({"ok": False, "message": "Not authorized."}), 403
+
+		try:
+			ctx.interface.execute_query(
+				"DELETE FROM popugame_sessions WHERE code = %s AND status = 'waiting';",
+				(code,),
+			)
+		except Exception:
+			return flask.jsonify({"ok": False, "message": "Request failed. Please try again."}), 500
+
+		return flask.jsonify({"ok": True}), 200
+
+	@api.route("/api/popugame/leaderboard")
+	def api_popugame_leaderboard():
+		try:
+			rows = ctx.interface.execute_query(
+				"SELECT pr.elo, pr.games_played, pr.wins, pr.losses, pr.draws, "
+				"u.first_name, u.last_name "
+				"FROM popugame_ratings pr "
+				"JOIN users u ON pr.user_id = u.id "
+				"WHERE u.is_anonymous = FALSE AND u.is_active = TRUE "
+				"ORDER BY pr.elo DESC "
+				"LIMIT 25;"
+			) or []
+		except Exception:
+			return flask.jsonify({"ok": False, "message": "Failed to load leaderboard."}), 500
+		entries = []
+		for r in rows:
+			name = f"{r.get('first_name', '')} {r.get('last_name', '')}".strip() or "—"
+			entries.append({
+				"name": name,
+				"elo": int(r.get("elo") or _DEFAULT_ELO),
+				"games_played": int(r.get("games_played") or 0),
+				"wins": int(r.get("wins") or 0),
+				"losses": int(r.get("losses") or 0),
+				"draws": int(r.get("draws") or 0),
+			})
+		return flask.jsonify({"ok": True, "entries": entries}), 200
+
+	@api.route("/api/popugame/public")
+	def api_popugame_public():
+		try:
+			rows = ctx.interface.execute_query(
+				"SELECT code, player0_name, player0_user_id, created_at, is_casual, is_members_only "
+				"FROM popugame_sessions "
+				"WHERE status = 'waiting' AND is_public = TRUE "
+				"ORDER BY created_at ASC "
+				"LIMIT 20;"
+			) or []
+		except Exception:
+			return flask.jsonify({"ok": False, "message": "Failed to load public games."}), 500
+		user = get_request_user(ctx)
+		user_id = str(user.get("id")) if user else None
+		games = []
+		for r in rows:
+			created = r.get("created_at")
+			uid = r.get("player0_user_id")
+			uid_str = str(uid) if uid else None
+			is_own_game = bool(user_id and uid_str and user_id == uid_str)
+			games.append({
+				"code": r.get("code"),
+				"host_name": _public_player_name(r.get("player0_name")),
+				"created_at": created.isoformat() if hasattr(created, "isoformat") else str(created or ""),
+				"is_casual": bool(r.get("is_casual")),
+				"is_members_only": bool(r.get("is_members_only")),
+				"is_own_game": is_own_game,
+			})
+		return flask.jsonify({"ok": True, "games": games}), 200
+
+	@api.route("/api/popugame/history")
+	def api_popugame_history():
+		try:
+			limit = min(int(flask.request.args.get("limit", "20")), 50)
+		except Exception:
+			limit = 20
+		try:
+			rows = ctx.interface.execute_query(
+				"SELECT code, player0_name, player1_name, winner, ended_reason, "
+				"turn, elo_after_p0, elo_after_p1, elo_delta_p0, elo_delta_p1, updated_at "
+				"FROM popugame_sessions "
+				"WHERE status = 'finished' AND player0_name IS NOT NULL AND player1_name IS NOT NULL "
+				"ORDER BY updated_at DESC "
+				"LIMIT %s;",
+				(limit,),
+			) or []
+		except Exception:
+			return flask.jsonify({"ok": False, "message": "Failed to load history."}), 500
+		games = []
+		for r in rows:
+			finished = r.get("updated_at")
+			games.append({
+				"code": r.get("code"),
+				"p0_name": _public_player_name(r.get("player0_name")),
+				"p1_name": _public_player_name(r.get("player1_name")),
+				"winner": r.get("winner"),
+				"ended_reason": r.get("ended_reason"),
+				"turn": r.get("turn"),
+				"elo_after_p0": r.get("elo_after_p0"),
+				"elo_after_p1": r.get("elo_after_p1"),
+				"elo_delta_p0": r.get("elo_delta_p0"),
+				"elo_delta_p1": r.get("elo_delta_p1"),
+				"finished_at": finished.isoformat() if hasattr(finished, "isoformat") else str(finished or ""),
+			})
+		return flask.jsonify({"ok": True, "games": games}), 200
+
+	@api.route("/api/popugame/replay/<code>")
+	def api_popugame_replay(code: str):
+		code = (code or "").strip().upper()
+		if not code or len(code) != 6 or not code.isalnum():
+			return flask.jsonify({"ok": False, "message": "Invalid game code."}), 400
+		row = _get_session_by_code(ctx, code)
+		if not row:
+			return flask.jsonify({"ok": False, "message": "Game not found."}), 404
+		row = _maybe_apply_elo_for_finished_game(ctx, row)
+		try:
+			moves = ctx.interface.execute_query(
+				"SELECT move_number, player, row_idx, col_idx, grid_state "
+				"FROM popugame_moves "
+				"WHERE session_id = (SELECT id FROM popugame_sessions WHERE code = %s) "
+				"ORDER BY move_number ASC;",
+				(code,),
+			) or []
+		except Exception:
+			moves = []
+		no_recording = len(moves) == 0
+		move_list = []
+		for m in moves:
+			gs = m.get("grid_state")
+			if isinstance(gs, str):
+				try:
+					gs = json.loads(gs)
+				except Exception:
+					gs = []
+			move_list.append({
+				"move_number": m.get("move_number"),
+				"player": m.get("player"),
+				"row_idx": m.get("row_idx"),
+				"col_idx": m.get("col_idx"),
+				"grid_state": gs,
+			})
+		return flask.jsonify({
+			"ok": True,
+			"state": _popu_state_payload(row, ctx=ctx),
+			"moves": move_list,
+			"no_recording": no_recording,
+		}), 200
+
 
 def _get_session_by_code(ctx: ApiContext, code: str) -> dict | None:
 	rows, _ = ctx.interface.client.get_rows_with_filters(
@@ -379,6 +571,8 @@ def _popu_state_payload(row: dict, ctx: ApiContext | None = None) -> dict:
 		"winner": row.get("winner"),
 		"ended_reason": row.get("ended_reason"),
 		"ratings_applied": bool(row.get("ratings_applied")),
+		"is_casual": bool(row.get("is_casual")),
+		"is_members_only": bool(row.get("is_members_only")),
 		"elo_delta_p0": row.get("elo_delta_p0"),
 		"elo_delta_p1": row.get("elo_delta_p1"),
 		"elo_after_p0": row.get("elo_after_p0"),
@@ -430,6 +624,8 @@ def _maybe_apply_elo_for_finished_game(ctx: ApiContext, row: dict | None) -> dic
 	if not row:
 		return row
 	if (row.get("status") or "") != "finished":
+		return row
+	if bool(row.get("is_casual")):
 		return row
 	uid0 = row.get("player0_user_id")
 	uid1 = row.get("player1_user_id")

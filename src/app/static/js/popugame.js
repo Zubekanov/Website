@@ -20,6 +20,7 @@
 	const hostBtn = root.querySelector("[data-popugame-host]");
 	const joinBtn = root.querySelector("[data-popugame-join]");
 	const concedeBtn = root.querySelector("[data-popugame-concede]");
+	const abandonBtn = root.querySelector("[data-popugame-abandon]");
 	const postgameButtons = root.querySelectorAll("[data-popugame-postgame]");
 	const modalEl = root.querySelector("[data-popugame-modal]");
 	const closeBtn = root.querySelector("[data-popugame-close]");
@@ -711,7 +712,12 @@
 		} else {
 			const p0 = basePlayerName(player0Name, "Player 1");
 			const p1 = basePlayerName(player1Name, "Player 2");
-			statusEl.textContent = player === 0 ? `${p0} (X) to move` : `${p1} (O) to move`;
+			const activeName = player === 0 ? p0 : p1;
+			if (isMultiplayer && playerIndex !== null) {
+				statusEl.textContent = player === playerIndex ? "Your turn" : `${activeName} to move`;
+			} else {
+				statusEl.textContent = `${activeName} to move`;
+			}
 		}
 
 		const cells = boardEl.querySelectorAll(".popugame__cell");
@@ -720,7 +726,7 @@
 			const c = Number.parseInt(btn.dataset.col || "0", 10);
 			const cell = grid[r][c];
 			btn.textContent = "";
-			btn.classList.remove("is-claim-p0", "is-claim-p1", "is-token-p0", "is-token-p1");
+			btn.classList.remove("is-claim-p0", "is-claim-p1", "is-token-p0", "is-token-p1", "is-legal");
 			if (cell & p0Claim) btn.classList.add("is-claim-p0");
 			if (cell & p1Claim) btn.classList.add("is-claim-p1");
 			if (cell & p0Token) {
@@ -732,7 +738,9 @@
 				btn.textContent = "O";
 			}
 			const isTurn = playerIndex === null || playerIndex === player;
+			const canAct = !gameOver && gameStatus !== "waiting" && isTurn;
 			btn.disabled = gameOver || gameStatus === "waiting" || !isTurn || !legalMoves[player][r][c];
+			btn.classList.toggle("is-legal", canAct && legalMoves[player][r][c]);
 		});
 
 		if (concedeBtn) {
@@ -743,13 +751,19 @@
 			concedeBtn.disabled = hideConcede;
 			concedeBtn.classList.toggle("is-hidden", hideConcede);
 		}
+		if (abandonBtn) {
+			const showAbandon = isMultiplayer && gameStatus === "waiting" && playerIndex === 0;
+			abandonBtn.hidden = !showAbandon;
+			abandonBtn.disabled = !showAbandon;
+		}
 		if (isMultiplayer && postgameButtons && postgameButtons.length > 0) {
 			postgameButtons.forEach((btn) => {
 				btn.hidden = !gameOver;
 			});
 		}
 		if (undoBtn) {
-			undoBtn.disabled = isMultiplayer || moveHistory.length === 0;
+			undoBtn.hidden = isMultiplayer;
+			undoBtn.disabled = moveHistory.length === 0;
 		}
 
 		if (gameOver) {
@@ -860,6 +874,9 @@
 		const nextTurn = Number.isFinite(state.turn) ? state.turn : 0;
 		const nextStatus = state.status || "active";
 
+		if (nextStatus === "active" && gameStatus !== "active") {
+			primeNotificationPermission();
+		}
 		grid = state.grid || makeGrid(0);
 		turn = nextTurn;
 		player = nextActivePlayer;
@@ -919,6 +936,13 @@
 			return;
 		}
 		playerIndex = json.player;
+		if (playerIndex === 0 && gameCode) {
+			try {
+				const stored = new Set(JSON.parse(localStorage.getItem("pg_my_codes") || "[]"));
+				stored.add(gameCode);
+				localStorage.setItem("pg_my_codes", JSON.stringify([...stored]));
+			} catch {}
+		}
 		setStateFromServer(json.state);
 		startStream();
 	};
@@ -958,7 +982,18 @@
 	};
 
 if (resetBtn) {
-	resetBtn.addEventListener("click", resetGame);
+	resetBtn.addEventListener("click", async () => {
+		if (turn > 0 && !gameOver) {
+			const ok = await showDialog({
+				title: "Reset Board?",
+				bodyHtml: "<p>This will clear the current game. Are you sure?</p>",
+				confirmText: "Reset",
+				cancelText: "Cancel",
+			});
+			if (!ok) return;
+		}
+		resetGame();
+	});
 }
 if (undoBtn) {
 	undoBtn.addEventListener("click", undoMove);
@@ -1034,7 +1069,23 @@ if (dialogEl) {
 		window.location.href = `/popugame/${json.code}`;
 	};
 
+	const joinInputEl = root.querySelector("[data-popugame-join-input]");
+
 	const handleJoinByCode = async () => {
+		if (joinInputEl) {
+			const cleaned = joinInputEl.value.trim().toUpperCase();
+			if (cleaned.length !== 6 || !/^[A-Z0-9]+$/.test(cleaned)) {
+				await showDialog({
+					title: "Invalid code",
+					bodyHtml: "<p>Codes are 6 letters/numbers.</p>",
+					confirmText: "OK",
+					hideCancel: true,
+				});
+				return;
+			}
+			window.location.href = `/popugame/${cleaned}`;
+			return;
+		}
 		const ok = await showDialog({
 			title: "Join Game",
 			bodyHtml: `
@@ -1061,6 +1112,12 @@ if (dialogEl) {
 		}
 		window.location.href = `/popugame/${cleaned}`;
 	};
+
+	if (joinInputEl) {
+		joinInputEl.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") joinBtn?.click();
+		});
+	}
 
 if (hostBtn) {
 	hostBtn.addEventListener("click", handleHostGame);
@@ -1091,6 +1148,29 @@ if (concedeBtn) {
 			return;
 		}
 		setStateFromServer(json.state);
+	});
+}
+if (abandonBtn) {
+	abandonBtn.addEventListener("click", async () => {
+		if (!gameCode) return;
+		const ok = await showDialog({
+			title: "Abandon Match?",
+			bodyHtml: "<p>No opponent has joined yet. This will delete the game.</p>",
+			confirmText: "Abandon",
+			cancelText: "Cancel",
+		});
+		if (!ok) return;
+		const { json } = await apiPost("/api/popugame/abandon", { code: gameCode });
+		if (!json || !json.ok) {
+			await showDialog({
+				title: "Abandon failed",
+				bodyHtml: `<p>${(json && json.message) || "Could not abandon the game."}</p>`,
+				confirmText: "OK",
+				hideCancel: true,
+			});
+			return;
+		}
+		window.location.href = "/popugame";
 	});
 }
 if (endgameCloseEl) {
@@ -1135,9 +1215,12 @@ document.addEventListener("visibilitychange", () => {
 });
 document.addEventListener("keydown", (event) => {
 	if (event.key !== "Escape") return;
-	closeEndgameModal();
+	if (overlayOpenCount > 0) {
+		closeEndgameModal();
+		closeOverlay(modalEl);
+		hideDialog(false);
+	}
 });
-root.addEventListener("click", primeNotificationPermission, { once: true });
 
 initBoard();
 if (isMultiplayer) {

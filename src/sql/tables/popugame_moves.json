@@ -1,0 +1,62 @@
+{
+	"table_name": "popugame_moves",
+	"description": "Move-by-move recording for PopuGame multiplayer sessions.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "session_id",
+			"type": "uuid",
+			"nullable": false,
+			"index": true,
+			"foreign_key": {
+				"table": "popugame_sessions",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "move_number",
+			"type": "int",
+			"nullable": false
+		},
+		{
+			"name": "player",
+			"type": "int",
+			"nullable": false
+		},
+		{
+			"name": "row_idx",
+			"type": "int",
+			"nullable": false
+		},
+		{
+			"name": "col_idx",
+			"type": "int",
+			"nullable": false
+		},
+		{
+			"name": "grid_state",
+			"type": "jsonb",
+			"nullable": false
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"default": "now()",
+			"nullable": false
+		}
+	],
+	"indexes": [
+		{
+			"name": "popugame_moves_session_move_idx",
+			"columns": ["session_id", "move_number"],
+			"unique": false
+		}
+	]
+}
