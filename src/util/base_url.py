@@ -23,7 +23,7 @@ def get_public_base_url(
 	env: Mapping[str, str] | None = None,
 	default: str = "",
 ) -> str:
-	env_vars = env or os.environ
+	env_vars = env if env is not None else os.environ
 	configured_url = (env_vars.get("WEBSITE_BASE_URL") or env_vars.get("PUBLIC_BASE_URL") or "").strip()
 
 	if not configured_url and fcr is not None:

@@ -19,8 +19,13 @@ class UserManagement:
         email: str,
         password: str,
         repeat_password: str,
-    ) -> tuple[bool, str]:
-        """Validate registration fields."""
+    ) -> tuple[bool, str, bool]:
+        """Validate registration fields.
+
+        Returns (ok, message, is_infra_error).
+        is_infra_error is True when the failure is a backend problem (DB write,
+        email delivery) rather than invalid user input, so callers can alert.
+        """
         valid_referral_sources = {
             "friend",
             "github",
@@ -30,19 +35,19 @@ class UserManagement:
         }
 
         if referral_source not in valid_referral_sources:
-            return False, "Invalid referral source."
+            return False, "Invalid referral source.", False
 
         if not first_name or not last_name:
-            return False, "First and last name cannot be empty."
+            return False, "First and last name cannot be empty.", False
 
         if "@" not in email:
-            return False, "Invalid email address."
+            return False, "Invalid email address.", False
 
         if len(password) < 8:
-            return False, "Password must be at least 8 characters long."
+            return False, "Password must be at least 8 characters long.", False
 
         if password != repeat_password:
-            return False, "Passwords do not match."
+            return False, "Passwords do not match.", False
 
         status, message = interface.insert_pending_user({
             "referral_source": referral_source,
@@ -53,7 +58,7 @@ class UserManagement:
         })
 
         if not status:
-            return status, message
+            return False, message, True  # DB write failure
         
         # In this branch, message is the verification token
         token = message
@@ -94,9 +99,9 @@ class UserManagement:
         )
         if not result.ok:
             logging.warning("Failed to send verification email to %s: %s", email, result.error)
-            return False, "We could not send a verification email. Please try again later."
-        
-        return True, "You will be redirected to the email verification page shortly."
+            return False, "We could not send a verification email. Please try again later.", True  # email infra failure
+
+        return True, "You will be redirected to the email verification page shortly.", False
     
     @staticmethod
     def login_user(

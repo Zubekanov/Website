@@ -6,6 +6,7 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sql.psql_client import PSQLClient
 from util.fcr.file_config_reader import FileConfigReader
@@ -13,10 +14,67 @@ from util.auth_cache import session_cache
 
 logger = logging.getLogger(__name__)
 fcr = FileConfigReader()
-config = fcr.find("website_db.conf")
+
+_DB_ENV_MAP = {
+	"WEBSITE_DB_DATABASE": "database",
+	"WEBSITE_DB_USER": "user",
+	"WEBSITE_DB_PASSWORD": "password",
+	"WEBSITE_DB_HOST": "host",
+	"WEBSITE_DB_PORT": "port",
+}
+
+
+def _load_db_config() -> dict[str, Any]:
+	config: dict[str, Any] = {}
+	try:
+		file_config = fcr.find("website_db.conf")
+		if isinstance(file_config, dict):
+			config.update(file_config)
+	except Exception:
+		pass
+
+	for env_key, conf_key in _DB_ENV_MAP.items():
+		value = os.environ.get(env_key)
+		if value is None:
+			continue
+		value = value.strip()
+		if not value and conf_key in {"host", "port"}:
+			config[conf_key] = None
+			continue
+		config[conf_key] = value
+
+	if not config.get("database"):
+		raise RuntimeError("Missing database configuration for website database.")
+	if not config.get("user"):
+		raise RuntimeError("Missing user configuration for website database.")
+	if not config.get("password"):
+		raise RuntimeError("Missing password configuration for website database.")
+
+	port_raw = config.get("port")
+	if port_raw in (None, ""):
+		config["port"] = None
+	else:
+		config["port"] = int(port_raw)
+
+	host = config.get("host")
+	config["host"] = host or None
+	return config
+
+
+def _load_token_secret() -> str:
+	env_secret = (os.environ.get("WEBSITE_TOKEN_SECRET") or "").strip()
+	if env_secret:
+		return env_secret
+
+	secret_conf = fcr.find("secrets.conf")
+	secret = (secret_conf.get("WEBSITE_TOKEN_SECRET") or "").strip() if isinstance(secret_conf, dict) else ""
+	if not secret:
+		raise RuntimeError("Missing WEBSITE_TOKEN_SECRET.")
+	return secret
 
 class PSQLInterface:
 	def __init__(self):
+		config = _load_db_config()
 		self._client = PSQLClient(
 			database=config.get("database"),
 			user=config.get("user"),
@@ -25,12 +83,11 @@ class PSQLInterface:
 			port=config.get("port", None),
 		)
 
+	def token_secret(self) -> bytes:
+		return _load_token_secret().encode("utf-8")
+
 	def _token_secret(self) -> bytes:
-		secret_conf = fcr.find("secrets.conf")
-		secret = secret_conf.get("WEBSITE_TOKEN_SECRET")
-		if not secret:
-			raise RuntimeError("Missing WEBSITE_TOKEN_SECRET.")
-		return secret.encode("utf-8")
+		return self.token_secret()
 
 	def _generate_verification_token(self, nbytes: int = 32) -> str:
 		return secrets.token_urlsafe(nbytes)
@@ -477,6 +534,39 @@ class PSQLInterface:
 		except Exception as e:
 			return False, f"Failed to promote user: {e}"
 		return True, "User promoted to admin."
+
+	def delete_user(self, user_id: str) -> None:
+		"""
+		Deactivates the user account, revokes all sessions, and removes
+		all integration rows. Does not perform external syncs.
+		"""
+		self._client.update_rows_with_filters(
+			"users",
+			{"is_active": False},
+			raw_conditions=["id = %s"],
+			raw_params=[user_id],
+		)
+		self._client.update_rows_with_filters(
+			"user_sessions",
+			{"revoked_at": datetime.now(timezone.utc)},
+			raw_conditions=["user_id = %s", "revoked_at IS NULL"],
+			raw_params=[user_id],
+		)
+		self._client.delete_rows_with_filters(
+			"discord_webhooks",
+			raw_conditions=["user_id = %s"],
+			raw_params=[user_id],
+		)
+		self._client.delete_rows_with_filters(
+			"minecraft_whitelist",
+			raw_conditions=["user_id = %s"],
+			raw_params=[user_id],
+		)
+		self._client.delete_rows_with_filters(
+			"audiobookshelf_registrations",
+			raw_conditions=["user_id = %s"],
+			raw_params=[user_id],
+		)
 
 	def demote_user_from_admin(self, user_id: str) -> tuple[bool, str]:
 		if not user_id:
