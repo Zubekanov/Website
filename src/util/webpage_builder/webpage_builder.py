@@ -1688,6 +1688,19 @@ def build_popugame_replay_page(user: dict | None, *, code: str) -> str:
 			<h2 class="popugame-replay__title" data-pg-replay-title>Loading replay…</h2>
 			<div class="popugame-replay__meta" data-pg-replay-meta></div>
 		</div>
+		<div class="popugame__scorebox popugame-replay__scorebox" data-pg-replay-scorebox hidden aria-label="Score">
+			<div class="popugame__nameline">
+				<span class="popugame__name popugame__name--p0" data-pg-replay-name-p0>Player 1</span>
+				<span class="popugame__name-sep">vs</span>
+				<span class="popugame__name popugame__name--p1" data-pg-replay-name-p1>Player 2</span>
+			</div>
+			<div class="popugame__scoreline">
+				<span class="popugame__score popugame__score--p0" data-pg-replay-score-p0>0</span>
+				<span class="popugame__score-sep">:</span>
+				<span class="popugame__score popugame__score--p1" data-pg-replay-score-p1>0</span>
+			</div>
+			<div class="popugame__score-label">claimed cells</div>
+		</div>
 		<div class="popugame__board popugame-replay__board" data-pg-replay-board aria-label="Replay board"></div>
 		<div class="popugame-replay__controls">
 			<button class="btn popugame__btn" id="pg-replay-first" type="button" title="First move">&#8676;</button>

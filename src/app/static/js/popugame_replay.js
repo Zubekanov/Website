@@ -8,6 +8,11 @@
 	const metaEl = root.querySelector("[data-pg-replay-meta]");
 	const stepEl = root.querySelector("[data-pg-replay-step]");
 	const noticeEl = root.querySelector("[data-pg-replay-notice]");
+	const scoreboxEl = root.querySelector("[data-pg-replay-scorebox]");
+	const scoreP0El = root.querySelector("[data-pg-replay-score-p0]");
+	const scoreP1El = root.querySelector("[data-pg-replay-score-p1]");
+	const nameP0El = root.querySelector("[data-pg-replay-name-p0]");
+	const nameP1El = root.querySelector("[data-pg-replay-name-p1]");
 	const firstBtn = document.getElementById("pg-replay-first");
 	const prevBtn = document.getElementById("pg-replay-prev");
 	const nextBtn = document.getElementById("pg-replay-next");
@@ -69,12 +74,15 @@
 
 	const goToStep = (step) => {
 		currentStep = Math.max(0, Math.min(step, totalSteps()));
+		let grid;
 		if (currentStep === 0) {
-			renderGrid(makeEmptyGrid(gridSize));
+			grid = makeEmptyGrid(gridSize);
 		} else {
 			const move = moves[currentStep - 1];
-			renderGrid(move.grid_state || makeEmptyGrid(gridSize));
+			grid = move.grid_state || makeEmptyGrid(gridSize);
 		}
+		renderGrid(grid);
+		updateScore(grid);
 		if (stepEl) stepEl.textContent = `${currentStep} / ${totalSteps()}`;
 		if (firstBtn) firstBtn.disabled = currentStep === 0;
 		if (prevBtn) prevBtn.disabled = currentStep === 0;
@@ -123,6 +131,24 @@
 		return "Draw";
 	};
 
+	const computeScore = (grid) => {
+		let p0 = 0, p1 = 0;
+		for (const row of (grid || [])) {
+			for (const cell of (row || [])) {
+				if (cell & p0Claim) p0++;
+				if (cell & p1Claim) p1++;
+			}
+		}
+		return { p0, p1 };
+	};
+
+	const updateScore = (grid) => {
+		if (!scoreboxEl) return;
+		const { p0, p1 } = computeScore(grid);
+		if (scoreP0El) scoreP0El.textContent = String(p0);
+		if (scoreP1El) scoreP1El.textContent = String(p1);
+	};
+
 	// ── Load data ─────────────────────────────────────────
 
 	const load = async () => {
@@ -147,6 +173,9 @@
 
 		const p0 = escapeHtml(state.player0_name || "Player 1");
 		const p1 = escapeHtml(state.player1_name || "Player 2");
+		if (nameP0El) nameP0El.textContent = state.player0_name || "Player 1";
+		if (nameP1El) nameP1El.textContent = state.player1_name || "Player 2";
+		if (scoreboxEl) scoreboxEl.hidden = false;
 		if (titleEl) titleEl.textContent = `${state.player0_name || "Player 1"} vs ${state.player1_name || "Player 2"}`;
 		if (metaEl) {
 			const result = formatResult(state);
@@ -161,7 +190,9 @@
 
 		if (data.no_recording || moves.length === 0) {
 			// No move history — show final board state and inform user
-			renderGrid(state.grid || makeEmptyGrid(size));
+			const finalGrid = state.grid || makeEmptyGrid(size);
+			renderGrid(finalGrid);
+			updateScore(finalGrid);
 			if (stepEl) stepEl.textContent = "No recording";
 			if (firstBtn) firstBtn.disabled = true;
 			if (prevBtn) prevBtn.disabled = true;

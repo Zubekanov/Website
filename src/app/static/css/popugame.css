@@ -880,6 +880,10 @@
 	pointer-events: none;
 }
 
+.popugame-replay__scorebox {
+	justify-self: center;
+}
+
 .popugame-replay__controls {
 	display: flex;
 	gap: 0.4rem;
