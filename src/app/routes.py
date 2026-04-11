@@ -1,52 +1,34 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from functools import wraps
 import logging
 import time
 import traceback
-import requests
+
 import flask
 from flask import g
+import requests
 from werkzeug.exceptions import HTTPException
+
+from app.auth_cookies import AUTH_TOKEN_NAME, session_cookie_kwargs
 from util.user_management import UserManagement
-from util.webpage_builder.webpage_builder import (
-	build_admin_api_access_approvals_page,
-	build_admin_audiobookshelf_approvals_page,
-	build_admin_dashboard_page,
-	build_admin_discord_webhook_approvals_page,
-	build_admin_email_debug_page,
-	build_admin_frontend_test_page,
-	build_admin_minecraft_approvals_page,
-	build_admin_users_page,
-	build_api_access_application_page,
-	build_audiobookshelf_registration_page,
-	build_audiobookshelf_unavailable_page,
-	build_delete_account_page,
-	build_discord_webhook_registration_page,
-	build_discord_webhook_verify_page,
-	build_discord_webhook_verified_page,
-	build_empty_landing_page,
-	build_error_page,
-	build_integration_remove_page,
-	build_integration_removed_page,
-	build_login_page,
-	build_minecraft_page,
-	build_popugame_invalid_link_page,
-	build_popugame_page,
-	build_profile_page,
-	build_psql_interface_page,
-	build_readme_page,
-	build_register_page,
-	build_reset_password_page,
-	build_server_metrics_page,
-	build_verify_email_page,
-	build_verify_email_token_page,
-	build_501_page,
-	_is_admin_user as _builder_is_admin_user,
-)
+from util.webpage_builder import webpage_builder as page_builders
 
 logger = logging.getLogger(__name__)
 main = flask.Blueprint("main", __name__)
-_AUTH_TOKEN_NAME_ = "session"
 PAGE_ACCESS_REQUIREMENTS: dict[str, dict[str, str]] = {}
+
+
+@dataclass(frozen=True)
+class PageRoute:
+	path: str
+	endpoint: str
+	builder_name: str
+	access: str | None = None
+	methods: tuple[str, ...] = ("GET",)
+	unauth_redirect: str = "/login"
+	auth_redirect: str = "/profile"
 
 
 def page_access(level: str, *, unauth_redirect: str = "/login", auth_redirect: str = "/profile"):
@@ -71,20 +53,78 @@ def page_access(level: str, *, unauth_redirect: str = "/login", auth_redirect: s
 			if level == "admin":
 				if not user:
 					return flask.redirect("/login")
-				if not _builder_is_admin_user(user):
+				if not page_builders.is_admin_user(user):
 					err = HTTPException()
 					err.code = 403
 					err.description = "Admin access required."
-					return build_error_page(user, err), 403
+					return page_builders.build_error_page(user, err), 403
 			return fn(*args, **kwargs)
 
 		return _wrapped
 
 	return _decorator
 
+
+def _register_page_route(spec: PageRoute) -> None:
+	def _view(**kwargs):
+		builder = getattr(page_builders, spec.builder_name)
+		return builder(getattr(g, "user", None), **kwargs)
+
+	_view.__name__ = spec.endpoint
+	view = _view
+	if spec.access in {"auth", "anon", "admin"}:
+		view = page_access(
+			spec.access,
+			unauth_redirect=spec.unauth_redirect,
+			auth_redirect=spec.auth_redirect,
+		)(view)
+	main.add_url_rule(
+		spec.path,
+		endpoint=spec.endpoint,
+		view_func=view,
+		methods=list(spec.methods),
+	)
+	globals()[spec.endpoint] = view
+
+
+_PAGE_ROUTES = (
+	PageRoute("/readme", "readme_page", "build_readme_page"),
+	PageRoute("/server-metrics", "server_metrics_page", "build_server_metrics_page"),
+	PageRoute("/profile", "profile_page", "build_profile_page", access="auth", unauth_redirect="/login"),
+	PageRoute("/login", "login_page", "build_login_page", access="anon", auth_redirect="/profile"),
+	PageRoute("/register", "register_page", "build_register_page", access="anon", auth_redirect="/profile"),
+	PageRoute("/reset-password", "reset_password_page", "build_reset_password_page"),
+	PageRoute("/delete-account", "delete_account_page", "build_delete_account_page", access="auth", unauth_redirect="/"),
+	PageRoute("/verify-email", "verify_email_page", "build_verify_email_page"),
+	PageRoute("/verify-email/<token>", "verify_email_token_page", "build_verify_email_token_page"),
+	PageRoute("/audiobookshelf-registration", "audiobookshelf_registration_page", "build_audiobookshelf_registration_page"),
+	PageRoute("/api-access-application", "api_access_application_page", "build_api_access_application_page", access="admin"),
+	PageRoute("/discord-webhook-registration", "discord_webhook_registration_page", "build_discord_webhook_registration_page"),
+	PageRoute("/discord-webhook/verify", "discord_webhook_verify_page", "build_discord_webhook_verify_page"),
+	PageRoute("/discord-webhook/verified", "discord_webhook_verified_page", "build_discord_webhook_verified_page"),
+	PageRoute("/token", "discord_webhook_token_page", "build_discord_webhook_verify_page"),
+	PageRoute("/minecraft", "minecraft_page", "build_minecraft_page"),
+	PageRoute("/psql-interface", "psql_interface_page", "build_psql_interface_page", access="admin"),
+	PageRoute("/admin", "admin_dashboard_page", "build_admin_dashboard_page", access="admin"),
+	PageRoute("/admin/audiobookshelf-approvals", "admin_audiobookshelf_approvals_page", "build_admin_audiobookshelf_approvals_page", access="admin"),
+	PageRoute("/admin/discord-webhook-approvals", "admin_discord_webhook_approvals_page", "build_admin_discord_webhook_approvals_page", access="admin"),
+	PageRoute("/admin/minecraft-approvals", "admin_minecraft_approvals_page", "build_admin_minecraft_approvals_page", access="admin"),
+	PageRoute("/admin/api-access-approvals", "admin_api_access_approvals_page", "build_admin_api_access_approvals_page", access="admin"),
+	PageRoute("/admin/email-debug", "admin_email_debug_page", "build_admin_email_debug_page", access="admin"),
+	PageRoute("/admin/frontend-test", "admin_frontend_test_page", "build_admin_frontend_test_page", access="admin"),
+	PageRoute("/integration/remove", "integration_remove_page", "build_integration_remove_page"),
+	PageRoute("/integration/removed", "integration_removed_page", "build_integration_removed_page"),
+	PageRoute("/admin/users", "admin_users_page", "build_admin_users_page", access="admin"),
+)
+
+for _spec in _PAGE_ROUTES:
+	_register_page_route(_spec)
+
+
 @main.before_app_request
 def _timing_start():
 	g._t0 = time.perf_counter()
+
 
 @main.before_request
 def load_user():
@@ -92,7 +132,7 @@ def load_user():
 	if path == "/api" or path.startswith("/api/"):
 		return
 	g.user = None
-	auth_token = flask.request.cookies.get("session")
+	auth_token = flask.request.cookies.get(AUTH_TOKEN_NAME)
 	if auth_token:
 		user = UserManagement.get_user_by_session_token(auth_token)
 		if user:
@@ -100,11 +140,12 @@ def load_user():
 		else:
 			logging.info("Invalid session token provided.")
 
+
 def _ensure_user_loaded_for_error():
 	if hasattr(g, "user"):
 		return g.user
 
-	token = flask.request.cookies.get("session")
+	token = flask.request.cookies.get(AUTH_TOKEN_NAME)
 	if not token:
 		g.user = None
 		return None
@@ -113,6 +154,7 @@ def _ensure_user_loaded_for_error():
 	g.user = user
 	return user
 
+
 @main.after_app_request
 def _timing_end(resp):
 	if not hasattr(g, "_t0"):
@@ -120,11 +162,11 @@ def _timing_end(resp):
 	if resp.is_streamed:
 		return resp
 
-	ct = (resp.headers.get("Content-Type", "") or "").lower()
-	if "text/html" not in ct:
+	content_type = (resp.headers.get("Content-Type", "") or "").lower()
+	if "text/html" not in content_type:
 		return resp
-	ce = (resp.headers.get("Content-Encoding", "") or "").lower()
-	if ce and ce != "identity":
+	content_encoding = (resp.headers.get("Content-Encoding", "") or "").lower()
+	if content_encoding and content_encoding != "identity":
 		return resp
 
 	total_ms = (time.perf_counter() - g._t0) * 1000.0
@@ -134,86 +176,29 @@ def _timing_end(resp):
 	resp.set_data(body)
 	return resp
 
+
 @main.route("/")
 def landing_page():
 	if g.user:
 		return flask.redirect("/profile")
-	return build_empty_landing_page(g.user)
+	return page_builders.build_empty_landing_page(g.user)
 
-@main.route("/readme")
-def readme_page():
-	return build_readme_page(g.user)
-
-@main.route("/server-metrics")
-def server_metrics_page():
-	return build_server_metrics_page(g.user)
-
-@main.route("/profile")
-@page_access("auth", unauth_redirect="/login")
-def profile_page():
-	if not g.user:
-		return flask.redirect("/login")
-	return build_profile_page(g.user)
-
-@main.route("/login")
-@page_access("anon", auth_redirect="/profile")
-def login_page():
-	if g.user:
-		return flask.redirect("/profile")
-	return build_login_page(g.user)
-
-@main.route("/register")
-@page_access("anon", auth_redirect="/profile")
-def register_page():
-	if g.user:
-		return flask.redirect("/profile")
-	return build_register_page(g.user)
 
 @main.route("/logout")
 def logout_page():
 	resp = flask.make_response(flask.redirect("/"))
 	resp.set_cookie(
-		key = _AUTH_TOKEN_NAME_,
-		value = "",
-		httponly = True,
-		secure = True,
-		samesite = "Lax",
-		max_age = 0,
-		path = "/",
+		key=AUTH_TOKEN_NAME,
+		**session_cookie_kwargs(value="", max_age=0),
 	)
 	return resp
 
-@main.route("/reset-password")
-def reset_password_page():
-	return build_reset_password_page(g.user)
 
 @main.route("/reset-password/<token>")
 def reset_password_token_page(token):
-	return build_501_page(g.user)
+	_ = token
+	return page_builders.build_501_page(g.user)
 
-@main.route("/delete-account")
-@page_access("auth", unauth_redirect="/")
-def delete_account_page():
-	if not g.user:
-		return flask.redirect("/")
-	return build_delete_account_page(g.user)
-
-@main.route("/verify-email")
-def verify_email_page():
-	return build_verify_email_page(g.user)
-
-@main.route("/verify-email/<token>")
-def verify_email_token_page(token):
-	return build_verify_email_token_page(g.user, token)
-
-@main.route("/audiobookshelf-registration", methods=["GET"])
-def audiobookshelf_registration_page():
-	return build_audiobookshelf_registration_page(g.user)
-
-@main.route("/api-access-application", methods=["GET"])
-@page_access("admin")
-def api_access_application_page():
-	return build_api_access_application_page(g.user)
 
 @main.route("/audiobookshelf", methods=["GET"])
 def audiobookshelf_redirect_page():
@@ -225,7 +210,8 @@ def audiobookshelf_redirect_page():
 		status_note = f"HTTP {resp.status_code}"
 	except Exception as exc:
 		status_note = str(exc) or "Connection failed."
-	return build_audiobookshelf_unavailable_page(g.user, status_note)
+	return page_builders.build_audiobookshelf_unavailable_page(g.user, status_note)
+
 
 @main.route("/admin/amp", methods=["GET"])
 @main.route("/admin/amp/", methods=["GET"])
@@ -233,108 +219,65 @@ def audiobookshelf_redirect_page():
 def admin_amp_redirect_page():
 	return flask.redirect("https://amp-panel.zubekanov.com/")
 
-@main.route("/discord-webhook-registration", methods=["GET"])
-def discord_webhook_registration_page():
-	return build_discord_webhook_registration_page(g.user)
-
-@main.route("/discord-webhook/verify", methods=["GET"])
-def discord_webhook_verify_page():
-	return build_discord_webhook_verify_page(g.user)
-
-@main.route("/discord-webhook/verified", methods=["GET"])
-def discord_webhook_verified_page():
-	return build_discord_webhook_verified_page(g.user)
-
-@main.route("/token", methods=["GET"])
-def discord_webhook_token_page():
-	return build_discord_webhook_verify_page(g.user)
-
-@main.route("/minecraft")
-def minecraft_page():
-	return build_minecraft_page(g.user)
 
 @main.route("/popugame")
 def popugame_page():
-	return build_popugame_page(g.user)
+	return page_builders.build_popugame_landing_page(g.user)
+
+
+@main.route("/popugame/local")
+def popugame_local_page():
+	return page_builders.build_popugame_page(g.user)
+
 
 @main.route("/popugame/invalid")
 def popugame_invalid_page():
-	return build_popugame_invalid_link_page(g.user), 404
+	return page_builders.build_popugame_invalid_link_page(g.user), 404
+
+
+@main.route("/popugame/replay/<code>")
+def popugame_replay_page(code: str):
+	code = (code or "").strip()
+	if not code.isalnum() or len(code) != 6:
+		return flask.redirect("/popugame/invalid")
+	return page_builders.build_popugame_replay_page(g.user, code=code)
+
 
 @main.route("/popugame/<code>")
 def popugame_game_page(code: str):
 	code = (code or "").strip()
 	if not code.isalnum() or len(code) != 6:
 		return flask.redirect("/popugame/invalid")
-	return build_popugame_page(g.user, game_code=code)
+	return page_builders.build_popugame_page(g.user, game_code=code)
 
-@main.route("/psql-interface")
-@page_access("admin")
-def psql_interface_page():
-	return build_psql_interface_page(g.user)
-
-@main.route("/admin")
-@page_access("admin")
-def admin_dashboard_page():
-	return build_admin_dashboard_page(g.user)
-
-@main.route("/admin/audiobookshelf-approvals")
-@page_access("admin")
-def admin_audiobookshelf_approvals_page():
-	return build_admin_audiobookshelf_approvals_page(g.user)
-
-@main.route("/admin/discord-webhook-approvals")
-@page_access("admin")
-def admin_discord_webhook_approvals_page():
-	return build_admin_discord_webhook_approvals_page(g.user)
-
-@main.route("/admin/minecraft-approvals")
-@page_access("admin")
-def admin_minecraft_approvals_page():
-	return build_admin_minecraft_approvals_page(g.user)
-
-@main.route("/admin/api-access-approvals")
-@page_access("admin")
-def admin_api_access_approvals_page():
-	return build_admin_api_access_approvals_page(g.user)
-
-@main.route("/admin/email-debug")
-@page_access("admin")
-def admin_email_debug_page():
-	return build_admin_email_debug_page(g.user)
-
-@main.route("/admin/frontend-test")
-@page_access("admin")
-def admin_frontend_test_page():
-	return build_admin_frontend_test_page(g.user)
-
-@main.route("/integration/remove")
-def integration_remove_page():
-	token = flask.request.args.get("token") or ""
-	return build_integration_remove_page(g.user, token)
-
-@main.route("/integration/removed")
-def integration_removed_page():
-	return build_integration_removed_page(g.user)
-
-
-@main.route("/admin/users")
-@page_access("admin")
-def admin_users_page():
-	return build_admin_users_page(g.user)
 
 @main.app_errorhandler(Exception)
 def handle_all_errors(e):
 	user = _ensure_user_loaded_for_error()
 
-	# HTTP errors
 	if isinstance(e, HTTPException):
-		return build_error_page(user, e), e.code
+		return page_builders.build_error_page(user, e), e.code
 
 	tb_text = "".join(traceback.format_exception(type(e), e, e.__traceback__))
 	logger.error("Unhandled application error: %s", e)
 	logger.error("Unhandled application traceback:\n%s", tb_text)
+	try:
+		from app.api import _ctx
+		from app.api_common import notify_moderators
+		notify_moderators(
+			_ctx,
+			"internal_server_error",
+			title="Unhandled server error (500)",
+			details=[
+				f"Path: {flask.request.method} {flask.request.path}",
+				f"Exception: {type(e).__name__}: {str(e)[:200]}",
+				f"Traceback: {tb_text.splitlines()[-1][:200]}",
+			],
+			context={"action": "internal_server_error"},
+		)
+	except Exception:
+		pass
 	err = HTTPException()
 	err.code = 500
 	err.description = "Internal Server Error"
-	return build_error_page(user, err), 500
+	return page_builders.build_error_page(user, err), 500

@@ -114,8 +114,11 @@ def subscription_card(
 	resubscribe_html: str,
 ) -> str:
 	status_class = " subscription-status--inactive" if not is_active else ""
+	state_attr = "active" if is_active else "inactive"
 	return (
-		"<div class=\"subscription-card\" data-subscription-card>"
+		f"<div class=\"subscription-card\" data-subscription-card "
+		f"data-subscription-state=\"{state_attr}\" "
+		f"data-subscription-event-key=\"{html.escape(event_key)}\">"
 		"<div class=\"subscription-main\">"
 		f"<div class=\"subscription-title\">{html.escape(event_key)}</div>"
 		f"<div class=\"subscription-permission\">{html.escape(permission)}</div>"
@@ -123,7 +126,7 @@ def subscription_card(
 		"</div>"
 		"<div class=\"subscription-footer\">"
 		f"<span class=\"subscription-date\">Subscribed {html.escape(date_str) if date_str else ''}</span>"
-		f"<span class=\"subscription-status{status_class}\">{status_label}</span>"
+		f"<span class=\"subscription-status{status_class}\" data-subscription-status=\"{state_attr}\">{status_label}</span>"
 		f"{unsubscribe_html}"
 		f"{resubscribe_html}"
 		"</div>"
@@ -202,6 +205,8 @@ def integration_delete_action(
 	attrs = {}
 	if hidden:
 		attrs["hidden"] = "hidden"
+		attrs["disabled"] = "disabled"
+		attrs["style"] = "display:none"
 
 	return HTMLHelper.button(
 		"Disable",
@@ -236,7 +241,7 @@ def integration_enable_action(
 
 def admin_users_shell(contents: str) -> str:
 	return (
-		"<div class=\"admin-users\">"
+		"<div class=\"admin-users\" data-admin-users>"
 		"<header class=\"admin-users__header\">"
 		"<div>"
 		"<h1>User Management</h1>"
@@ -251,7 +256,12 @@ def admin_users_shell(contents: str) -> str:
 def admin_user_badge(label: str) -> str:
 	label_safe = html.escape(label)
 	cls = " admin-user-badge--admin" if label.upper() == "ADMIN" else ""
-	return f"<span class=\"admin-user-badge{cls}\">{label_safe}</span>"
+	role_attr = label.lower()
+	return (
+		f"<span class=\"admin-user-badge{cls}\" data-user-role=\"{html.escape(role_attr)}\">"
+		f"{label_safe}"
+		"</span>"
+	)
 
 
 def admin_user_actions(actions_html: str) -> str:
@@ -277,9 +287,12 @@ def admin_user_card(
 	badge_html: str,
 	actions_html: str,
 	integrations_html: str,
+	*,
+	role_label: str | None = None,
 ) -> str:
+	role_attr = f' data-user-role="{html.escape((role_label or "").lower())}"' if role_label else ""
 	return (
-		f"<article class=\"admin-user-card\" data-user-card data-user-id=\"{html.escape(user_id)}\">"
+		f"<article class=\"admin-user-card\" data-user-card data-user-id=\"{html.escape(user_id)}\"{role_attr}>"
 		"<div class=\"admin-user-card__header\">"
 		"<div>"
 		f"<div class=\"admin-user-card__name\">{html.escape(name)}</div>"
@@ -353,7 +366,11 @@ def admin_user_delete_modal(reasons_html: str) -> str:
 
 def integration_badge(status: str) -> str:
 	status_class = " integration-badge--inactive" if status == "Suspended" else ""
-	return f"<span class=\"integration-badge{status_class}\">{status}</span>"
+	status_attr = status.strip().lower().replace(" ", "-")
+	return (
+		f"<span class=\"integration-badge{status_class}\" "
+		f"data-integration-status-badge=\"{html.escape(status_attr)}\">{status}</span>"
+	)
 
 
 def integration_card(
@@ -364,10 +381,15 @@ def integration_card(
 	subtitle: str,
 	badge_html: str,
 	subscriptions_html: str = "",
+	status: str | None = None,
 ) -> str:
+	status_attr = ""
+	if status:
+		status_attr = f' data-integration-status="{html.escape(status.strip().lower().replace(" ", "-"))}"'
 	return (
 		f"<div class=\"integration-card\" data-integration-card=\"{html.escape(card_type)}\" "
-		f"data-integration-id=\"{html.escape(card_id)}\">"
+		f"data-integration-type=\"{html.escape(card_type)}\" "
+		f"data-integration-id=\"{html.escape(card_id)}\"{status_attr}>"
 		f"<div class=\"integration-title\">{title}</div>"
 		f"<div class=\"integration-meta\">{meta}</div>"
 		f"<div class=\"integration-sub\">{subtitle}</div>"
@@ -404,7 +426,7 @@ def integration_card_empty(message: str | None = None) -> str:
 	title = "No linked integrations"
 	subtext = message or "You have not connected any services yet."
 	return (
-		"<div class=\"integration-card integration-card--empty\">"
+		"<div class=\"integration-card integration-card--empty\" data-integration-empty>"
 		f"<div class=\"integration-title\">{html.escape(title)}</div>"
 		f"<div class=\"integration-sub\">{html.escape(subtext)}</div>"
 		"</div>"
@@ -512,7 +534,7 @@ def profile_delete_panel() -> str:
 
 def profile_integrations_header(title: str, subtitle: str, cards_html: str) -> str:
 	return (
-		"<section class=\"profile-integrations\">"
+		"<section class=\"profile-integrations\" data-linked-integrations>"
 		"<div class=\"profile-section-header\">"
 		f"<h2>{title}</h2>"
 		f"<p>{subtitle}</p>"

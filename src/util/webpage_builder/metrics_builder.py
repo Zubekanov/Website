@@ -1,20 +1,18 @@
 from sql.psql_client import PSQLClient
 from datetime import datetime, timedelta, timezone
+import os
 from util.fcr.file_config_reader import FileConfigReader, ConfTypes
 
 fcr = FileConfigReader()
-metrics_db_config = fcr.load_config(
-	"src/config/metrics_db.conf",
-	conf_type=ConfTypes.KEY_VALUE,
-	required_keys=["database", "user", "password"],
-)
-
-metrics_db = PSQLClient(
-	database=metrics_db_config["database"],
-	user=metrics_db_config["user"],
-	password=metrics_db_config["password"],
-	host=metrics_db_config.get("host", "localhost"),
-)
+_METRICS_DB_ENV_MAP = {
+	"METRICS_DB_DATABASE": "database",
+	"METRICS_DB_USER": "user",
+	"METRICS_DB_PASSWORD": "password",
+	"METRICS_DB_HOST": "host",
+	"METRICS_DB_PORT": "port",
+}
+metrics_db: PSQLClient | None = None
+_metrics_db_error: str | None = None
 
 METRICS_TABLE = "server_metrics"
 METRICS_NAMES = {
@@ -35,8 +33,45 @@ METRICS_UNITS = {
 }
 
 
+def _load_metrics_db_config() -> dict[str, str]:
+	config = fcr.load_config(
+		"src/config/metrics_db.conf",
+		conf_type=ConfTypes.KEY_VALUE,
+		required_keys=["database", "user", "password"],
+	)
+	for env_key, conf_key in _METRICS_DB_ENV_MAP.items():
+		value = os.environ.get(env_key)
+		if value is None:
+			continue
+		config[conf_key] = value.strip()
+	return config
+
+
+def _get_metrics_db() -> PSQLClient:
+	global metrics_db, _metrics_db_error
+	if metrics_db is not None:
+		return metrics_db
+	if _metrics_db_error is not None:
+		raise RuntimeError(_metrics_db_error)
+
+	try:
+		config = _load_metrics_db_config()
+		port_raw = (config.get("port") or "").strip()
+		metrics_db = PSQLClient(
+			database=config["database"],
+			user=config["user"],
+			password=config["password"],
+			host=(config.get("host") or "localhost").strip() or "localhost",
+			port=int(port_raw) if port_raw else None,
+		)
+		return metrics_db
+	except Exception as exc:
+		_metrics_db_error = str(exc)
+		raise
+
+
 def _get_latest_metrics(num_entries: int = 720):
-    rows, _ = metrics_db.get_rows_with_filters(
+    rows, _ = _get_metrics_db().get_rows_with_filters(
         METRICS_TABLE,
         order_by="ts",
         order_dir="DESC",
@@ -92,6 +127,7 @@ def _get_metrics_bucketed_downsample(
 	bucket_seconds: int,
 	format_ts: bool = False,
 ):
+	metrics_db = _get_metrics_db()
 	col_info = metrics_db.get_column_info("public", METRICS_TABLE)
 	ts_col = col_info.get("ts", {})
 	ts_type = (ts_col.get("data_type") or "").lower()
@@ -174,6 +210,7 @@ def _get_metrics_bucketed_aggregate(
 	bucket_seconds: int,
 	format_ts: bool = False,
 ):
+	metrics_db = _get_metrics_db()
 	col_info = metrics_db.get_column_info("public", METRICS_TABLE)
 	ts_col = col_info.get("ts", {})
 	ts_type = (ts_col.get("data_type") or "").lower()
