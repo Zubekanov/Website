@@ -1,0 +1,5 @@
+database=[Name of the dedicated Playwright/e2e database]
+user=[Database username used only by browser e2e tests]
+password=[Password for the dedicated e2e database user]
+# host=[Optional database host]
+# port=[Optional database port]

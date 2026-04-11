@@ -30,7 +30,7 @@ class _FakeInterface:
 	def __init__(self, client=None):
 		self.client = client or _FakeClient()
 
-	def _token_secret(self):
+	def token_secret(self):
 		return b"test-secret"
 
 
