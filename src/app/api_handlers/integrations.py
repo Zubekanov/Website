@@ -402,11 +402,11 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 	@api.route("/api-access-application", methods=["POST"])
 	def api_api_access_application():
 		user = get_request_user(ctx)
-		if not user or not _is_admin(ctx, user.get("id")):
+		if not user:
 			return flask.jsonify({
 				"ok": False,
-				"message": "Admin access required.",
-			}), 403
+				"message": "Authentication required.",
+			}), 401
 
 		data = flask.request.json or {}
 		first_name = (data.get("first_name") or "").strip()
@@ -418,7 +418,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		use_case = (data.get("use_case") or "").strip()
 
 		user_id = user.get("id")
-		is_admin = True
+		is_admin = _is_admin(ctx, user_id)
 
 		if not first_name or not last_name or not email:
 			if user:
@@ -719,7 +719,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 		code = f"{secrets.randbelow(1000000):06d}"
 		verify_id = None
 		# Store verification first to include a link in the message.
-		secret = ctx.interface._token_secret()
+		secret = ctx.interface.token_secret()
 		code_hash = hmac.new(secret, code.encode("utf-8"), hashlib.sha256).hexdigest()
 		expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
 		if not user_id:
@@ -808,7 +808,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			return flask.jsonify({"ok": False, "message": "Verification expired or invalid."}), 400
 		ver = rows[0]
 
-		secret = ctx.interface._token_secret()
+		secret = ctx.interface.token_secret()
 		code_hash = hmac.new(secret, code.encode("utf-8"), hashlib.sha256).hexdigest()
 		if code_hash != ver.get("code_hash"):
 			return flask.jsonify({"ok": False, "message": "Invalid verification code."}), 400

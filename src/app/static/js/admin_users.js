@@ -1,4 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
+  function normalizeStatus(value) {
+    return String(value || "").trim().toLowerCase().replace(/\s+/g, "-");
+  }
+
   const actionButtons = document.querySelectorAll("[data-user-action]");
   const badgeFor = (card) => card?.querySelector(".admin-user-badge");
   const nameFor = (card) => card?.querySelector(".admin-user-card__name")?.textContent || "User";
@@ -38,10 +42,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (action === "promote") {
           badge.textContent = "ADMIN";
           badge.classList.add("admin-user-badge--admin");
+          badge.dataset.userRole = "admin";
         } else {
           badge.textContent = "MEMBER";
           badge.classList.remove("admin-user-badge--admin");
+          badge.dataset.userRole = "member";
         }
+      }
+      if (card) {
+        card.dataset.userRole = action === "promote" ? "admin" : "member";
       }
       const promoteBtn = card?.querySelector("[data-user-action=\"promote\"]");
       const demoteBtn = card?.querySelector("[data-user-action=\"demote\"]");
@@ -210,17 +219,23 @@ document.addEventListener("DOMContentLoaded", () => {
         enableBtn.disabled = false;
         return;
       }
-      const card = enableBtn.closest("[data-integration-card]");
-      if (card) {
-        const badge = card.querySelector(".integration-badge");
-        if (badge) {
-          badge.textContent = enableBtn.dataset.activeLabel || "Active";
+	        const card = enableBtn.closest("[data-integration-card]");
+	        if (card) {
+	          const badge = card.querySelector(".integration-badge");
+	          if (badge) {
+	            badge.textContent = enableBtn.dataset.activeLabel || "Active";
           badge.classList.remove("integration-badge--inactive");
-        }
-        const delBtn = card.querySelector("[data-integration-delete]");
-        if (delBtn) delBtn.hidden = false;
-      }
-      enableBtn.remove();
+          badge.dataset.integrationStatusBadge = normalizeStatus(enableBtn.dataset.activeLabel || "Active");
+	          }
+	          card.dataset.integrationStatus = normalizeStatus(enableBtn.dataset.activeLabel || "Active");
+	          const delBtn = card.querySelector("[data-integration-delete]");
+	          if (delBtn) {
+	            delBtn.hidden = false;
+	            delBtn.disabled = false;
+	            delBtn.style.display = "";
+	          }
+	        }
+	        enableBtn.remove();
     } catch (err) {
       window.alert(String(err));
       enableBtn.disabled = false;
@@ -267,10 +282,16 @@ document.addEventListener("DOMContentLoaded", () => {
           if (badge) {
             badge.textContent = "Suspended";
             badge.classList.add("integration-badge--inactive");
+            badge.dataset.integrationStatusBadge = "suspended";
           }
-          const delBtn = card.querySelector("[data-integration-delete]");
-          if (delBtn) delBtn.hidden = true;
-          if (!card.querySelector("[data-integration-enable]")) {
+	          card.dataset.integrationStatus = "suspended";
+	          const delBtn = card.querySelector("[data-integration-delete]");
+	          if (delBtn) {
+	            delBtn.hidden = true;
+	            delBtn.disabled = true;
+	            delBtn.style.display = "none";
+	          }
+	          if (!card.querySelector("[data-integration-enable]")) {
             const enableBtn = document.createElement("button");
             enableBtn.className = "integration-enable";
             enableBtn.dataset.integrationEnable = "1";

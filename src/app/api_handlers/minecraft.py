@@ -201,6 +201,15 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 			fetched_at_ts = ctx.minecraft_status_cache.get("fetched_at_ts")
 			fetched_at_iso = ctx.minecraft_status_cache.get("fetched_at_iso")
 
+		if cached and fetched_at_ts and (now - float(fetched_at_ts)) < 30:
+			age = now - float(fetched_at_ts)
+			response = dict(cached)
+			response["cached"] = True
+			response["refreshing"] = False
+			response["age_seconds"] = int(age)
+			response["fetched_at"] = fetched_at_iso
+			return flask.jsonify(response)
+
 		try:
 			data = fetch_status()
 			fetched_at = datetime.now(timezone.utc)

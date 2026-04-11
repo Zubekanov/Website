@@ -1,6 +1,10 @@
 (() => {
 	"use strict";
 
+	function normalizeStatus(value) {
+		return String(value || "").trim().toLowerCase().replace(/\s+/g, "-");
+	}
+
 	async function handleAction(button) {
 		const route = button.dataset.submitRoute || "";
 		const subId = button.dataset.subscriptionId || "";
@@ -31,7 +35,9 @@
 			if (status) {
 				status.textContent = "Inactive";
 				status.classList.add("subscription-status--inactive");
+				status.dataset.subscriptionStatus = "inactive";
 			}
+			card.dataset.subscriptionState = "inactive";
 			const unsubscribeBtn = card.querySelector("[data-subscription-action='unsubscribe']");
 			if (unsubscribeBtn) unsubscribeBtn.remove();
 			const footer = card.querySelector(".subscription-footer");
@@ -51,7 +57,9 @@
 			if (status) {
 				status.textContent = "Active";
 				status.classList.remove("subscription-status--inactive");
+				status.dataset.subscriptionStatus = "active";
 			}
+			card.dataset.subscriptionState = "active";
 			const resubscribeBtn = card.querySelector("[data-subscription-action='resubscribe']");
 			if (resubscribeBtn) resubscribeBtn.remove();
 			const footer = card.querySelector(".subscription-footer");
@@ -179,16 +187,18 @@
 					return;
 				}
 
-				const card = activeIntegration.closest("[data-integration-card]");
-				if (card) {
-					const badge = card.querySelector(".integration-badge");
-					if (badge) {
-						badge.textContent = "Suspended";
-						badge.classList.add("integration-badge--inactive");
+					const card = activeIntegration.closest("[data-integration-card]");
+					if (card) {
+						const badge = card.querySelector(".integration-badge");
+						if (badge) {
+							badge.textContent = "Suspended";
+							badge.classList.add("integration-badge--inactive");
+							badge.dataset.integrationStatusBadge = "suspended";
+						}
+						card.dataset.integrationStatus = "suspended";
+						const delBtn = card.querySelector("[data-integration-delete]");
+						if (delBtn) delBtn.remove();
 					}
-					const delBtn = card.querySelector("[data-integration-delete]");
-					if (delBtn) delBtn.remove();
-				}
 				closeModal();
 			} catch (err) {
 				if (modalMessage) modalMessage.textContent = String(err);

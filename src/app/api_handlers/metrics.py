@@ -83,7 +83,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 				timestamps, values = _get_metrics(metric, num_entries=query.count, format_ts=query.format_ts)
 		except ValueError as e:
 			return flask.jsonify({
-				"error": "Invalid metrics request.",
+				"error": str(e),
 				"timestamps": [],
 				"data": [],
 			}), 400
@@ -153,7 +153,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 						)
 					except Exception as metric_err:
 						return flask.jsonify({
-							"error": "Unable to fetch one or more metrics right now.",
+							"error": f"Failed to fetch metric '{metric}': {metric_err}",
 							"timestamps": [],
 							"data": {},
 						}), 500

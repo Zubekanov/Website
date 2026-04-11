@@ -1,14 +1,7 @@
-:root {
-  --admin-card-bg: var(--card-bg, rgba(10, 12, 18, 0.7));
-  --admin-card-border: var(--card-border, rgba(255, 255, 255, 0.08));
-  --admin-text-muted: var(--text-muted, rgba(255, 255, 255, 0.65));
-  --admin-accent: var(--accent, #7cd2ff);
-}
-
 .admin-users {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 3rem 1.5rem 4rem;
+  padding: 2rem 1rem 2.5rem;
 }
 
 .admin-users__header h1 {
@@ -18,7 +11,7 @@
 
 .admin-users__header p {
   margin: 0;
-  color: var(--admin-text-muted);
+  color: var(--form_text);
 }
 
 .admin-users__list {
@@ -28,11 +21,17 @@
 }
 
 .admin-user-card {
-  background: var(--admin-card-bg);
-  border: 1px solid var(--admin-card-border);
-  border-radius: 18px;
+  background: var(--contents);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.admin-user-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .admin-user-card__header {
@@ -49,7 +48,7 @@
 
 .admin-user-card__email {
   margin-top: 0.2rem;
-  color: var(--admin-text-muted);
+  color: var(--form_text);
 }
 
 .admin-user-card__meta {
@@ -62,7 +61,7 @@
 .admin-user-meta-row {
   display: flex;
   gap: 0.5rem;
-  color: var(--admin-text-muted);
+  color: var(--form_text);
 }
 
 .admin-user-meta-label {
@@ -72,8 +71,9 @@
 
 .admin-user-badge {
   padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-pill);
+  background: var(--background);
+  border: 1px solid var(--border);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -81,8 +81,9 @@
 }
 
 .admin-user-badge--admin {
-  background: rgba(80, 190, 120, 0.2);
-  color: #7ee09a;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  border-color: var(--badge-success-border);
 }
 
 .admin-user-actions {
@@ -93,24 +94,24 @@
 }
 
 .admin-user-action {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  background: var(--background);
   color: inherit;
   padding: 0.5rem 0.95rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .admin-user-action:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--default) 8%, transparent);
+  border-color: color-mix(in srgb, var(--default) 14%, transparent);
   transform: translateY(-1px);
 }
 
 .admin-user-action--danger {
-  border-color: rgba(255, 120, 120, 0.4);
-  color: #ffb6b6;
+  border-color: var(--badge-error-border);
+  color: var(--badge-error-text);
 }
 
 .admin-user-card__integrations .integration-grid {

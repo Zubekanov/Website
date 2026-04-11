@@ -37,10 +37,13 @@
 .admin-dashboard__section-title {
 	margin: 0;
 	font-size: 0.98rem;
+	font-weight: 700;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	color: var(--form_text);
-	opacity: 0.9;
+	background: linear-gradient(90deg, var(--dark_blue), var(--objects));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
 }
 
 .admin-dashboard__grid {
@@ -56,9 +59,9 @@
 .admin-card {
 	background: var(--contents);
 	border: 1px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-lg);
 	padding: 1.1rem 1.2rem;
-	box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--shadow-md);
 	display: grid;
 	gap: 0.65rem;
 	color: var(--default);
@@ -70,7 +73,7 @@
 .admin-card:hover {
 	transform: translateY(-2px);
 	border-color: var(--dark_blue);
-	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+	box-shadow: var(--shadow-lg);
 }
 
 .admin-card--wide {
@@ -106,7 +109,7 @@
 	min-width: 28px;
 	height: 22px;
 	padding: 0 0.4rem;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	font-size: 0.75rem;
 	font-weight: 700;
 	display: inline-flex;

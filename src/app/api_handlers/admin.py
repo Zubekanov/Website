@@ -3,6 +3,7 @@ from __future__ import annotations
 import html as _html
 import logging
 from datetime import datetime, timezone
+from functools import partial
 
 import flask
 
@@ -27,14 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def register(api: flask.Blueprint, ctx: ApiContext) -> None:
-	def _sync_amp_minecraft_whitelist(*, actor_user_id: str | None, trigger: str, dry_run: bool = False, fail_hard: bool = False):
-		return sync_amp_minecraft_whitelist(
-			ctx.interface,
-			trigger=trigger,
-			actor_user_id=actor_user_id,
-			dry_run=dry_run,
-			fail_hard=fail_hard,
-		)
+	_sync_amp_minecraft_whitelist = partial(sync_amp_minecraft_whitelist, ctx.interface)
 
 	@api.route("/api/admin/users/promote", methods=["POST"])
 	def api_admin_users_promote():
