@@ -84,7 +84,7 @@
 		lobbyListEl.innerHTML = games.map((g) => {
 			let badge = "";
 			if (g.is_members_only) {
-				badge = '<span class="pg-lobby-badge pg-lobby-badge--members">Members Only (Elo Match)</span>';
+				badge = '<span class="pg-lobby-badge pg-lobby-badge--members">Members Elo Match</span>';
 			} else if (g.is_casual) {
 				badge = '<span class="pg-lobby-badge pg-lobby-badge--casual">Casual</span>';
 			}
