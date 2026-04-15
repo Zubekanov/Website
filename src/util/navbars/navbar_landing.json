@@ -52,6 +52,12 @@
                     "label": "Requests",
                     "items": [
                         {
+                            "label": "File Storage",
+                            "desc": "Upload and download files hosted on the server.",
+                            "href": "/files",
+                            "visibility": ["authenticated"]
+                        },
+                        {
                             "label": "Request Audiobookshelf Account",
                             "desc": "Fill out a form to request an account on the Audiobookshelf server.",
                             "href": "/audiobookshelf-registration"
@@ -125,6 +131,12 @@
                             "label": "Admin Dashboard",
                             "desc": "Open admin dashboard and moderation tools.",
                             "href": "/admin",
+                            "visibility": ["admin"]
+                        },
+                        {
+                            "label": "File Storage Admin",
+                            "desc": "Manage all user files and quota requests.",
+                            "href": "/admin/files",
                             "visibility": ["admin"]
                         },
                         {

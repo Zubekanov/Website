@@ -187,9 +187,6 @@
 	box-shadow: var(--focus-ring);
 }
 
-html[data-theme="dark"] .minecraft-host-copy img {
-	filter: invert(1);
-}
 
 .minecraft-status-footer {
 	font-size: 0.8125rem;

@@ -1,0 +1,49 @@
+{
+	"table_name": "file_folders",
+	"description": "User-created folders for grouping uploaded files.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"nullable": false,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "name",
+			"type": "varchar",
+			"length": 255,
+			"nullable": false
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"nullable": false,
+			"default": "now()"
+		},
+		{
+			"name": "updated_at",
+			"type": "timestamptz",
+			"nullable": false,
+			"default": "now()"
+		}
+	],
+	"indexes": [
+		{
+			"name": "file_folders_user_id_idx",
+			"columns": ["user_id"],
+			"unique": false
+		}
+	]
+}

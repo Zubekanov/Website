@@ -1,0 +1,64 @@
+{
+	"table_name": "user_storage_quotas",
+	"description": "Per-user file storage quota and usage tracking.",
+	"columns": [
+		{
+			"name": "user_id",
+			"type": "uuid",
+			"primary_key": true,
+			"nullable": false,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "quota_bytes",
+			"type": "bigint",
+			"nullable": false
+		},
+		{
+			"name": "used_bytes",
+			"type": "bigint",
+			"nullable": false,
+			"default": 0
+		},
+		{
+			"name": "status",
+			"type": "varchar",
+			"length": 16,
+			"nullable": false,
+			"default": "'pending'"
+		},
+		{
+			"name": "request_note",
+			"type": "text",
+			"nullable": true
+		},
+		{
+			"name": "admin_note",
+			"type": "varchar",
+			"length": 255,
+			"nullable": true
+		},
+		{
+			"name": "requested_at",
+			"type": "timestamptz",
+			"nullable": false,
+			"default": "now()"
+		},
+		{
+			"name": "approved_at",
+			"type": "timestamptz",
+			"nullable": true
+		}
+	],
+	"indexes": [
+		{
+			"name": "user_storage_quotas_status_requested_at_idx",
+			"columns": ["status", "requested_at"],
+			"unique": false
+		}
+	]
+}

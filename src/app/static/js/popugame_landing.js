@@ -96,8 +96,8 @@
 				joinAction = `
 					<div class="pg-lobby-own-actions">
 						<a href="/popugame/${escapeHtml(g.code)}" class="btn btn--ghost pg-lobby-join" style="padding:0.2rem 0.6rem;font-size:0.8rem;">Rejoin</a>
-						<button class="btn pg-lobby-delete" type="button" data-pg-delete-code="${escapeHtml(g.code)}" aria-label="Delete match">
-							<img src="/static/img/bin.png" alt="Delete" class="pg-lobby-delete__icon">
+						<button class="icon-btn icon-btn--delete" type="button" data-pg-delete-code="${escapeHtml(g.code)}" aria-label="Delete match">
+							<img src="/static/img/bin.png" alt="Delete" class="icon-btn__img">
 						</button>
 					</div>`;
 			} else if (g.is_members_only && !isLoggedIn) {

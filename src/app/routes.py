@@ -115,6 +115,8 @@ _PAGE_ROUTES = (
 	PageRoute("/integration/remove", "integration_remove_page", "build_integration_remove_page"),
 	PageRoute("/integration/removed", "integration_removed_page", "build_integration_removed_page"),
 	PageRoute("/admin/users", "admin_users_page", "build_admin_users_page", access="admin"),
+	PageRoute("/files", "files_page", "build_files_page", access="auth", unauth_redirect="/login"),
+	PageRoute("/admin/files", "admin_files_page", "build_admin_files_page", access="admin"),
 )
 
 for _spec in _PAGE_ROUTES:
@@ -249,6 +251,15 @@ def popugame_game_page(code: str):
 	if not code.isalnum() or len(code) != 6:
 		return flask.redirect("/popugame/invalid")
 	return page_builders.build_popugame_page(g.user, game_code=code)
+
+
+@main.route("/share/<link_id>")
+def share_page(link_id: str):
+	import re
+	link_id = (link_id or "").strip()
+	if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", link_id, re.IGNORECASE):
+		return flask.redirect("/")
+	return page_builders.build_share_page(g.user, link_id=link_id)
 
 
 @main.app_errorhandler(Exception)

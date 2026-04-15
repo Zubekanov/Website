@@ -692,6 +692,36 @@
 	justify-content: center;
 }
 
+.popugame-landing__quickplay-sub {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--form_text);
+}
+
+.popugame-landing__join-divider {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0.25rem 0 0;
+	color: var(--form_text);
+	font-size: 0.75rem;
+}
+
+.popugame-landing__join-divider::before,
+.popugame-landing__join-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--border);
+}
+
+.popugame-landing__join-label {
+	margin: 0;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--form_text);
+}
+
 .popugame-landing__join-row {
 	margin-top: 0.25rem;
 }
@@ -1154,33 +1184,3 @@
 	flex-shrink: 0;
 }
 
-.pg-lobby-delete {
-	flex-shrink: 0;
-	padding: 0.2rem 0.35rem;
-	background: transparent;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-sm);
-	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	opacity: 0.55;
-	transition: opacity 0.15s, border-color 0.15s;
-}
-
-.pg-lobby-delete:hover {
-	opacity: 1;
-	border-color: var(--red, #e05);
-}
-
-.pg-lobby-delete:disabled {
-	opacity: 0.25;
-	cursor: not-allowed;
-}
-
-.pg-lobby-delete__icon {
-	width: 14px;
-	height: 14px;
-	display: block;
-	object-fit: contain;
-}

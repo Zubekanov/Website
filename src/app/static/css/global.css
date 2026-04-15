@@ -139,6 +139,60 @@ main h1 {
 .badge--info    { background: var(--badge-info-bg);    color: var(--badge-info-text);    border-color: var(--badge-info-border);    }
 .badge--muted   { background: var(--background);       color: var(--form_text);          border-color: var(--border);               }
 
+/* Icon button — small bordered button holding a single image icon.
+   Used across files, admin, share, profile, and minecraft pages. */
+
+.icon-btn {
+	flex-shrink: 0;
+	padding: 0.2rem 0.3rem;
+	background: transparent;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.55;
+	transition: opacity 0.15s, border-color 0.15s;
+	text-decoration: none;
+}
+
+.icon-btn:hover {
+	opacity: 1;
+	border-color: var(--dark_blue);
+}
+
+.icon-btn--delete:hover {
+	border-color: #e74c3c;
+}
+
+.icon-btn--disabled {
+	opacity: 0.25;
+	cursor: not-allowed;
+}
+
+.icon-btn__img {
+	width: 14px;
+	height: 14px;
+	display: block;
+	object-fit: contain;
+}
+
+/* Dark mode: invert images to white; tint delete buttons red */
+html[data-theme="dark"] .icon-btn__img {
+	filter: invert(1);
+}
+
+html[data-theme="dark"] .icon-btn--delete {
+	background: rgba(231, 76, 60, 0.12);
+	border-color: rgba(231, 76, 60, 0.4);
+}
+
+/* Context menu delete item: red icon instead of red box */
+html[data-theme="dark"] .icon-btn--ctx-delete .icon-btn__img {
+	filter: invert(1) sepia(1) saturate(6) hue-rotate(315deg);
+}
+
 /* Card — base layout shared by profile-card, admin-card, approval-card */
 .card {
 	background: var(--contents);

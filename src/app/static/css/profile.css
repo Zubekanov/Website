@@ -401,10 +401,6 @@
 	color: var(--form_text);
 }
 
-html[data-theme="dark"] .secret-toggle img,
-html[data-theme="dark"] .secret-copy img {
-	filter: invert(1) hue-rotate(180deg);
-}
 
 .integration-badge {
 	position: absolute;

@@ -8,11 +8,13 @@ def register_all(api, ctx: ApiContext) -> None:
 		admin,
 		auth,
 		discord,
+		files,
 		integrations,
 		metrics,
 		minecraft,
 		ping,
 		popugame,
+		share,
 		stocks,
 	)
 
@@ -25,3 +27,5 @@ def register_all(api, ctx: ApiContext) -> None:
 	admin.register(api, ctx)
 	popugame.register(api, ctx)
 	stocks.register(api, ctx)
+	files.register(api, ctx)
+	share.register(api, ctx)

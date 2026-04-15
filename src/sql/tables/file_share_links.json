@@ -1,0 +1,97 @@
+{
+	"table_name": "file_share_links",
+	"description": "Public share links for individual files or folders. The link id is the public URL token.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "created_by",
+			"type": "uuid",
+			"nullable": false,
+			"index": true,
+			"foreign_key": {
+				"table": "users",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "target_type",
+			"type": "varchar",
+			"length": 8,
+			"nullable": false
+		},
+		{
+			"name": "file_id",
+			"type": "uuid",
+			"nullable": true,
+			"foreign_key": {
+				"table": "user_files",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "folder_id",
+			"type": "uuid",
+			"nullable": true,
+			"foreign_key": {
+				"table": "file_folders",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "is_enabled",
+			"type": "boolean",
+			"nullable": false,
+			"default": true
+		},
+		{
+			"name": "download_count",
+			"type": "int",
+			"nullable": false,
+			"default": 0
+		},
+		{
+			"name": "created_at",
+			"type": "timestamptz",
+			"nullable": false,
+			"default": "now()"
+		},
+		{
+			"name": "last_accessed_at",
+			"type": "timestamptz",
+			"nullable": true
+		}
+	],
+	"constraints": [
+		{
+			"type": "check",
+			"name": "file_share_links_target_xor",
+			"expression": "(file_id IS NOT NULL AND folder_id IS NULL) OR (file_id IS NULL AND folder_id IS NOT NULL)"
+		}
+	],
+	"indexes": [
+		{
+			"name": "file_share_links_created_by_idx",
+			"columns": ["created_by"],
+			"unique": false
+		},
+		{
+			"name": "file_share_links_file_id_idx",
+			"columns": ["file_id"],
+			"unique": false
+		},
+		{
+			"name": "file_share_links_folder_id_idx",
+			"columns": ["folder_id"],
+			"unique": false
+		}
+	]
+}

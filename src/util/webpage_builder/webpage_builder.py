@@ -1460,7 +1460,7 @@ def build_popugame_page(user: dict | None, *, game_code: str | None = None) -> s
 					<span class="minecraft-host-chip popugame__copy-chip" data-popugame-copy-chip data-popugame-copy-kind="link">
 						<span class="minecraft-host-text" data-popugame-share-link>{link_safe}</span>
 						<button class="minecraft-host-copy" type="button" data-popugame-copy-btn aria-label="Copy game link">
-							<img src="/static/img/copy.png" alt="">
+							<img class="icon-btn__img" src="/static/img/copy.png" alt="">
 							<span class="minecraft-host-tooltip" data-popugame-tooltip aria-hidden="true">Copied</span>
 						</button>
 					</span>
@@ -1470,7 +1470,7 @@ def build_popugame_page(user: dict | None, *, game_code: str | None = None) -> s
 					<span class="minecraft-host-chip popugame__copy-chip" data-popugame-copy-chip data-popugame-copy-kind="code">
 						<span class="minecraft-host-text" data-popugame-share-code>{code_safe}</span>
 						<button class="minecraft-host-copy" type="button" data-popugame-copy-btn aria-label="Copy game code">
-							<img src="/static/img/copy.png" alt="">
+							<img class="icon-btn__img" src="/static/img/copy.png" alt="">
 							<span class="minecraft-host-tooltip" data-popugame-tooltip aria-hidden="true">Copied</span>
 						</button>
 					</span>
@@ -1631,11 +1631,14 @@ def build_popugame_landing_page(user: dict | None) -> str:
 			<div class="popugame-landing__right">
 				<div class="popugame-landing__quickplay">
 					<div class="popugame-landing__panel-title">Play</div>
-					<a href="/popugame/local" class="btn btn--primary popugame-landing__play-btn">Play Locally</a>
-					<button class="btn popugame-landing__play-btn" id="pg-host-private" type="button">Host Private Game</button>
-					<button class="btn btn--accent popugame-landing__play-btn" id="pg-host-public" type="button">Start Public Game</button>
+					<p class="popugame-landing__quickplay-sub">Start or join a match</p>
+					<button class="btn btn--primary popugame-landing__play-btn" id="pg-host-public" type="button">Start Public Game</button>
+					<button class="btn btn--ghost popugame-landing__play-btn" id="pg-host-private" type="button">Invite a Friend</button>
+					<a href="/popugame/local" class="btn btn--ghost popugame-landing__play-btn">Play Locally</a>
+					<div class="popugame-landing__join-divider"><span>or</span></div>
+					<p class="popugame-landing__join-label">Join with code</p>
 					<div class="popugame__join-row popugame-landing__join-row">
-						<input class="popugame__join-input" type="text" id="pg-join-input" maxlength="6" placeholder="Game code" autocomplete="off" spellcheck="false">
+						<input class="popugame__join-input" type="text" id="pg-join-input" maxlength="6" placeholder="XXXXXX" autocomplete="off" spellcheck="false">
 						<button class="btn" id="pg-join-btn" type="button">Join</button>
 					</div>
 				</div>
@@ -2001,6 +2004,157 @@ def build_501_page(user: dict | None = None) -> str:
 	)
 
 
+def build_files_page(user: dict | None) -> str:
+	ctx = _page_context(user)
+	auth_error = _auth_guard(ctx)
+	if auth_error:
+		return auth_error
+
+	body_html = """
+	<div class="files-portal" data-files-portal>
+		<div class="files-portal__header">
+			<h1 class="files-portal__title">File Storage</h1>
+		</div>
+		<div class="files-portal__content" data-files-content>
+			<div class="files-state-notice files-state-notice--loading" data-files-loading>Loading…</div>
+		</div>
+	</div>
+	"""
+	return _render(
+		Page(
+			title="File Storage",
+			children=(RawHtml(body_html),),
+			stylesheets=("/static/css/files.css",),
+			scripts=("/static/js/files.js",),
+		),
+		ctx,
+	)
+
+
+def build_admin_files_page(user: dict | None) -> str:
+	ctx = _page_context(user)
+	admin_error = _admin_guard(ctx, "File Storage Admin")
+	if admin_error:
+		return admin_error
+
+	body_html = """
+	<div class="files-admin" data-files-admin>
+		<div class="files-admin__header">
+			<h1 class="files-portal__title">File Storage Admin</h1>
+		</div>
+
+		<div class="files-admin__section">
+			<div class="files-admin__section-header">
+				<span class="files-admin__section-title">Quota Requests</span>
+			</div>
+			<div data-files-admin-quotas>
+				<div class="files-state-notice files-state-notice--loading">Loading…</div>
+			</div>
+		</div>
+
+		<div class="files-admin__section">
+			<div class="files-admin__section-header">
+				<span class="files-admin__section-title">All Files</span>
+				<span class="files-admin__summary" data-files-admin-summary></span>
+			</div>
+			<div data-files-admin-files>
+				<div class="files-state-notice files-state-notice--loading">Loading…</div>
+			</div>
+		</div>
+	</div>
+	"""
+	return _render(
+		Page(
+			title="File Storage Admin",
+			children=(RawHtml(body_html),),
+			stylesheets=("/static/css/db_interface.css", "/static/css/files.css"),
+			scripts=("/static/js/files_admin.js",),
+		),
+		ctx,
+	)
+
+
+def _share_fmt_size(size_bytes: int) -> str:
+	"""Human-readable file size for share page meta tags."""
+	if size_bytes < 1024:
+		return f"{size_bytes} B"
+	if size_bytes < 1024 ** 2:
+		return f"{size_bytes / 1024:.1f} KB"
+	if size_bytes < 1024 ** 3:
+		return f"{size_bytes / 1024 ** 2:.1f} MB"
+	return f"{size_bytes / 1024 ** 3:.1f} GB"
+
+
+def build_share_page(user: dict | None, *, link_id: str) -> str:
+	import html as _html
+	ctx = _page_context(user)
+	safe_link_id = _html.escape(link_id)
+
+	# ── Server-side metadata lookup for <head> tags ──────────────────────
+	title = "Shared File"
+	description = "Access a shared file or folder."
+	try:
+		rows, _ = ctx.interface.client.get_rows_with_filters(
+			"file_share_links",
+			equalities={"id": link_id},
+			page_limit=1,
+			page_num=0,
+		)
+		if rows:
+			link = rows[0]
+			if link.get("is_enabled"):
+				if link.get("target_type") == "file" and link.get("file_id"):
+					file_rows, _ = ctx.interface.client.get_rows_with_filters(
+						"user_files",
+						equalities={"id": str(link["file_id"])},
+						page_limit=1,
+						page_num=0,
+					)
+					if file_rows:
+						f = file_rows[0]
+						name = f.get("original_name") or "File"
+						size = int(f.get("size_bytes") or 0)
+						title = f"Download {name}"
+						description = f"Download {name} ({_share_fmt_size(size)}) — shared file."
+				elif link.get("target_type") == "folder" and link.get("folder_id"):
+					folder_rows, _ = ctx.interface.client.get_rows_with_filters(
+						"file_folders",
+						equalities={"id": str(link["folder_id"])},
+						page_limit=1,
+						page_num=0,
+					)
+					if folder_rows:
+						name = folder_rows[0].get("name") or "Folder"
+						title = f"Download \u201c{name}\u201d"
+						description = f'Download the shared folder \u201c{name}\u201d.'
+	except Exception:
+		pass  # Fall back to generic title/description
+
+	body_html = f"""
+	<div class="share-page" data-share-page data-share-link-id="{safe_link_id}">
+		<div class="share-page__loading files-state-notice files-state-notice--loading" data-share-loading>
+			Loading…
+		</div>
+	</div>
+	"""
+	return _render(
+		Page(
+			title=title,
+			meta_description=description,
+			children=(RawHtml(body_html),),
+			stylesheets=("/static/css/files.css", "/static/css/share.css"),
+			scripts=("/static/js/share.js",),
+			config_values={
+				"robots": "noindex,nofollow",
+				"og_title": title,
+				"og_description": description,
+				"og_type": "website",
+			},
+		),
+		ctx,
+	)
+
+
 __all__ = [
 	"is_admin_user",
 	"build_501_page",
@@ -2011,8 +2165,10 @@ __all__ = [
 	"build_admin_email_debug_page",
 	"build_admin_frontend_test_page",
 	"build_admin_minecraft_approvals_page",
+	"build_admin_files_page",
 	"build_admin_users_page",
 	"build_api_access_application_page",
+	"build_files_page",
 	"build_audiobookshelf_registration_page",
 	"build_audiobookshelf_unavailable_page",
 	"build_delete_account_page",
@@ -2035,6 +2191,7 @@ __all__ = [
 	"build_register_page",
 	"build_reset_password_page",
 	"build_server_metrics_page",
+	"build_share_page",
 	"build_stock_viewer_page",
 	"build_test_page",
 	"build_verify_email_page",

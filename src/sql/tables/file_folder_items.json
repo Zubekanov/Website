@@ -1,0 +1,58 @@
+{
+	"table_name": "file_folder_items",
+	"description": "Join table linking files to folders. A file may appear in multiple folders.",
+	"columns": [
+		{
+			"name": "id",
+			"type": "uuid",
+			"primary_key": true,
+			"default": "gen_random_uuid()",
+			"nullable": false
+		},
+		{
+			"name": "folder_id",
+			"type": "uuid",
+			"nullable": false,
+			"index": true,
+			"foreign_key": {
+				"table": "file_folders",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "file_id",
+			"type": "uuid",
+			"nullable": false,
+			"index": true,
+			"foreign_key": {
+				"table": "user_files",
+				"column": "id",
+				"on_delete": "cascade"
+			}
+		},
+		{
+			"name": "added_at",
+			"type": "timestamptz",
+			"nullable": false,
+			"default": "now()"
+		}
+	],
+	"indexes": [
+		{
+			"name": "file_folder_items_folder_id_idx",
+			"columns": ["folder_id"],
+			"unique": false
+		},
+		{
+			"name": "file_folder_items_file_id_idx",
+			"columns": ["file_id"],
+			"unique": false
+		},
+		{
+			"name": "file_folder_items_unique_idx",
+			"columns": ["folder_id", "file_id"],
+			"unique": true
+		}
+	]
+}
