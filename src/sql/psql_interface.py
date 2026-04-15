@@ -814,13 +814,69 @@ class PSQLInterface:
 			(limit,),
 		) or []
 	
+	def _topo_sort_table_configs(self, config_names: list[str]) -> list[str]:
+		"""Return config names sorted so FK dependencies are created before dependents."""
+		from collections import deque
+
+		# Map table_name -> config_name that defines it
+		table_to_cfg: dict[str, str] = {}
+		# Map config_name -> set of table names it depends on (via FKs)
+		cfg_deps: dict[str, set[str]] = {}
+
+		for cfg in config_names:
+			try:
+				tables = self._normalise_tables_config(fcr.find(cfg))
+			except Exception:
+				cfg_deps[cfg] = set()
+				continue
+			for t in tables:
+				name = t.get("table_name")
+				if name:
+					table_to_cfg[name] = cfg
+			deps: set[str] = set()
+			for t in tables:
+				for col in t.get("columns", []):
+					fk = col.get("foreign_key")
+					if fk and fk.get("table"):
+						deps.add(fk["table"])
+			cfg_deps[cfg] = deps
+
+		# Build adjacency list and in-degree at the config level
+		in_degree: dict[str, int] = {c: 0 for c in config_names}
+		adj: dict[str, list[str]] = {c: [] for c in config_names}
+
+		for cfg in config_names:
+			for dep_table in cfg_deps.get(cfg, set()):
+				dep_cfg = table_to_cfg.get(dep_table)
+				if dep_cfg and dep_cfg != cfg:
+					adj[dep_cfg].append(cfg)
+					in_degree[cfg] += 1
+
+		queue = deque(sorted(c for c, deg in in_degree.items() if deg == 0))
+		result: list[str] = []
+		while queue:
+			node = queue.popleft()
+			result.append(node)
+			for neighbor in sorted(adj[node]):
+				in_degree[neighbor] -= 1
+				if in_degree[neighbor] == 0:
+					queue.append(neighbor)
+
+		# Append anything left (e.g. cycles or cross-schema FKs) in stable order
+		seen = set(result)
+		for c in config_names:
+			if c not in seen:
+				result.append(c)
+		return result
+
 	def verify_tables(self, safe_mode: bool = True) -> None:
 		tables_dir = os.path.join(os.path.dirname(__file__), "tables")
-		json_files = glob.glob(os.path.join(tables_dir, "*.json"))
+		json_files = sorted(glob.glob(os.path.join(tables_dir, "*.json")))
+		config_names = [os.path.basename(f) for f in json_files]
+		ordered_configs = self._topo_sort_table_configs(config_names)
 		configured: set[tuple[str, str]] = set()
 
-		for json_file in json_files:
-			table_config_name = os.path.basename(json_file)
+		for table_config_name in ordered_configs:
 			self.verify_table(table_config_name, safe_mode=safe_mode)
 			try:
 				table_config = fcr.find(table_config_name)
