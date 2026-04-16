@@ -63,8 +63,44 @@
     // Render: file view
     // ----------------------------------------------------------------
 
+    const _1GB  = 1024 * 1024 * 1024;
+    const _100MB = 100 * 1024 * 1024;
+
     function renderFile(data) {
         document.title = `${data.name} — Shared File`;
+        const size = Number(data.size_bytes || 0);
+
+        let actionsHtml;
+        if (size > _1GB) {
+            // Large file: mandatory ZIP only
+            actionsHtml = `
+                <a class="btn btn--primary share-page__download-btn"
+                   href="/api/share/${escHtml(linkId)}/download/zip"
+                   download="${escHtml(data.name)}.zip">
+                    Download as ZIP
+                </a>`;
+        } else if (size > _100MB) {
+            // Medium file: both options
+            actionsHtml = `
+                <a class="btn btn--primary share-page__download-btn"
+                   href="/api/share/${escHtml(linkId)}/download"
+                   download="${escHtml(data.name)}">
+                    Download
+                </a>
+                <a class="btn share-page__download-btn"
+                   href="/api/share/${escHtml(linkId)}/download/zip"
+                   download="${escHtml(data.name)}.zip">
+                    Download as ZIP
+                </a>`;
+        } else {
+            actionsHtml = `
+                <a class="btn btn--primary share-page__download-btn"
+                   href="/api/share/${escHtml(linkId)}/download"
+                   download="${escHtml(data.name)}">
+                    Download
+                </a>`;
+        }
+
         root.innerHTML = `
         <div class="share-page__card">
             <div class="share-page__icon share-page__icon--file" aria-hidden="true">
@@ -85,12 +121,7 @@
                     <dd>${Number(data.download_count || 0)}</dd>
                 </div>
             </dl>
-            <div class="share-page__actions">
-                <a class="btn btn--primary share-page__download-btn"
-                   href="/api/share/${escHtml(linkId)}/download"
-                   download="${escHtml(data.name)}">
-                    Download
-                </a>
+            <div class="share-page__actions">${actionsHtml}
             </div>
         </div>`;
     }

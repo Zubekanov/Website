@@ -59,7 +59,7 @@ class _FilesClient:
         self.calls.append(("update", table, dict(fields)))
 
     def delete_rows_with_filters(self, table, **kwargs):
-        self.calls.append(("delete", table))
+        self.calls.append(("delete", table, {}))
 
 
 class _FilesInterface:
@@ -376,7 +376,7 @@ def test_files_list_unauthenticated(app_factory, tmp_path, monkeypatch):
 
 
 def test_files_list_returns_file_entries(app_factory, tmp_path, monkeypatch):
-    ctx = _make_ctx(query_rows=[_file_row()])
+    ctx = _make_ctx(_FilesClient(rows_map={"user_files": [_file_row()]}))
     app = _make_app(app_factory, ctx, tmp_path)
     monkeypatch.setattr(files_mod, "get_request_user", lambda _ctx: MEMBER)
     resp = app.test_client().get("/api/files/list")
@@ -391,11 +391,15 @@ def test_files_list_returns_file_entries(app_factory, tmp_path, monkeypatch):
 # 6. POST /api/files/upload
 # ---------------------------------------------------------------------------
 
-def _upload(client, data_bytes=b"hello", filename="test.txt", content_type=None):
+def _upload(client, data_bytes=b"hello", filename="test.txt", extra_headers=None):
+    headers = {"X-Filename": filename}
+    if extra_headers:
+        headers.update(extra_headers)
     return client.post(
         "/api/files/upload",
-        data={"file": (io.BytesIO(data_bytes), filename)},
-        content_type="multipart/form-data",
+        data=data_bytes,
+        content_type="application/octet-stream",
+        headers=headers,
     )
 
 
@@ -435,14 +439,14 @@ def test_upload_quota_full(app_factory, tmp_path, monkeypatch):
     assert "quota full" in resp.get_json()["message"].lower()
 
 
-def test_upload_no_file_field(app_factory, tmp_path, monkeypatch):
+def test_upload_no_filename_header(app_factory, tmp_path, monkeypatch):
     client = _FilesClient(rows_map={"user_storage_quotas": [_quota_row()]})
     ctx = _make_ctx(client)
     app = _make_app(app_factory, ctx, tmp_path)
     monkeypatch.setattr(files_mod, "get_request_user", lambda _ctx: MEMBER)
-    resp = app.test_client().post("/api/files/upload", data={}, content_type="multipart/form-data")
+    resp = app.test_client().post("/api/files/upload", data=b"data", content_type="application/octet-stream")
     assert resp.status_code == 400
-    assert "No file" in resp.get_json()["message"]
+    assert "Filename" in resp.get_json()["message"]
 
 
 def test_upload_empty_filename(app_factory, tmp_path, monkeypatch):
@@ -450,11 +454,7 @@ def test_upload_empty_filename(app_factory, tmp_path, monkeypatch):
     ctx = _make_ctx(client)
     app = _make_app(app_factory, ctx, tmp_path)
     monkeypatch.setattr(files_mod, "get_request_user", lambda _ctx: MEMBER)
-    resp = app.test_client().post(
-        "/api/files/upload",
-        data={"file": (io.BytesIO(b"data"), "")},
-        content_type="multipart/form-data",
-    )
+    resp = _upload(app.test_client(), data_bytes=b"data", filename="")
     assert resp.status_code == 400
     assert "Filename" in resp.get_json()["message"]
 
@@ -583,11 +583,7 @@ def test_upload_filename_truncated_to_255(app_factory, tmp_path, monkeypatch):
     app = _make_app(app_factory, ctx, tmp_path)
     monkeypatch.setattr(files_mod, "get_request_user", lambda _ctx: MEMBER)
     long_name = "a" * 260 + ".txt"
-    resp = app.test_client().post(
-        "/api/files/upload",
-        data={"file": (io.BytesIO(b"data"), long_name)},
-        content_type="multipart/form-data",
-    )
+    resp = _upload(app.test_client(), data_bytes=b"data", filename=long_name)
     assert resp.status_code == 200
     insert_calls = [(op, t, d) for op, t, d in client.calls if op == "insert" and t == "user_files"]
     assert len(insert_calls[0][2]["original_name"]) == 255

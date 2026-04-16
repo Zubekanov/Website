@@ -136,6 +136,12 @@
 	pointer-events: none;
 }
 
+.files-upload-zone__cancel-btn {
+	pointer-events: all;
+	font-size: 0.8rem;
+	padding: 0.25rem 0.75rem;
+}
+
 .files-upload-progress {
 	margin-top: 0.5rem;
 	height: 4px;
@@ -243,6 +249,32 @@
 	color: var(--form_text);
 	font-size: 0.85rem;
 	font-style: italic;
+}
+
+/* Name cell — inline editable */
+
+.files-table__cell--name {
+    cursor: text;
+}
+
+.files-table__name-input {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--dark_blue);
+    outline: none;
+    background: transparent;
+    color: var(--default);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.files-table__name-input:disabled {
+    opacity: 0.5;
+    cursor: wait;
 }
 
 /* ----------------------------------------------------------

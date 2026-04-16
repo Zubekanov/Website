@@ -3,7 +3,13 @@ from __future__ import annotations
 import logging
 import mimetypes
 import os
+import re
+import shutil
+import tempfile
+import time
 import uuid
+import zipfile
+from urllib.parse import unquote
 from datetime import datetime, timezone
 
 import flask
@@ -18,6 +24,12 @@ ADMIN_DISPLAY_QUOTA = 100 * 1024 * 1024 * 1024  # 100 GB
 
 # Maximum original filename length stored in the DB (sanity cap).
 _MAX_FILENAME_LEN = 255
+
+# Chunked upload settings.
+_UPLOAD_ID_RE     = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+_CHUNK_MAX_BYTES  = 2 * 1024 * 1024    # 2 MB hard cap per individual chunk
+_UPLOAD_MAX_BYTES = 512 * 1024 * 1024  # 512 MB max assembled file
+_STALE_UPLOAD_AGE = 86400              # 24 h — abandon incomplete uploads after this
 
 # MIME types that must never be served as-is (browsers may execute them).
 _DANGEROUS_MIME_TYPES = frozenset({
@@ -68,6 +80,70 @@ def _fmt_bytes(n: int) -> str:
             return f"{n:.1f} {unit}"
         n /= 1024
     return f"{n:.1f} PB"
+
+
+def _tmp_dir() -> str:
+    return os.path.normpath(os.path.join(_upload_root(), "..", "uploads_tmp"))
+
+
+def _tmp_path(upload_id: str) -> str:
+    return os.path.join(_tmp_dir(), upload_id + ".part")
+
+
+def _write_zip_to_tmp(disk_path: str, arcname: str) -> str:
+    """Write a ZIP_STORED single-file zip into uploads_tmp; return its path.
+
+    The caller must delete the path when the response has been sent.
+    """
+    tmp = _tmp_dir()
+    os.makedirs(tmp, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip", dir=tmp)
+    os.close(tmp_fd)
+    try:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+            zf.write(disk_path, arcname)
+    except Exception:
+        _unlink_safe(tmp_path)
+        raise
+    return tmp_path
+
+
+def _unlink_safe(path: str) -> None:
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _is_valid_zip(path: str) -> bool:
+    try:
+        return zipfile.is_zipfile(path)
+    except OSError:
+        return False
+
+
+def _validate_upload_id(upload_id: str) -> bool:
+    return bool(upload_id and _UPLOAD_ID_RE.match(upload_id))
+
+
+def _cleanup_stale_uploads() -> None:
+    """Delete .part and .zip temp files older than _STALE_UPLOAD_AGE. Best-effort, never raises."""
+    try:
+        tmp = _tmp_dir()
+        if not os.path.isdir(tmp):
+            return
+        cutoff = time.time() - _STALE_UPLOAD_AGE
+        for name in os.listdir(tmp):
+            if not (name.endswith(".part") or name.endswith(".zip")):
+                continue
+            path = os.path.join(tmp, name)
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                pass
+    except Exception:
+        pass
 
 
 def register(api: flask.Blueprint, ctx: ApiContext) -> None:
@@ -234,22 +310,16 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
             quota_row = None
             available = None
 
-        if "file" not in flask.request.files:
-            return flask.jsonify({"ok": False, "message": "No file provided."}), 400
-
-        f = flask.request.files["file"]
-        original_name = (f.filename or "").strip()
+        raw_name = flask.request.headers.get("X-Filename", "").strip()
+        if not raw_name:
+            return flask.jsonify({"ok": False, "message": "Filename is empty."}), 400
+        original_name = unquote(raw_name)[:_MAX_FILENAME_LEN].strip()
         if not original_name:
             return flask.jsonify({"ok": False, "message": "Filename is empty."}), 400
-        original_name = original_name[:_MAX_FILENAME_LEN]
 
-        # Detect MIME type from filename before streaming.
-        mime_type = f.mimetype or None
-        if not mime_type or mime_type == "application/octet-stream":
-            guessed, _ = mimetypes.guess_type(original_name)
-            if guessed:
-                mime_type = guessed
-        mime_type = _safe_mime_type(mime_type)
+        # Detect MIME type from filename.
+        guessed, _ = mimetypes.guess_type(original_name)
+        mime_type = _safe_mime_type(guessed)
 
         # Generate stored name (UUID hex, no extension).
         stored_name = uuid.uuid4().hex
@@ -263,7 +333,7 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             limit = available  # None for admins
             with open(dest, "wb") as fh:
-                for chunk in iter(lambda: f.stream.read(65536), b""):
+                for chunk in iter(lambda: flask.request.stream.read(65536), b""):
                     size_bytes += len(chunk)
                     if limit is not None and size_bytes > limit:
                         quota_exceeded = True
@@ -278,20 +348,14 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
                     pass
             return flask.jsonify({"ok": False, "message": "Failed to save file. Please try again."}), 500
 
-        if size_bytes == 0:
-            if dest:
+        if size_bytes == 0 or quota_exceeded:
+            if dest and os.path.isfile(dest):
                 try:
                     os.remove(dest)
                 except OSError:
                     pass
-            return flask.jsonify({"ok": False, "message": "Empty files are not allowed."}), 400
-
-        if quota_exceeded:
-            if dest:
-                try:
-                    os.remove(dest)
-                except OSError:
-                    pass
+            if size_bytes == 0:
+                return flask.jsonify({"ok": False, "message": "Empty files are not allowed."}), 400
             return flask.jsonify({
                 "ok": False,
                 "message": f"File is too large. Available: {_fmt_bytes(available)}.",
@@ -338,6 +402,223 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
                         os.remove(dest)
                     except OSError:
                         pass
+                return flask.jsonify({"ok": False, "message": "Failed to record storage usage. Please try again."}), 500
+
+        return flask.jsonify({"ok": True, "file": _serialize_file(file_row)})
+
+    # ------------------------------------------------------------------
+    # Member: upload progress polling
+    # ------------------------------------------------------------------
+
+    @api.route("/api/files/upload/progress/<upload_id>", methods=["GET"])
+    def api_files_upload_progress(upload_id: str):
+        user = get_request_user(ctx)
+        if not user:
+            return flask.jsonify({"ok": False, "message": "Authentication required."}), 401
+
+        if not _validate_upload_id(upload_id):
+            return flask.jsonify({"ok": False, "message": "Invalid upload ID."}), 400
+
+        part = _tmp_path(upload_id)
+        try:
+            bytes_written = os.path.getsize(part) if os.path.isfile(part) else 0
+        except OSError:
+            bytes_written = 0
+
+        return flask.jsonify({"ok": True, "bytes_written": bytes_written})
+
+    # ------------------------------------------------------------------
+    # Member: chunked upload — receive one chunk
+    # ------------------------------------------------------------------
+
+    @api.route("/api/files/upload/chunk", methods=["POST"])
+    def api_files_upload_chunk():
+        user = get_request_user(ctx)
+        if not user:
+            return flask.jsonify({"ok": False, "message": "Authentication required."}), 401
+
+        upload_id = (flask.request.headers.get("X-Upload-Id") or "").strip()
+        if not _validate_upload_id(upload_id):
+            return flask.jsonify({"ok": False, "message": "Invalid upload ID."}), 400
+
+        try:
+            chunk_index  = int(flask.request.headers.get("X-Chunk-Index",  -1))
+            total_chunks = int(flask.request.headers.get("X-Total-Chunks",  0))
+            total_size   = int(flask.request.headers.get("X-Total-Size",    0))
+        except (ValueError, TypeError):
+            return flask.jsonify({"ok": False, "message": "Invalid chunk parameters."}), 400
+
+        filename = unquote((flask.request.headers.get("X-Filename") or "").strip())
+        if not filename:
+            return flask.jsonify({"ok": False, "message": "Filename required."}), 400
+
+        if chunk_index < 0 or total_chunks <= 0 or chunk_index >= total_chunks:
+            return flask.jsonify({"ok": False, "message": "Invalid chunk index."}), 400
+
+        if total_size <= 0 or total_size > _UPLOAD_MAX_BYTES:
+            return flask.jsonify({"ok": False, "message": f"Total size out of range (max {_fmt_bytes(_UPLOAD_MAX_BYTES)})."}), 400
+
+        user_id  = str(user["id"])
+        is_admin = ctx.interface.is_admin(user_id)
+
+        if chunk_index == 0:
+            # Validate quota upfront on the first chunk.
+            if not is_admin:
+                rows, _ = ctx.interface.client.get_rows_with_filters(
+                    "user_storage_quotas",
+                    equalities={"user_id": user_id},
+                    page_limit=1,
+                    page_num=0,
+                )
+                if not rows or rows[0]["status"] != "approved":
+                    return flask.jsonify({"ok": False, "message": "You do not have an approved storage quota."}), 403
+                available = int(rows[0]["quota_bytes"]) - int(rows[0]["used_bytes"])
+                if total_size > available:
+                    return flask.jsonify({"ok": False, "message": f"File too large. Available: {_fmt_bytes(available)}."}), 400
+            _cleanup_stale_uploads()
+
+        try:
+            tmp = _tmp_dir()
+            os.makedirs(tmp, exist_ok=True)
+            part = _tmp_path(upload_id)
+            mode = "wb" if chunk_index == 0 else "ab"
+            with open(part, mode) as fh:
+                for data in iter(lambda: flask.request.stream.read(65536), b""):
+                    fh.write(data)
+        except Exception:
+            logger.exception("Failed to write chunk %d for upload %s (user %s)", chunk_index, upload_id, user_id)
+            return flask.jsonify({"ok": False, "message": "Failed to write chunk."}), 500
+
+        return flask.jsonify({"ok": True})
+
+    # ------------------------------------------------------------------
+    # Member: chunked upload — finalise assembled file
+    # ------------------------------------------------------------------
+
+    @api.route("/api/files/upload/complete", methods=["POST"])
+    def api_files_upload_complete():
+        user = get_request_user(ctx)
+        if not user:
+            return flask.jsonify({"ok": False, "message": "Authentication required."}), 401
+
+        data = flask.request.json or {}
+        upload_id = (data.get("upload_id") or "").strip()
+        if not _validate_upload_id(upload_id):
+            return flask.jsonify({"ok": False, "message": "Invalid upload ID."}), 400
+
+        filename = (data.get("filename") or "").strip()[:_MAX_FILENAME_LEN]
+        if not filename:
+            return flask.jsonify({"ok": False, "message": "Filename required."}), 400
+
+        try:
+            total_size = int(data.get("total_size", 0))
+        except (ValueError, TypeError):
+            return flask.jsonify({"ok": False, "message": "Invalid total_size."}), 400
+
+        part = _tmp_path(upload_id)
+        if not os.path.isfile(part):
+            return flask.jsonify({"ok": False, "message": "Upload session not found or expired."}), 404
+
+        actual_size = os.path.getsize(part)
+        if actual_size != total_size:
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+            return flask.jsonify({"ok": False, "message": "Upload incomplete or corrupted — please retry."}), 400
+
+        user_id  = str(user["id"])
+        is_admin = ctx.interface.is_admin(user_id)
+
+        # Re-validate quota (may have changed during a long upload).
+        if not is_admin:
+            rows, _ = ctx.interface.client.get_rows_with_filters(
+                "user_storage_quotas",
+                equalities={"user_id": user_id},
+                page_limit=1,
+                page_num=0,
+            )
+            if not rows or rows[0]["status"] != "approved":
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+                return flask.jsonify({"ok": False, "message": "You do not have an approved storage quota."}), 403
+            quota_row = rows[0]
+            available = int(quota_row["quota_bytes"]) - int(quota_row["used_bytes"])
+            if actual_size > available:
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+                return flask.jsonify({"ok": False, "message": f"File too large. Available: {_fmt_bytes(available)}."}), 400
+        else:
+            quota_row = None
+
+        mime_type, _ = mimetypes.guess_type(filename)
+        mime_type = _safe_mime_type(mime_type)
+        stored_name = uuid.uuid4().hex
+
+        try:
+            dest = _safe_dest(user_id, stored_name)
+        except ValueError:
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+            return flask.jsonify({"ok": False, "message": "Internal path error."}), 500
+
+        try:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            os.rename(part, dest)
+        except OSError:
+            try:
+                shutil.move(part, dest)
+            except Exception:
+                logger.exception("Failed to move temp file to final dest for user %s", user_id)
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+                return flask.jsonify({"ok": False, "message": "Failed to save file. Please try again."}), 500
+
+        try:
+            now = datetime.now(timezone.utc)
+            file_row = ctx.interface.client.insert_row("user_files", {
+                "user_id": user_id,
+                "original_name": filename,
+                "stored_name": stored_name,
+                "mime_type": mime_type,
+                "size_bytes": actual_size,
+                "download_count": 0,
+                "created_at": now,
+                "updated_at": now,
+            })
+        except Exception:
+            logger.exception("Failed to insert file record for user %s", user_id)
+            try:
+                os.remove(dest)
+            except OSError:
+                pass
+            return flask.jsonify({"ok": False, "message": "Failed to record file. Please try again."}), 500
+
+        if not is_admin and quota_row is not None:
+            try:
+                ctx.interface.client.update_rows_with_filters(
+                    "user_storage_quotas",
+                    {"used_bytes": int(quota_row["used_bytes"]) + actual_size},
+                    equalities={"user_id": user_id},
+                )
+            except Exception:
+                logger.exception("Failed to update used_bytes for user %s — rolling back", user_id)
+                try:
+                    ctx.interface.client.delete_rows_with_filters("user_files", equalities={"id": str(file_row["id"])})
+                except Exception:
+                    logger.exception("Failed to delete file record during quota rollback for user %s", user_id)
+                try:
+                    os.remove(dest)
+                except OSError:
+                    pass
                 return flask.jsonify({"ok": False, "message": "Failed to record storage usage. Please try again."}), 500
 
         return flask.jsonify({"ok": True, "file": _serialize_file(file_row)})
@@ -396,6 +677,113 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
             download_name=row["original_name"],
             mimetype=_safe_mime_type(row.get("mime_type")),
         )
+
+    # ------------------------------------------------------------------
+    # Member: download own file as ZIP
+    # ------------------------------------------------------------------
+
+    @api.route("/api/files/download/<file_id>/zip", methods=["GET"])
+    def api_files_download_zip(file_id: str):
+        user = get_request_user(ctx)
+        if not user:
+            return flask.jsonify({"ok": False, "message": "Authentication required."}), 401
+
+        user_id = str(user["id"])
+        is_admin = ctx.interface.is_admin(user_id)
+
+        rows, _ = ctx.interface.client.get_rows_with_filters(
+            "user_files",
+            equalities={"id": file_id},
+            page_limit=1,
+            page_num=0,
+        )
+        if not rows:
+            return flask.jsonify({"ok": False, "message": "File not found."}), 404
+
+        row = rows[0]
+        if not is_admin and str(row["user_id"]) != user_id:
+            return flask.jsonify({"ok": False, "message": "Access denied."}), 403
+
+        try:
+            path = _safe_dest(user_id, row["stored_name"])
+        except ValueError:
+            logger.error("Path traversal attempt on file %s by user %s", file_id, user_id)
+            return flask.jsonify({"ok": False, "message": "File not found on disk."}), 404
+
+        if not os.path.isfile(path):
+            return flask.jsonify({"ok": False, "message": "File not found on disk."}), 404
+
+        # Increment download count (best-effort).
+        try:
+            ctx.interface.client.update_rows_with_filters(
+                "user_files",
+                {"download_count": int(row["download_count"] or 0) + 1,
+                 "updated_at": datetime.now(timezone.utc)},
+                equalities={"id": file_id},
+            )
+        except Exception:
+            logger.warning("Failed to increment download_count for file %s", file_id)
+
+        # Already a valid zip — serve as-is.
+        if row["original_name"].lower().endswith(".zip") and _is_valid_zip(path):
+            return flask.send_file(
+                path,
+                mimetype="application/zip",
+                as_attachment=True,
+                download_name=row["original_name"],
+            )
+
+        safe_name = (row["original_name"] or "file").replace("/", "_").replace("\\", "_")
+        try:
+            tmp_path = _write_zip_to_tmp(path, safe_name)
+        except Exception:
+            logger.exception("Failed to build zip for file %s", file_id)
+            return flask.jsonify({"ok": False, "message": "Failed to create ZIP."}), 500
+
+        response = flask.send_file(
+            tmp_path,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"{safe_name}.zip",
+        )
+        response.call_on_close(lambda: _unlink_safe(tmp_path))
+        return response
+
+    # ------------------------------------------------------------------
+    # Member: rename own file
+    # ------------------------------------------------------------------
+
+    @api.route("/api/files/<file_id>", methods=["PATCH"])
+    def api_files_rename(file_id: str):
+        user = get_request_user(ctx)
+        if not user:
+            return flask.jsonify({"ok": False, "message": "Authentication required."}), 401
+
+        data = flask.request.json or {}
+        new_name = (data.get("name") or "").strip()[:_MAX_FILENAME_LEN]
+        if not new_name:
+            return flask.jsonify({"ok": False, "message": "Name cannot be empty."}), 400
+
+        user_id = str(user["id"])
+        is_admin = ctx.interface.is_admin(user_id)
+
+        rows, _ = ctx.interface.client.get_rows_with_filters(
+            "user_files",
+            equalities={"id": file_id},
+            page_limit=1,
+            page_num=0,
+        )
+        if not rows:
+            return flask.jsonify({"ok": False, "message": "File not found."}), 404
+        if not is_admin and str(rows[0]["user_id"]) != user_id:
+            return flask.jsonify({"ok": False, "message": "Access denied."}), 403
+
+        ctx.interface.client.update_rows_with_filters(
+            "user_files",
+            {"original_name": new_name, "updated_at": datetime.now(timezone.utc)},
+            equalities={"id": file_id},
+        )
+        return flask.jsonify({"ok": True, "name": new_name})
 
     # ------------------------------------------------------------------
     # Member: delete own file

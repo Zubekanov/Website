@@ -110,7 +110,7 @@ def create_app(
 		RUN_STARTUP_TASKS=bool(run_startup_tasks),
 		VERIFY_TABLES_SAFE_MODE=bool(verify_tables_safe_mode),
 		UPLOAD_FOLDER="/HDD01/website_files",
-		MAX_CONTENT_LENGTH=512 * 1024 * 1024,  # 512 MB per request
+		MAX_CONTENT_LENGTH=20 * 1024 * 1024 * 1024,  # 20 GB per request
 	)
 	app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 	app.register_blueprint(main)

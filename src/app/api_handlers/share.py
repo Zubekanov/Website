@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import tempfile
 import zipfile
 from datetime import datetime, timezone
 
@@ -152,6 +153,61 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
                 as_attachment=True,
                 download_name=f"{safe_name}.zip",
             )
+
+    # ------------------------------------------------------------------
+    # Public: download a single file as a ZIP (file share links only)
+    # ------------------------------------------------------------------
+
+    @api.route("/api/share/<link_id>/download/zip", methods=["GET"])
+    def api_share_download_zip(link_id: str):
+        link, err = _resolve_link(ctx, link_id, require_enabled=True)
+        if err:
+            return err
+        if link["target_type"] != "file":
+            return flask.jsonify({"ok": False, "message": "Not a file share link."}), 400
+
+        _record_access(ctx, link_id)
+
+        upload_folder = flask.current_app.config["UPLOAD_FOLDER"]
+        file_row = _get_file_for_link(ctx, link)
+        if file_row is None:
+            return flask.jsonify({"ok": False, "message": "File no longer exists."}), 404
+
+        try:
+            disk_path = _safe_read_path(upload_folder, str(file_row["user_id"]), file_row["stored_name"])
+        except ValueError:
+            logger.error("Path traversal detected on share link %s", link_id)
+            return flask.jsonify({"ok": False, "message": "File not found on disk."}), 404
+
+        if not os.path.isfile(disk_path):
+            return flask.jsonify({"ok": False, "message": "File not found on disk."}), 404
+
+        safe_name = (file_row["original_name"] or "file").replace("/", "_").replace("\\", "_")
+
+        # Already a valid zip — serve as-is.
+        if file_row["original_name"].lower().endswith(".zip") and _is_valid_zip(disk_path):
+            return flask.send_file(
+                disk_path,
+                mimetype="application/zip",
+                as_attachment=True,
+                download_name=file_row["original_name"],
+            )
+
+        tmp_dir = os.path.normpath(os.path.join(upload_folder, "..", "uploads_tmp"))
+        try:
+            tmp_path = _write_single_file_zip(disk_path, safe_name, tmp_dir)
+        except Exception:
+            logger.exception("Failed to build zip for share link %s", link_id)
+            return flask.jsonify({"ok": False, "message": "Failed to create ZIP."}), 500
+
+        response = flask.send_file(
+            tmp_path,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"{safe_name}.zip",
+        )
+        response.call_on_close(lambda: _safe_unlink(tmp_path))
+        return response
 
     # ------------------------------------------------------------------
     # Public: download a single file from a folder share link
@@ -326,6 +382,37 @@ def _record_access(ctx: ApiContext, link_id: str) -> None:
             )
     except Exception:
         logger.warning("Failed to record access for share link %s", link_id)
+
+
+def _is_valid_zip(path: str) -> bool:
+    try:
+        return zipfile.is_zipfile(path)
+    except OSError:
+        return False
+
+
+def _write_single_file_zip(disk_path: str, arcname: str, tmp_dir: str) -> str:
+    """Write a ZIP_STORED single-file zip to a temp file; return its path.
+
+    The caller must delete the returned file when done (e.g. via call_on_close).
+    """
+    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip", dir=tmp_dir)
+    os.close(tmp_fd)
+    try:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+            zf.write(disk_path, arcname)
+    except Exception:
+        _safe_unlink(tmp_path)
+        raise
+    return tmp_path
+
+
+def _safe_unlink(path: str) -> None:
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
 
 
 def _iso(dt) -> str | None:

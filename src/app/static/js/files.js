@@ -45,6 +45,16 @@
     }
 
     // ----------------------------------------------------------------
+    // Upload queue state  (module-level so it survives re-renders)
+    // ----------------------------------------------------------------
+
+    let _uploadQueue  = [];   // files waiting to be sent
+    let _uploadActive = false;
+    let _uploadTotal  = 0;    // total files in the current batch (for display)
+    let _uploadDone   = 0;    // files successfully completed in this batch
+    let _uploadAbort  = null; // callable that cancels the active upload
+
+    // ----------------------------------------------------------------
     // Formatting helpers
     // ----------------------------------------------------------------
 
@@ -57,6 +67,13 @@
             v /= 1024;
         }
         return v.toFixed(1) + " TB";
+    }
+
+    function fmtDuration(ms) {
+        const s = Math.round(ms / 1000);
+        if (s < 60) return `${s}s`;
+        const m = Math.floor(s / 60), r = s % 60;
+        return r > 0 ? `${m}m ${r}s` : `${m}m`;
     }
 
     function fmtDate(iso) {
@@ -142,9 +159,18 @@
         if (!files || files.length === 0) {
             rows = `<div class="files-table__empty">No files uploaded yet.</div>`;
         } else {
-            rows = files.map(f => `
+            rows = files.map(f => {
+            const large   = Number(f.size_bytes || 0) > 1073741824; // 1 GB
+            const dlHref  = large
+                ? `/api/files/download/${escapeHtml(f.id)}/zip`
+                : `/api/files/download/${escapeHtml(f.id)}`;
+            const dlAttr  = large
+                ? `download="${escapeHtml(f.original_name)}.zip"`
+                : "download";
+            const dlTitle = large ? "Download as ZIP" : "Download";
+            return `
             <div class="files-table__row" data-file-id="${escapeHtml(f.id)}">
-                <div class="files-table__cell">${escapeHtml(f.original_name)}</div>
+                <div class="files-table__cell files-table__cell--name" data-editable-name tabindex="0">${escapeHtml(f.original_name)}</div>
                 <div class="files-table__cell files-table__cell--size">${fmtBytes(f.size_bytes)}</div>
                 <div class="files-table__cell files-table__cell--date">${fmtDate(f.created_at)}</div>
                 <div class="files-table__cell files-table__cell--dl-count">${Number(f.download_count || 0)}</div>
@@ -154,8 +180,7 @@
                             data-share-file-name="${escapeHtml(f.original_name)}">
                         <img class="icon-btn__img" src="/static/img/share.png" alt="Share">
                     </button>
-                    <a class="icon-btn" href="/api/files/download/${escapeHtml(f.id)}" download
-                       title="Download">
+                    <a class="icon-btn" href="${dlHref}" ${dlAttr} title="${dlTitle}">
                         <img class="icon-btn__img" src="/static/img/download.png" alt="Download">
                     </a>
                     <button class="icon-btn icon-btn--delete" title="Delete"
@@ -166,12 +191,13 @@
                 <div class="files-table__cell files-table__cell--menu">
                     <button class="icon-btn icon-btn--menu" title="More options"
                             data-menu-file="${escapeHtml(f.id)}"
-                            data-menu-download="/api/files/download/${escapeHtml(f.id)}"
+                            data-menu-download="${dlHref}"
                             data-menu-file-name="${escapeHtml(f.original_name)}">
                         <img class="icon-btn__img" src="/static/img/threedots.png" alt="More">
                     </button>
                 </div>
-            </div>`).join("\n");
+            </div>`;
+        }).join("\n");
         }
 
         return `
@@ -195,14 +221,16 @@
     function buildUploadZone() {
         return `
         <div class="files-upload-zone" id="files-drop-zone" role="button" tabindex="0"
-             aria-label="Drop a file here or click to upload">
-            <p class="files-upload-zone__label">Drop a file here, or</p>
-            <button class="btn btn--primary files-upload-zone__btn" type="button" id="files-pick-btn">Choose file</button>
-            <input type="file" id="files-input" style="display:none" aria-hidden="true">
+             aria-label="Drop files here or click to upload">
+            <p class="files-upload-zone__label">Drop files here, or</p>
+            <button class="btn btn--primary files-upload-zone__btn" type="button" id="files-pick-btn">Choose files</button>
+            <input type="file" id="files-input" style="display:none" aria-hidden="true" multiple>
             <div class="files-upload-progress" id="files-progress">
                 <div class="files-upload-progress__fill" id="files-progress-fill" style="width:0%"></div>
             </div>
             <p id="files-upload-status" style="font-size:0.8rem;color:var(--form_text);margin:0.25rem 0 0;min-height:1em;"></p>
+            <button class="btn files-upload-zone__cancel-btn" type="button" id="files-cancel-btn"
+                    style="display:none;margin-top:0.5rem;">Cancel</button>
         </div>`;
     }
 
@@ -335,77 +363,220 @@
     // ----------------------------------------------------------------
 
     function wireUploadZone(quota) {
-        const zone       = document.getElementById("files-drop-zone");
-        const pickBtn    = document.getElementById("files-pick-btn");
-        const input      = document.getElementById("files-input");
-        const progress   = document.getElementById("files-progress");
-        const fill       = document.getElementById("files-progress-fill");
-        const statusEl   = document.getElementById("files-upload-status");
+        const zone      = document.getElementById("files-drop-zone");
+        const pickBtn   = document.getElementById("files-pick-btn");
+        const cancelBtn = document.getElementById("files-cancel-btn");
+        const input     = document.getElementById("files-input");
+        const progress  = document.getElementById("files-progress");
+        const fill      = document.getElementById("files-progress-fill");
+        const statusEl  = document.getElementById("files-upload-status");
 
         if (!zone || !input) return;
 
+        // Cancel button — calls whatever abort function the active upload registered.
+        cancelBtn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (_uploadAbort) _uploadAbort();
+        });
+
+        // Warn before navigating away while an upload is in progress.
+        window.addEventListener("beforeunload", (e) => {
+            if (_uploadActive) { e.preventDefault(); }
+        }, { once: false });
+
         pickBtn?.addEventListener("click", (e) => { e.stopPropagation(); input.click(); });
-        zone.addEventListener("click", () => input.click());
-        zone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") input.click(); });
+        zone.addEventListener("click", () => { if (!_uploadActive) input.click(); });
+        zone.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && !_uploadActive) input.click(); });
 
         zone.addEventListener("dragover",  (e) => { e.preventDefault(); zone.classList.add("files-upload-zone--drag-over"); });
         zone.addEventListener("dragleave", ()  => { zone.classList.remove("files-upload-zone--drag-over"); });
         zone.addEventListener("drop", (e) => {
             e.preventDefault();
             zone.classList.remove("files-upload-zone--drag-over");
-            const file = e.dataTransfer?.files?.[0];
-            if (file) doUpload(file, quota);
+            if (e.dataTransfer?.files?.length) enqueue(e.dataTransfer.files, quota);
         });
 
         input.addEventListener("change", () => {
-            const file = input.files?.[0];
-            if (file) doUpload(file, quota);
+            if (input.files?.length) enqueue(input.files, quota);
+            input.value = "";  // reset so the same file can be re-selected later
         });
 
-        function doUpload(file, q) {
+        // ------------------------------------------------------------------
+        // Queue management
+        // ------------------------------------------------------------------
+
+        function enqueue(fileList, q) {
+            const incoming = Array.from(fileList);
+            if (incoming.length === 0) return;
+
+            if (!_uploadActive && _uploadQueue.length === 0) {
+                // Fresh batch — reset counters.
+                _uploadTotal = incoming.length;
+                _uploadDone  = 0;
+            } else {
+                _uploadTotal += incoming.length;
+            }
+            _uploadQueue.push(...incoming);
+            if (!_uploadActive) startNext(q);
+        }
+
+        function startNext(q) {
+            if (_uploadQueue.length === 0) {
+                _uploadActive = false;
+                _uploadAbort  = null;
+                if (cancelBtn) cancelBtn.style.display = "none";
+                if (fill)     fill.style.width = "100%";
+                if (statusEl) {
+                    statusEl.style.color = "#2ecc71";
+                    statusEl.textContent = _uploadTotal === 1
+                        ? "Upload complete."
+                        : `${_uploadTotal} files uploaded.`;
+                }
+                init();
+                return;
+            }
+            _uploadActive = true;
+            if (cancelBtn) cancelBtn.style.display = "";
+            doUpload(_uploadQueue.shift(), q);
+        }
+
+        async function doUpload(file, q) {
             const available = q ? (Number(q.quota_bytes || 0) - Number(q.used_bytes || 0)) : Infinity;
             if (!q?.is_admin && file.size > available) {
-                if (statusEl) { statusEl.style.color = "#e74c3c"; statusEl.textContent = `File too large. Available: ${fmtBytes(available)}.`; }
+                _uploadQueue  = [];
+                _uploadActive = false;
+                if (statusEl) { statusEl.style.color = "#e74c3c"; statusEl.textContent = `"${file.name}" is too large. Available: ${fmtBytes(available)}.`; }
+                if (pickBtn)  pickBtn.disabled = false;
                 return;
             }
 
-            const formData = new FormData();
-            formData.append("file", file);
+            const pos        = _uploadDone + 1;
+            const queueLabel = _uploadTotal > 1 ? ` (${pos} of ${_uploadTotal})` : "";
 
-            if (progress)  { progress.classList.add("files-upload-progress--visible"); }
-            if (fill)       { fill.style.width = "0%"; }
-            if (statusEl)  { statusEl.style.color = "var(--form_text)"; statusEl.textContent = "Uploading…"; }
-            if (pickBtn)   { pickBtn.disabled = true; }
+            if (progress) progress.classList.add("files-upload-progress--visible");
+            if (fill)     fill.style.width = "0%";
+            if (statusEl) { statusEl.style.color = "var(--form_text)"; statusEl.textContent = `Uploading${queueLabel}…`; }
+            if (pickBtn)  pickBtn.disabled = true;
 
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/api/files/upload");
+            function onSuccess() {
+                _uploadAbort  = null;
+                _uploadDone++;
+                if (q) q.used_bytes = Number(q.used_bytes || 0) + file.size;
+                startNext(q);
+            }
+            function onError(msg) {
+                _uploadAbort  = null;
+                _uploadQueue  = [];
+                _uploadActive = false;
+                if (cancelBtn) cancelBtn.style.display = "none";
+                if (statusEl) { statusEl.style.color = "#e74c3c"; statusEl.textContent = msg || "Upload failed."; }
+                if (pickBtn)  pickBtn.disabled = false;
+                if (fill)     fill.style.width = "0%";
+            }
+            function onCancelled() {
+                _uploadAbort  = null;
+                _uploadQueue  = [];
+                _uploadActive = false;
+                if (cancelBtn) cancelBtn.style.display = "none";
+                if (statusEl) { statusEl.style.color = "var(--form_text)"; statusEl.textContent = "Upload cancelled."; }
+                if (pickBtn)  pickBtn.disabled = false;
+                if (fill)     fill.style.width = "0%";
+            }
 
-            xhr.upload.addEventListener("progress", (e) => {
-                if (e.lengthComputable && fill) {
-                    fill.style.width = ((e.loaded / e.total) * 100).toFixed(1) + "%";
+            const CHUNK_SIZE = 16 * 1024 * 1024; // 16 MB per chunk
+
+            if (file.size < CHUNK_SIZE) {
+                // Small file: single request with cautious animated guess bar.
+                let fakePct = 0;
+                const fakeTimer = setInterval(() => {
+                    fakePct = Math.min(fakePct + (88 - fakePct) * 0.07, 88);
+                    if (fill) fill.style.width = fakePct.toFixed(1) + "%";
+                }, 120);
+
+                await new Promise((resolve) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/files/upload");
+                    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+                    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+                    xhr.addEventListener("load", () => {
+                        clearInterval(fakeTimer);
+                        let data = {};
+                        try { data = JSON.parse(xhr.responseText); } catch {}
+                        if (data.ok) { onSuccess(); } else { onError(data.message); }
+                        resolve();
+                    });
+                    xhr.addEventListener("abort", () => {
+                        clearInterval(fakeTimer);
+                        onCancelled();
+                        resolve();
+                    });
+                    xhr.addEventListener("error", () => {
+                        clearInterval(fakeTimer);
+                        onError("Network error.");
+                        resolve();
+                    });
+                    _uploadAbort = () => xhr.abort();
+                    xhr.send(file);
+                });
+            } else {
+                // Large file: split into 16 MB chunks, progress advances per chunk.
+                const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+                const uploadId = crypto.randomUUID();
+                const controller = new AbortController();
+                _uploadAbort = () => controller.abort();
+                try {
+                    const chunkTimes = []; // ms per completed chunk, oldest first
+                    for (let i = 0; i < totalChunks; i++) {
+                        const start = i * CHUNK_SIZE;
+                        const end   = Math.min(start + CHUNK_SIZE, file.size);
+                        const blob  = file.slice(start, end);
+
+                        const t0 = Date.now();
+                        const resp = await fetch("/api/files/upload/chunk", {
+                            method: "POST",
+                            signal: controller.signal,
+                            headers: {
+                                "Content-Type":   "application/octet-stream",
+                                "X-Upload-Id":    uploadId,
+                                "X-Chunk-Index":  String(i),
+                                "X-Total-Chunks": String(totalChunks),
+                                "X-Filename":     encodeURIComponent(file.name),
+                                "X-Total-Size":   String(file.size),
+                            },
+                            body: blob,
+                        });
+                        chunkTimes.push(Date.now() - t0);
+                        let data = {};
+                        try { data = await resp.json(); } catch {}
+                        if (!data.ok) { onError(data.message); return; }
+
+                        const pct = ((i + 1) / totalChunks * 100).toFixed(1);
+                        if (fill) fill.style.width = pct + "%";
+
+                        const remaining = totalChunks - (i + 1);
+                        let etaStr = "";
+                        if (remaining > 0) {
+                            // Average over the last `remaining` chunks (or all if fewer recorded).
+                            const window = chunkTimes.slice(-remaining);
+                            const avgMs  = window.reduce((a, b) => a + b, 0) / window.length;
+                            etaStr = " — ~" + fmtDuration(remaining * avgMs);
+                        }
+                        if (statusEl) statusEl.textContent = `Uploading${queueLabel} ${Math.round(pct)}%${etaStr}`;
+                    }
+
+                    const resp = await fetch("/api/files/upload/complete", {
+                        method: "POST",
+                        signal: controller.signal,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ upload_id: uploadId, filename: file.name, total_size: file.size }),
+                    });
+                    let data = {};
+                    try { data = await resp.json(); } catch {}
+                    if (data.ok) { onSuccess(); } else { onError(data.message); }
+                } catch (err) {
+                    if (err?.name === "AbortError") { onCancelled(); } else { onError("Network error."); }
                 }
-            });
-
-            xhr.addEventListener("load", () => {
-                let data = {};
-                try { data = JSON.parse(xhr.responseText); } catch {}
-                if (data.ok) {
-                    if (statusEl) { statusEl.style.color = "#2ecc71"; statusEl.textContent = "Upload complete."; }
-                    // Reload entire page state.
-                    init();
-                } else {
-                    if (statusEl) { statusEl.style.color = "#e74c3c"; statusEl.textContent = data.message || "Upload failed."; }
-                    if (pickBtn) { pickBtn.disabled = false; }
-                    if (fill) { fill.style.width = "0%"; }
-                }
-            });
-
-            xhr.addEventListener("error", () => {
-                if (statusEl) { statusEl.style.color = "#e74c3c"; statusEl.textContent = "Network error."; }
-                if (pickBtn) { pickBtn.disabled = false; }
-            });
-
-            xhr.send(formData);
+            }
         }
     }
 
@@ -433,6 +604,68 @@
                     alert("Network error.");
                     btn.disabled = false;
                 }
+            });
+        });
+    }
+
+    // ----------------------------------------------------------------
+    // Wire: inline rename (click name cell to edit in place)
+    // ----------------------------------------------------------------
+
+    function _wireInlineRename() {
+        content.querySelectorAll("[data-editable-name]").forEach(cell => {
+            cell.addEventListener("click", () => {
+                if (cell.querySelector("input")) return;
+
+                const row     = cell.closest("[data-file-id]");
+                const fileId  = row?.dataset.fileId;
+                if (!fileId) return;
+
+                const current = cell.textContent;
+                const input   = document.createElement("input");
+                input.className = "files-table__name-input";
+                input.type  = "text";
+                input.value = current;
+
+                cell.textContent = "";
+                cell.appendChild(input);
+                input.focus();
+                input.select();
+
+                let committed = false;
+
+                async function commit() {
+                    if (committed) return;
+                    committed = true;
+                    const newName = input.value.trim();
+                    if (!newName || newName === current) { cell.textContent = current; return; }
+                    input.disabled = true;
+                    try {
+                        const resp = await fetch(`/api/files/${fileId}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: newName }),
+                        });
+                        const data = await resp.json();
+                        if (data.ok) {
+                            const f = _files.find(x => x.id === fileId);
+                            if (f) f.original_name = data.name;
+                            cell.textContent = data.name;
+                            row.querySelector("[data-menu-file-name]")?.setAttribute("data-menu-file-name", data.name);
+                            row.querySelector("[data-share-file-name]")?.setAttribute("data-share-file-name", data.name);
+                        } else {
+                            cell.textContent = current;
+                        }
+                    } catch {
+                        cell.textContent = current;
+                    }
+                }
+
+                input.addEventListener("blur", commit);
+                input.addEventListener("keydown", e => {
+                    if (e.key === "Enter")  { e.preventDefault(); input.blur(); }
+                    if (e.key === "Escape") { committed = true; cell.textContent = current; }
+                });
             });
         });
     }
@@ -478,6 +711,9 @@
                    href="${escapeHtml(downloadHref)}" download>
                     <img class="icon-btn__img" src="/static/img/download.png" alt="">Download
                 </a>
+                <button class="files-ctx-menu__item" role="menuitem" data-ctx-rename>
+                    Rename
+                </button>
                 <button class="files-ctx-menu__item" role="menuitem" data-ctx-add-to-folder>
                     Add to folder ▶
                 </button>
@@ -489,6 +725,11 @@
             menu.querySelector("[data-ctx-share]")?.addEventListener("click", () => {
                 _closeCtxMenu();
                 _createShareLink("file", fileId, fileName || "file", null);
+            });
+
+            menu.querySelector("[data-ctx-rename]")?.addEventListener("click", () => {
+                _closeCtxMenu();
+                content.querySelector(`[data-file-id="${fileId}"] [data-editable-name]`)?.click();
             });
 
             menu.querySelector("[data-ctx-delete]")?.addEventListener("click", async () => {
@@ -596,6 +837,7 @@
         if (!section) return;
         section.innerHTML = buildSortPills() + buildFileTable(_sortedFiles());
         wireDeleteButtons();
+        _wireInlineRename();
         wireMenuButtons();
         _wireTableSort();
         _wireShareFileButtons();
