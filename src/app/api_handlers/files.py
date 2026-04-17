@@ -28,7 +28,7 @@ _MAX_FILENAME_LEN = 255
 # Chunked upload settings.
 _UPLOAD_ID_RE     = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 _CHUNK_MAX_BYTES  = 2 * 1024 * 1024    # 2 MB hard cap per individual chunk
-_UPLOAD_MAX_BYTES = 512 * 1024 * 1024  # 512 MB max assembled file
+_UPLOAD_MAX_BYTES = 20 * 1024 * 1024 * 1024  # 20 GB max assembled file
 _STALE_UPLOAD_AGE = 86400              # 24 h — abandon incomplete uploads after this
 
 # MIME types that must never be served as-is (browsers may execute them).
