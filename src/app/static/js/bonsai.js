@@ -149,7 +149,7 @@
     function updatePlayBtn() {
         const btn = document.getElementById("bonsai-play");
         if (!btn) return;
-        btn.innerHTML    = playing ? "&#9646;&#9646;" : "&#9654;";
+        btn.innerHTML    = playing ? "&#10073;&#10073;" : "&#9654;";
         btn.title        = playing ? "Pause" : "Play";
         btn.setAttribute("aria-label", playing ? "Pause" : "Play");
     }

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _BONSAI_DIR    = "/HDD01/bonsai_images"
 _TOKEN_PATH    = "/HDD01/bonsai_token"
 _ALLOWED_MIME  = {"image/jpeg", "image/png", "image/webp"}
-_UUID_RE       = __import__("re").compile(r"^[0-9a-f]{32}$")
+_UUID_RE       = __import__("re").compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", __import__("re").IGNORECASE)
 
 
 # ------------------------------------------------------------------
