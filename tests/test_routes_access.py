@@ -17,6 +17,7 @@ def _build_stub_webpage_builder_module() -> ModuleType:
 		"build_admin_api_access_approvals_page",
 		"build_admin_audiobookshelf_approvals_page",
 		"build_admin_dashboard_page",
+		"build_admin_bonsai_page",
 		"build_admin_files_page",
 		"build_admin_discord_webhook_approvals_page",
 		"build_admin_email_debug_page",

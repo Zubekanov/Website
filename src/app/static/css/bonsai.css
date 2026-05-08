@@ -156,3 +156,11 @@
 .bonsai-player__count {
 	color: rgba(255,255,255,0.5);
 }
+
+/* Pause icon: always white since it sits on a dark overlay */
+.bonsai-player__pause-icon {
+	width: 1em;
+	height: 1em;
+	display: block;
+	filter: invert(1);
+}

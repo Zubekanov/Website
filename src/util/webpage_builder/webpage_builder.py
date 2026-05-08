@@ -670,6 +670,12 @@ def _build_frontend_test_page_html() -> str:  # noqa: PLR0914
 				"Manage accounts and roles.",
 			)
 			+ html_fragments.admin_card(
+				"/admin/bonsai",
+				html_fragments.admin_card_meta("Bonsai", ""),
+				"Bonsai Snapshots",
+				"View and delete bonsai camera images.",
+			)
+			+ html_fragments.admin_card(
 				"/psql-interface",
 				html_fragments.admin_card_meta("Database", ""),
 				"PSQL Interface",
@@ -2067,6 +2073,39 @@ def build_files_page(user: dict | None) -> str:
 	)
 
 
+def build_admin_bonsai_page(user: dict | None) -> str:
+	ctx = _page_context(user)
+	admin_error = _admin_guard(ctx, "Bonsai Admin")
+	if admin_error:
+		return admin_error
+
+	body_html = """
+	<div class="files-admin" data-bonsai-admin>
+		<div class="files-admin__header">
+			<h1 class="files-portal__title">Bonsai Admin</h1>
+		</div>
+		<div class="files-admin__section">
+			<div class="files-admin__section-header">
+				<span class="files-admin__section-title">Snapshots</span>
+				<span class="files-admin__summary" data-bonsai-admin-summary></span>
+			</div>
+			<div data-bonsai-admin-grid>
+				<div class="files-state-notice files-state-notice--loading">Loading…</div>
+			</div>
+		</div>
+	</div>
+	"""
+	return _render(
+		Page(
+			title="Bonsai Admin",
+			children=(RawHtml(body_html),),
+			stylesheets=("/static/css/db_interface.css", "/static/css/files.css", "/static/css/bonsai_admin.css"),
+			scripts=("/static/js/bonsai_admin.js",),
+		),
+		ctx,
+	)
+
+
 def build_admin_files_page(user: dict | None) -> str:
 	ctx = _page_context(user)
 	admin_error = _admin_guard(ctx, "File Storage Admin")
@@ -2201,6 +2240,7 @@ __all__ = [
 	"build_admin_email_debug_page",
 	"build_admin_frontend_test_page",
 	"build_admin_minecraft_approvals_page",
+	"build_admin_bonsai_page",
 	"build_admin_files_page",
 	"build_admin_users_page",
 	"build_api_access_application_page",

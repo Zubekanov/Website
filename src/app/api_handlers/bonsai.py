@@ -246,3 +246,86 @@ def register(api: flask.Blueprint, ctx: ApiContext) -> None:
 
         logger.warning("Bonsai device token regenerated: %s", token)
         return flask.jsonify({"ok": True, "token": token})
+
+    # ------------------------------------------------------------------
+    # Admin: list all images
+    # ------------------------------------------------------------------
+
+    @api.route("/api/admin/bonsai/images", methods=["GET"])
+    def api_admin_bonsai_images_list():
+        _, err = require_admin(ctx)
+        if err:
+            return err
+
+        try:
+            limit = min(int(flask.request.args.get("limit", 200)), 1000)
+        except (ValueError, TypeError):
+            limit = 200
+
+        before = flask.request.args.get("before", "").strip()
+        params: list = []
+        where_clauses: list[str] = []
+
+        if before:
+            try:
+                before_dt = datetime.fromisoformat(before)
+                where_clauses.append("captured_at < %s")
+                params.append(before_dt)
+            except ValueError:
+                return flask.jsonify({"ok": False, "message": "Invalid 'before' timestamp."}), 400
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        params.append(limit)
+
+        rows = ctx.interface.execute_query(
+            f"SELECT id, captured_at, size_bytes, mime_type FROM bonsai_images {where_sql} ORDER BY captured_at DESC LIMIT %s;",
+            params,
+        ) or []
+
+        return flask.jsonify({
+            "ok": True,
+            "images": [
+                {
+                    "id":          str(r["id"]),
+                    "captured_at": r["captured_at"].isoformat() if hasattr(r["captured_at"], "isoformat") else str(r["captured_at"]),
+                    "size_bytes":  int(r["size_bytes"]),
+                    "mime_type":   r.get("mime_type"),
+                }
+                for r in rows
+            ],
+        })
+
+    # ------------------------------------------------------------------
+    # Admin: delete an image
+    # ------------------------------------------------------------------
+
+    @api.route("/api/admin/bonsai/images/<image_id>", methods=["DELETE"])
+    def api_admin_bonsai_image_delete(image_id: str):
+        _, err = require_admin(ctx)
+        if err:
+            return err
+
+        if not _UUID_RE.match(image_id):
+            return flask.jsonify({"ok": False, "message": "Invalid image ID."}), 400
+
+        rows = ctx.interface.execute_query(
+            "SELECT stored_name FROM bonsai_images WHERE id = %s LIMIT 1;",
+            (image_id,),
+        )
+        if not rows:
+            return flask.jsonify({"ok": False, "message": "Image not found."}), 404
+
+        stored_name = rows[0]["stored_name"]
+        path = os.path.join(_BONSAI_DIR, stored_name)
+
+        ctx.interface.client.delete_rows_with_filters(
+            "bonsai_images", equalities={"id": image_id}
+        )
+
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            logger.warning("Could not remove bonsai image file: %s", path)
+
+        return flask.jsonify({"ok": True})

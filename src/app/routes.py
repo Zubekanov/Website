@@ -117,6 +117,7 @@ _PAGE_ROUTES = (
 	PageRoute("/admin/users", "admin_users_page", "build_admin_users_page", access="admin"),
 	PageRoute("/files", "files_page", "build_files_page", access="auth", unauth_redirect="/login"),
 	PageRoute("/admin/files", "admin_files_page", "build_admin_files_page", access="admin"),
+	PageRoute("/admin/bonsai", "admin_bonsai_page", "build_admin_bonsai_page", access="admin"),
 )
 
 for _spec in _PAGE_ROUTES:
