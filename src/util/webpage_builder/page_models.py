@@ -24,7 +24,7 @@ def load_readme_text() -> str:
 		return "README is currently unavailable."
 
 
-def load_landing_page_html(*, user: dict | None, is_admin: bool, fcr) -> str:
+def load_landing_page_html(*, user: dict | None, is_admin: bool, fcr, hero_html: str | None = None) -> str:
 	nav_config = fcr.find("navbar_landing.json")
 	items = filter_nav_items(
 		nav_config.get("items", []),
@@ -123,10 +123,11 @@ def load_landing_page_html(*, user: dict | None, is_admin: bool, fcr) -> str:
 	if quick_links:
 		section_cards.insert(0, _card("Quick Links", "".join(quick_links)))
 
-	hero_html = _landing_nav_hero(
-		"This is the collection of features implemented on the website.",
-		"Thank you for visiting!",
-	)
+	if hero_html is None:
+		hero_html = _landing_nav_hero(
+			"This is the collection of features implemented on the website.",
+			"Thank you for visiting!",
+		)
 	return _landing_nav_shell(hero_html, "".join(section_cards))
 
 

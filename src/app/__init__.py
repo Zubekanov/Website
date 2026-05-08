@@ -121,6 +121,10 @@ def create_app(
 
 	psql = PSQLInterface()
 	psql.verify_tables(safe_mode=bool(verify_tables_safe_mode))
+
+	from app.api_handlers.bonsai import init_bonsai
+	init_bonsai()
+
 	if run_startup_tasks:
 		ensure_event_keys(psql)
 		try:

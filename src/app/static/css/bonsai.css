@@ -1,0 +1,158 @@
+/* ----------------------------------------------------------
+   Bonsai viewer — sits in place of the landing-nav hero
+   ---------------------------------------------------------- */
+
+.bonsai-viewer {
+	position: relative;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--contents);
+	box-shadow: var(--shadow-lg);
+	overflow: hidden;
+	aspect-ratio: 16 / 9;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Actual snapshot image */
+.bonsai-viewer__img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+/* ----------------------------------------------------------
+   Empty state (shown before any images are ingested)
+   ---------------------------------------------------------- */
+
+.bonsai-viewer__empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 2rem;
+	text-align: center;
+	position: relative;
+	z-index: 1;
+}
+
+.bonsai-viewer__empty-icon {
+	width: 52px;
+	height: 52px;
+	color: color-mix(in srgb, var(--default) 25%, transparent);
+}
+
+.bonsai-viewer__empty-title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: color-mix(in srgb, var(--default) 50%, transparent);
+}
+
+.bonsai-viewer__empty-sub {
+	margin: 0;
+	font-size: 0.82rem;
+	color: color-mix(in srgb, var(--default) 35%, transparent);
+}
+
+/* ----------------------------------------------------------
+   Player bar — overlaid at the bottom of the viewer
+   ---------------------------------------------------------- */
+
+.bonsai-player {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 0.75rem;
+	background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
+	padding-top: 1.5rem; /* extend gradient upward */
+}
+
+/* Step + play buttons */
+.bonsai-player__btn {
+	flex-shrink: 0;
+	background: rgba(255,255,255,0.12);
+	border: none;
+	border-radius: 50%;
+	color: #fff;
+	cursor: pointer;
+	width: 2rem;
+	height: 2rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1rem;
+	line-height: 1;
+	transition: background 0.15s;
+}
+
+.bonsai-player__btn:hover {
+	background: rgba(255,255,255,0.25);
+}
+
+.bonsai-player__btn--play {
+	font-size: 0.85rem;
+}
+
+/* Scrubber */
+.bonsai-player__scrubber {
+	flex: 1;
+	min-width: 0;
+	cursor: pointer;
+	padding: 0.4rem 0; /* larger hit area */
+}
+
+.bonsai-player__track {
+	position: relative;
+	height: 3px;
+	border-radius: 99px;
+	background: rgba(255,255,255,0.25);
+}
+
+.bonsai-player__fill {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 100%;
+	border-radius: 99px;
+	background: #fff;
+	pointer-events: none;
+}
+
+.bonsai-player__thumb {
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: #fff;
+	pointer-events: none;
+	transition: transform 0.1s;
+}
+
+.bonsai-player__scrubber:hover .bonsai-player__thumb {
+	transform: translate(-50%, -50%) scale(1.4);
+}
+
+/* Date + counter labels */
+.bonsai-player__date,
+.bonsai-player__count {
+	flex-shrink: 0;
+	font-size: 0.72rem;
+	color: rgba(255,255,255,0.85);
+	white-space: nowrap;
+}
+
+.bonsai-player__count {
+	color: rgba(255,255,255,0.5);
+}

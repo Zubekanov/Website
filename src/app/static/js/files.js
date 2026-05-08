@@ -561,7 +561,8 @@
                             const avgMs  = window.reduce((a, b) => a + b, 0) / window.length;
                             etaStr = " — ~" + fmtDuration(remaining * avgMs);
                         }
-                        if (statusEl) statusEl.textContent = `Uploading${queueLabel} ${Math.round(pct)}%${etaStr}`;
+                        const chunkLabel = totalChunks > 100 ? ` (chunk ${i + 1}/${totalChunks})` : "";
+                        if (statusEl) statusEl.textContent = `Uploading${queueLabel} ${Math.round(pct)}%${chunkLabel}${etaStr}`;
                     }
 
                     const resp = await fetch("/api/files/upload/complete", {

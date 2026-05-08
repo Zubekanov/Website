@@ -850,6 +850,42 @@ def build_readme_page(user: dict | None) -> str:
 	)
 
 
+def build_bonsai_page(user: dict | None) -> str:
+	ctx = _page_context(user)
+	camera_icon = (
+		'<svg class="bonsai-viewer__empty-icon" viewBox="0 0 24 24" fill="none" '
+		'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+		'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>'
+		'<circle cx="12" cy="13" r="4"/>'
+		'</svg>'
+	)
+	bonsai_hero = (
+		'<div class="bonsai-viewer" data-bonsai-viewer>'
+		'<div class="bonsai-viewer__empty">'
+		+ camera_icon +
+		'<p class="bonsai-viewer__empty-title">Could not fetch images</p>'
+		'<p class="bonsai-viewer__empty-sub">If this issue persists, please email '
+		'<a href="mailto:josephwong17@gmail.com">josephwong17@gmail.com</a></p>'
+		'</div>'
+		'</div>'
+	)
+	page_html = load_landing_page_html(
+		user=user,
+		is_admin=ctx.is_admin,
+		fcr=_get_fcr(),
+		hero_html=bonsai_hero,
+	)
+	return _render(
+		Page(
+			title="Home",
+			children=(Stack(children=(RawHtml(page_html),), data_attrs={"page": "bonsai"}),),
+			stylesheets=("/static/css/landing_nav.css", "/static/css/bonsai.css"),
+			scripts=("/static/js/bonsai.js",),
+		),
+		ctx,
+	)
+
+
 def build_empty_landing_page(user: dict | None) -> str:
 	ctx = _page_context(user)
 	page_html = load_landing_page_html(user=user, is_admin=ctx.is_admin, fcr=_get_fcr())

@@ -1,0 +1,46 @@
+[
+	{
+		"table_name": "bonsai_images",
+		"description": "Images captured from the bonsai camera and ingested via the device token.",
+		"columns": [
+			{
+				"name": "id",
+				"type": "uuid",
+				"primary_key": true,
+				"default": "gen_random_uuid()",
+				"nullable": false
+			},
+			{
+				"name": "stored_name",
+				"type": "varchar",
+				"length": 64,
+				"nullable": false,
+				"unique": true
+			},
+			{
+				"name": "captured_at",
+				"type": "timestamptz",
+				"nullable": false,
+				"index": true
+			},
+			{
+				"name": "size_bytes",
+				"type": "bigint",
+				"nullable": false
+			},
+			{
+				"name": "mime_type",
+				"type": "varchar",
+				"length": 128,
+				"nullable": true
+			}
+		],
+		"indexes": [
+			{
+				"name": "bonsai_images_captured_at_idx",
+				"columns": ["captured_at"],
+				"unique": false
+			}
+		]
+	}
+]

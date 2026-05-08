@@ -7,6 +7,7 @@ def register_all(api, ctx: ApiContext) -> None:
 	from app.api_handlers import (
 		admin,
 		auth,
+		bonsai,
 		discord,
 		files,
 		integrations,
@@ -29,3 +30,4 @@ def register_all(api, ctx: ApiContext) -> None:
 	stocks.register(api, ctx)
 	files.register(api, ctx)
 	share.register(api, ctx)
+	bonsai.register(api, ctx)

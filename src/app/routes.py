@@ -181,9 +181,7 @@ def _timing_end(resp):
 
 @main.route("/")
 def landing_page():
-	if g.user:
-		return flask.redirect("/profile")
-	return page_builders.build_empty_landing_page(g.user)
+	return page_builders.build_bonsai_page(g.user)
 
 
 @main.route("/logout")
