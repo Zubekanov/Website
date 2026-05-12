@@ -650,6 +650,12 @@ def load_admin_dashboard_page_html(interface) -> str:
 			"User Management",
 			"View users, roles, and integrations.",
 		)
+		+ html_fragments.admin_card(
+			"/admin/bonsai",
+			html_fragments.admin_card_meta("Bonsai"),
+			"Bonsai Snapshots",
+			"View and delete bonsai camera images.",
+		)
 	)
 
 	diagnostics_cards_html = (
