@@ -28,14 +28,21 @@
     async function init() {
         let data;
         try {
-            const resp = await fetch("/api/bonsai/images?daily=true&limit=1000");
+            const resp = await fetch("/api/bonsai/images?limit=1000");
             data = await resp.json();
         } catch { return; }
 
         if (!data?.ok || !data.images?.length) return;
 
-        // API returns newest-first; reverse for chronological playback.
-        images = [...data.images].reverse();
+        // API returns newest-first. Deduplicate to one image per local calendar
+        // day (browser timezone), keeping the most recent image for each day.
+        const byDay = new Map();
+        for (const img of data.images) {
+            const day = new Date(img.captured_at).toLocaleDateString("en-CA"); // YYYY-MM-DD
+            if (!byDay.has(day)) byDay.set(day, img);
+        }
+        // Reverse to chronological order (oldest → newest).
+        images = [...byDay.values()].reverse();
         currentIdx = images.length - 1;
 
         renderViewer();
